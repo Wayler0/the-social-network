@@ -61,12 +61,37 @@ Group chats, events calendar, notes and past papers, alumni mentorship matching,
 
 ## 5. Membership verification (Tharaka University only)
 
-Keep outsiders out while staying easy for real members. **Method TBD** (see open questions):
-- University email address (one-time code to the student/staff/alumni email) — preferred if students have one.
-- Admission/registration number + admin approval (e.g. freshers without an email yet).
-- Alumni: graduation year + vouching by verified members or admin review.
-- Staff: staff email or staff number + admin approval.
-- Roles (Student Leader, office accounts, etc.) are granted by admins, not self-claimed.
+Keep outsiders out while staying easy for real members.
+
+### Identifier
+
+- **Registration number** is the membership identifier for students and alumni; **staff number** for staff.
+- It is a unique field, **not** the database primary key (use an internal ID). Reg numbers can be mistyped, change format, or change for a person (e.g. diploma → degree).
+- It is personal data (Data Protection Act): never shown on profiles or in search; visible only to the member and admins.
+- One account per reg/staff number, plus a "someone has claimed my reg number" dispute button.
+
+### The real problem: ownership, not existence
+
+Knowing a reg number exists is not enough. Reg numbers appear on exam lists, notice boards and ID cards, so anyone can type a friend's. Verification must prove the person **owns** the number.
+
+### Options (weakest to strongest)
+
+| Method | Proves it exists | Proves it's theirs | Needs the school |
+|---|---|---|---|
+| Format check only (matches the reg number pattern) | No | No | No |
+| Upload student ID / admission letter, moderator checks | Partly | Mostly | No — but manual work and sensitive data (delete after checking) |
+| Class rep / classmate vouching (class reps already have class lists) | Yes | Yes | No |
+| University email one-time code (if students have university email, especially if built from the reg number) | Yes | Yes | No — uses email the university already provides |
+| ERP lookup (read-only "does this reg number exist, does the name match?") | Yes | Needs a second step | Yes — formal data-sharing agreement |
+
+### Recommended approach
+
+- **At launch:** reg number + **university email one-time code** if students have that email. If not: **class-rep vouching**, with ID upload as a fallback for edge cases. Format check always runs first to catch typos.
+- **Alumni:** reg number + graduation year + vouching by verified members or admin review.
+- **Staff:** staff email or staff number + admin approval.
+- **Roles** (Student Leader, office accounts, etc.) are granted by admins, never self-claimed.
+- **In parallel:** when asking the university for hosting approval, also ask for an official ERP verification link and a data-sharing agreement. This is the long-term answer.
+- **Never** probe the student portal or ERP to test whether reg numbers exist without written permission. That is unauthorised access under the Computer Misuse and Cybercrimes Act 2018 and would destroy trust with university ICT.
 
 Unverified accounts cannot see or post anything.
 
@@ -189,9 +214,23 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat
 ## 16. Open questions for the team
 
 - Final name and domain (e.g. a tharaka.ac.ke subdomain or our own).
-- Verification method: do students have a university email? How do freshers, alumni and staff verify?
+- Verification: do students have a university email (and is it built from the reg number)? If not, class-rep vouching at launch? (See section 5.)
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
 - Self-hosted Supabase vs plain Postgres + auth library + Socket.IO.
 - Reels in MVP or second release (bandwidth/storage).
 - Who moderates, and response time (especially for urgent/emergency reports).
 - Ad prices and how advertisers pay (outside the app).
+
+## 17. Team meeting agenda — 11 Nov 2026 (afternoon)
+
+Goal: agree the open questions above, not add features.
+
+1. **Walk-through of the brief (10 min)** — sections 1–4; Peter and Kim push back.
+2. **Verification (section 5)** — does anyone know if students have university email? Pick the launch method (email code vs class-rep vouching).
+3. **MVP cut** — proposed first release: accounts & verification, feed, groups, one-to-one chat, Today board, Ask a Senior. Later: reels, campus map, ads, emergency button (or keep emergency in v1?).
+4. **Server** — who asks university ICT for server details (section 16) and written approval? Ask about an ERP verification link in the same meeting.
+5. **Team roles** — who owns frontend, backend, server/ops, and university liaison.
+6. **Name and domain** — keep "Hatua"? tharaka.ac.ke subdomain or our own domain?
+7. **Next steps** — owners and dates for each decision; set up git access for everyone.
+
+Decisions from the meeting: _(record here and mark DECIDED in the relevant section)_
