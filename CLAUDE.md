@@ -1,114 +1,197 @@
-# Project Brief: Hatua — Campus Social Network ("Local Facebook")
+# Project Brief: Hatua — Tharaka University Social Network
 
 Working name "Hatua" (Swahili: "step") is a placeholder.
 Read this whole brief before writing code. Ask the team before changing any decision marked DECIDED.
 
 ## 1. What we're building
 
-A local, campus-centred social network for Kenya, starting at Tharaka University (Marimanti, Tharaka Nithi).
-Think "local Facebook": people connect with others in their area and campus, and the platform is also useful (Q&A, marketplace, events, jobs, student tools), so it beats WhatsApp groups.
+A free, members-only social network for the Tharaka University community: freshers, continuing students, alumni and staff.
+A place to network, learn and have fun — posts, groups, one-to-one chat, short videos (reels), campus news and a campus map — student-first.
 
-**DECIDED:** social network is the core. Tools and jobs are features inside it, not separate sites.
+Why it matters:
+- **Know first:** campus news (good and bad) reaches the community quickly, with official confirmation.
+- **Find your way:** freshers and shy/introverted students can learn the university (places, people, how things work) before they have to ask anyone face to face.
+- **Stay connected:** alumni network with and help current students.
 
-## 2. Who it's for (users)
+Decisions:
+- **DECIDED:** strictly Tharaka University. Only verified members can join or see content (closed to the outside, open inside).
+- **DECIDED:** free for users. No payments in the app.
+- **DECIDED:** social network is the core; education, news and fun live side by side.
+- **DECIDED:** self-hosted on the university's campus (KENET) server. Not Render.
 
-One journey, three stages — a user picks their stage at sign-up and can change it later:
-1. Joining tertiary — KCSE leavers (KUCCPS, HELB, choosing courses and campuses).
-2. Tertiary students — at a university or college.
-3. Job seekers — students and graduates looking for attachments, internships, part-time and full-time work.
+## 2. Who it's for
 
-**DECIDED:** location is by area (town / county) for everyone. Campus is an optional extra for students. (A campus-only picker does not work for KCSE leavers or job seekers.)
+Member types (chosen at sign-up, verified, updated over time):
+1. **Freshers** — newly admitted students (some may be 17).
+2. **Continuing students** — current students in any year.
+3. **Alumni** — graduates; network with and mentor students.
+4. **Staff** — lecturers and university staff (student-first rules, see section 6).
 
-## 3. Who pays (customers)
+Profiles show member type, course/school, year of study or graduation year, interests, and any role badges.
 
-- Local businesses near campuses (ads) — e.g. driving schools, eateries, cyber cafés, hostels.
-- Employers (featured job posts, casual job posts).
-- Landlords / hostels (listings).
-- Colleges, training centres, course providers (reach school leavers).
-- Users (small premium features, e.g. CV boost) — paid via M-Pesa.
-- Google AdSense as a background bonus only (Kenyan traffic pays low RPM, roughly $0.50–$2).
+Expected size: ~20,000 members at launch, growing with each intake and as alumni join (plan for 50,000+).
 
-## 4. MVP features (build in this order)
+## 3. Roles and accounts
 
-1. Accounts & profiles — sign up (phone or email), stage, area, optional campus, profile photo, delete-account option.
-2. Area/campus feed — posts (text + image), likes, comments, report button.
-3. Campus Q&A — questions with answers that stay searchable (e.g. "Which hostel near campus has water?").
-4. Comrade marketplace — buy/sell listings (books, phones, furniture), hostel room swaps.
-5. Events board — club and campus events (IEEE, ISACA, freshers, etc.).
-6. Jobs near me — employers post jobs tagged with location; filters: attachment, internship, part-time, casual, full-time; featured slot at top.
-7. Search — across posts, Q&A, listings, jobs, events. Search terms drive contextual ads.
-8. Ads system — see section 5.
+- **Personal accounts:** everyone has one and uses it normally.
+- **Role badges (verified, time-bound):** Staff, Student Leader, Club Leader, Moderator. Shown on the personal profile so nobody can impersonate them. Student/club leader roles expire at the end of the term of office.
+- **Office accounts:** official pages run by people with a role, e.g. "Student Council", "Academic Rep – School of Science", "Registrar", "Library", "Dean of Students", "IEEE Tharaka", "ISACA Tharaka". Used for official announcements. On handover, the office account (history and followers) passes to the next holder; personal accounts stay with the person.
+- **Verified office accounts** can post to the Today board and send push notifications (section 4.7).
 
-Later (not MVP): unit/course groups with notes and past papers, reviews of hostels/eateries/landlords, KUCCPS course checker, HELB guide, CV builder, direct messaging.
+## 4. Features
 
-## 5. Ads system
+### MVP (build in this order)
 
-- Targeting (in order of priority):
-  1. Contextual — match ad keywords to what the user searches or views (e.g. search "Tharaka University" → Tharaka Driving School ad).
-  2. User's chosen area / campus.
-  3. Approximate location from IP (rough town/county).
-  4. Precise GPS — opt-in only ("Show deals near me" button). Never track in the background.
-- Self-serve ad page: business picks area(s), uploads image + text, sets dates, pays with M-Pesa (Daraja API), ad goes live after admin approval.
-- Labels: every ad clearly marked "Sponsored".
-- Reporting: log every ad view and click in our own database (ad blockers can block GA4), so each advertiser gets a report: views, clicks, by area and date.
+1. **Accounts, verification & profiles** — sign up, prove Tharaka membership (section 5), member type, course, year, profile photo, delete account (in app and on the web), data export.
+2. **Feed & posts** — text, images, likes, comments. Report and block on everything. Anyone verified can post; all members see feed posts (including staff posts).
+3. **Groups** — any member can create one: public (any member can join) or private (approval/invite). Students can make **student-only** groups that staff cannot see or join. Auto-created groups per course and year. Group admins moderate their group.
+4. **One-to-one chat** — direct messages, message requests from strangers, block, report a conversation.
+5. **Ask a Senior** — freshers ask anything (hostels, offices, lecturers, where things are); continuing students and alumni answer; answers stay searchable. Askers may hide their name from other students (moderators can still see who asked). No fully anonymous posting anywhere else.
+6. **Campus map & places search** — see section 7.
+7. **Today board & official announcements** — when a member opens the app for the first time each day, they see pinned announcements from verified office accounts (departments, offices, student council). Each has an expiry date; limit on how many can be pinned at once; urgent vs normal (urgent always shows, normal can be collapsed).
+8. **Emergency / Urgent button** — alerts moderators and official safety accounts (security, health centre, dean of students) directly, and shows emergency numbers (campus security, ambulance, police). A normal feed post can still be made too.
+9. **Reels** — short vertical videos (education and fun), likes, comments, report. Data-saver mode (no autoplay on mobile data).
+10. **Search** — people, groups, posts, Ask a Senior answers, places, reels.
+11. **Sponsored content** — section 8.
+12. **Push notifications** — replies, messages, group activity, urgent announcements.
+
+### Later (not MVP)
+
+Group chats, events calendar, notes and past papers, alumni mentorship matching, own walking directions on campus (section 7), offline reading.
+
+## 5. Membership verification (Tharaka University only)
+
+Keep outsiders out while staying easy for real members. **Method TBD** (see open questions):
+- University email address (one-time code to the student/staff/alumni email) — preferred if students have one.
+- Admission/registration number + admin approval (e.g. freshers without an email yet).
+- Alumni: graduation year + vouching by verified members or admin review.
+- Staff: staff email or staff number + admin approval.
+- Roles (Student Leader, office accounts, etc.) are granted by admins, not self-claimed.
+
+Unverified accounts cannot see or post anything.
 
 ## 6. Trust & safety (non-negotiable)
 
-- Report button on every post, comment, listing, job and profile; admin moderation queue.
-- Jobs: verify employers; ban any listing that asks applicants to pay. Show the banner "Verified employers only. Never pay anyone to apply."
-- Under-18 users exist (some KCSE leavers are 17): no private messaging between strangers for under-18s, safer defaults, age-appropriate content.
-- Rules page / community guidelines; ability to suspend accounts.
+- Report and block on every post, comment, reel, group, chat and profile; admin moderation queue; group admins moderate their groups.
+- Community guidelines page; warn, suspend and ban accounts.
+- **Student-first staff rules:** staff posts are visible to everyone, but staff cannot send message requests to students (students may message staff), and staff cannot see student-only groups.
+- **Under-18 members** (some freshers are 17): no DMs from strangers by default, safer defaults, age-appropriate content.
+- **Breaking news and sensitive events** (e.g. a student's death or an accident):
+  - Do not name someone who has died or been seriously hurt until it is officially confirmed or the family has been told.
+  - No photos or videos of injured or dead people.
+  - Moderators can hide such posts in one tap, and label or pin confirmed information from official accounts.
+- Chat: message requests from strangers, easy block, report a conversation.
+- Reels/images: moderation tools for nudity, violence and harassment.
 
-## 7. Privacy & legal (Kenya)
+## 7. Campus map, places search & directions
 
-- Kenya Data Protection Act 2019: clear consent, privacy policy, cookie notice, account + data deletion.
-- Location is personal data — collect the minimum, precise location only with opt-in consent.
+Coverage: Tharaka University campus and the surrounding area — Marimanti, Gatunga, Mukothima and the perimeter.
+
+- **Base map:** OpenStreetMap (OSM) data. The team and clubs add missing campus buildings, footpaths, gates and local places to OSM (trace from satellite imagery in the OSM web editor; walk with StreetComplete / Every Door / OsmAnd). Organise a mapping day with clubs.
+- **Rendering:** MapLibre GL JS with a self-hosted Protomaps (PMTiles) file for the area — cheap, fast, can work offline.
+- **Our own places database:** library, lecture halls, offices (with opening hours), hostels, health centre, security, matatu/boda stages, shops, cyber cafés, banks/M-Pesa agents. Our search bar searches this first.
+- **Directions v1:** show the place on our map + "Open in Google Maps" for walking/driving directions.
+- **Directions v2 (later):** our own walking directions on campus using OSM footpaths and an open-source routing engine (e.g. GraphHopper or Valhalla).
+- Do not use the paid Google Maps API.
+- Private details (room numbers, people's homes) stay in our app only, never on OSM.
+
+## 8. Sponsored content (how we make money)
+
+- **DECIDED:** the team runs three kinds of ads: **jobs**, **courses** and **products**.
+- Ad deals and payment happen outside the app (no in-app payments, no self-serve ad checkout).
+- Admins create ads in an admin panel: title, text, image/video, link, category (job | course | product), target member types/courses/years, start and end dates.
+- Every ad is clearly labelled "Sponsored" and never disguised as a member post.
+- Targeting uses what members tell us (member type, course, year, interests) and what they search/view in the app. No GPS or location tracking for ads.
+- Log every ad view and click in our own database to report results to advertisers (views, clicks, by audience and date).
+- Job ads: verified employers only; reject any job that asks applicants to pay. Show "Never pay anyone to apply."
+
+## 9. Distribution & platform goals
+
+- **DECIDED:** no reliance on Google Play Store or Apple App Store, but built to meet their guidelines so we can list later.
+- Primary: a **Progressive Web App** (installable from the browser on Android, iPhone and desktop).
+- Optional: an Android **APK** downloadable from our website (thin wrapper around the PWA, e.g. Trusted Web Activity or Capacitor).
+- Store-readiness from day one: UGC moderation (report, block, filter), in-app + web account deletion, privacy policy, honest data disclosures, age gate, clearly labelled ads, no in-app payments.
+- Mobile-first, light on data, fast on cheap Android phones.
+
+## 10. Privacy & legal (Kenya)
+
+- Kenya Data Protection Act 2019: clear consent, privacy policy, cookie notice, account + data deletion, data export.
+- Collect the minimum. No precise location tracking; the map shows places, not people.
+- Private chats are personal data: protect them, limit staff/admin access, say so in the privacy policy.
+- Data is hosted on campus in Kenya.
 - Check registration requirements with the Office of the Data Protection Commissioner (ODPC) before launch.
+- Get written approval from the university (ICT and administration) for hosting, use of the university name/logo, and official office accounts.
 - (Team to confirm details with ODPC — not legal advice.)
 
-## 8. Analytics
+## 11. Analytics
 
-- Google Analytics 4 on every page + Google Search Console.
-- Custom events: ad_view, ad_click (with ad_id, area), post_create, job_apply, signup (with stage).
-- Goal: produce a media kit with real monthly numbers for big advertisers later.
+- Self-hosted, privacy-friendly analytics (e.g. Umami or Plausible self-hosted) to keep data on our server.
+- Events: signup (member type), verify_success, post_create, reel_upload, group_join, message_send, ask_senior_question, place_search, emergency_alert, ad_view, ad_click (ad_id, category).
+- Goal: real monthly numbers to show advertisers and the university.
 
-## 9. Suggested tech stack (confirm with team before starting)
+## 12. Tech stack (self-hosted on the campus KENET server)
 
-- Hosting: Render (team already uses it) — web service + Render Postgres.
-- App: a full-stack TypeScript framework (e.g. Next.js) with an ORM (e.g. Prisma) — suggestion only.
-- Images: object storage (e.g. S3-compatible / Cloudinary) — suggestion only.
-- Payments: M-Pesa Daraja API (STK Push).
-- Mobile-first, works well on slow data and cheap Android phones.
+Everything runs in **Docker Compose** so it is easy to rebuild or move.
 
-## 10. Draft data model (starting point, refine as needed)
+- **App:** Next.js (TypeScript), set up as a PWA.
+- **Database:** PostgreSQL. Full-text search in Postgres to start.
+- **Auth, realtime chat, storage API:** self-hosted Supabase (preferred), or an auth library + Socket.IO + Redis.
+- **Files (images, video):** MinIO (S3-compatible) on the server's disks.
+- **Reels:** background worker using ffmpeg to transcode uploads into small HLS renditions for cheap phones. Cap length and file size.
+- **Maps:** MapLibre GL JS + self-hosted Protomaps file.
+- **Web server / HTTPS:** Caddy (or Nginx) with Let's Encrypt.
+- **Push notifications:** Web Push.
+- **Monitoring:** Uptime Kuma + logs/metrics (e.g. Grafana).
 
-- users — id, name, phone/email, stage (joining | student | job_seeker), area_id, campus_id (nullable), is_under_18, created_at
-- areas — id, town, county
-- campuses — id, name, area_id
-- posts — id, user_id, area_id, campus_id, type (post | question | listing | event), body, image_url, created_at
+Operations (must have before launch):
+- **Nightly backups off the server** (database + files) to a second location, encrypted, with a tested restore.
+- **Power:** UPS/generator plan; who restarts the server out of hours.
+- **Uplink:** off-campus users (alumni, students at home) depend on the university's internet link; reels may need a quality cap or a CDN for video.
+- **Security:** isolated VM/network segment, only ports 80/443 exposed, regular patching, admin access limited and logged.
+- **Continuity:** handover plan when the founding team graduates.
+
+## 13. Draft data model (starting point, refine as needed)
+
+- users — id, name, email, member_type (fresher | continuing | alumni | staff), course, year_of_study, graduation_year, verified, verified_method, is_under_18, created_at
+- roles — id, user_id, role (staff | student_leader | club_leader | moderator | admin), title, starts_at, ends_at
+- office_accounts — id, name, type (department | office | student_council | club), verified, created_at
+- office_members — office_id, user_id, role (owner | editor), starts_at, ends_at
+- follows — follower_id, followee_id (user or office), created_at
+- groups — id, name, description, visibility (public | private), student_only, auto_type (course_year | none), created_by, created_at
+- group_members — group_id, user_id, role (admin | member), status (pending | active), joined_at
+- posts — id, author_user_id, author_office_id (nullable), group_id (nullable), body, media_url, media_type (image | video), is_reel, created_at
+- announcements — id, office_id, title, body, urgency (urgent | normal), pinned_until, created_at
+- questions — id, user_id, hide_name, body, created_at (Ask a Senior); answers — id, question_id, user_id, body, created_at
 - comments — id, post_id, user_id, body, created_at
-- jobs — id, employer_id, title, type, area_id, salary_text, is_featured, status, created_at
-- employers — id, name, verified, contact
-- ads — id, advertiser_id, title, body, image_url, keywords[], area_ids[], start_date, end_date, status
-- ad_events — id, ad_id, type (view | click), area_id, created_at
-- payments — id, payer, amount_kes, mpesa_receipt, purpose, status, created_at
+- likes — user_id, post_id, created_at
+- conversations — id, user_a_id, user_b_id, status (request | active | blocked), created_at
+- messages — id, conversation_id, sender_id, body, media_url, created_at, read_at
+- blocks — blocker_id, blocked_id, created_at
+- places — id, name, category, description, lat, lng, opening_hours, building, created_by, verified
+- emergency_alerts — id, user_id, message, lat, lng (optional, only if the user shares it), status, created_at
+- ads — id, category (job | course | product), advertiser_name, title, body, media_url, link, target (member types, courses, years), start_date, end_date, status
+- ad_events — id, ad_id, type (view | click), created_at
 - reports — id, reporter_id, target_type, target_id, reason, status
 
-## 11. Design reference
+## 14. Design reference
 
-Two mobile screens (Home, Jobs near me) were mocked up: one column, big tap targets, bottom nav (Home, Jobs, Campus, Tools, Profile), area chip at the top, search bar, journey buttons (Joining campus / At campus / Job hunting), clearly labelled sponsored cards. Accent colour: green #0A7B54.
+Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat, Profile. Search bar at top (people, posts, places). Today board at the top of Home on first open each day. Emergency button reachable from the menu. Clearly labelled sponsored cards. Badges for Staff / Student Leader / Official. Accent colour: green #0A7B54.
 
-## 12. Launch plan
+## 15. Launch plan
 
-1. Launch at Tharaka University only; seed with IEEE and ISACA student members, class reps, freshers.
-2. Sell first ads in person to businesses in Marimanti.
-3. Add self-serve ads + campus ambassadors (commission) to grow to new areas.
-4. Approach big advertisers (colleges, banks/saccos, telcos) once real traffic numbers exist.
+1. Get university approval (ICT for hosting; administration for name/logo and office accounts).
+2. Mapping day: add campus and Marimanti/Gatunga/Mukothima places to OSM and our places database.
+3. Launch at Tharaka University; seed with IEEE and ISACA members, class reps, student council, club leaders and freshers; onboard key offices (registrar, library, dean of students, security).
+4. Invite alumni through clubs and alumni networks.
+5. Sell first job, course and product ads in person (Marimanti businesses, colleges, employers).
+6. Approach bigger advertisers once real numbers exist.
 
-## 13. Open questions for the team
+## 16. Open questions for the team
 
-- Final name and domain.
-- Exact tech stack.
-- Sign-up method (phone OTP vs email).
-- Who moderates, and response time.
-- Ad prices (placeholder: e.g. KSh 500/week to test).
+- Final name and domain (e.g. a tharaka.ac.ke subdomain or our own).
+- Verification method: do students have a university email? How do freshers, alumni and staff verify?
+- Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
+- Self-hosted Supabase vs plain Postgres + auth library + Socket.IO.
+- Reels in MVP or second release (bandwidth/storage).
+- Who moderates, and response time (especially for urgent/emergency reports).
+- Ad prices and how advertisers pay (outside the app).
