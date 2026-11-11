@@ -164,24 +164,59 @@ Coverage: Tharaka University campus and the surrounding area — Marimanti, Gatu
 
 ## 12. Tech stack (self-hosted on the campus KENET server)
 
-Everything runs in **Docker Compose** so it is easy to rebuild or move.
+**Principle:** the requirements choose the stack. Team familiarity is only a tie-breaker between options that all fit. Status: **proposed** — the team challenges each row, then we mark it DECIDED.
 
-- **App:** Next.js (TypeScript), set up as a PWA.
-- **Database:** PostgreSQL. Full-text search in Postgres to start.
-- **Auth, realtime chat, storage API:** self-hosted Supabase (preferred), or an auth library + Socket.IO + Redis.
-- **Files (images, video):** MinIO (S3-compatible) on the server's disks.
-- **Reels:** background worker using ffmpeg to transcode uploads into small HLS renditions for cheap phones. Cap length and file size.
-- **Maps:** MapLibre GL JS + self-hosted Protomaps file.
-- **Web server / HTTPS:** Caddy (or Nginx) with Let's Encrypt.
-- **Push notifications:** Web Push.
-- **Monitoring:** Uptime Kuma + logs/metrics (e.g. Grafana).
+### Requirements that drive the choice
 
-Operations (must have before launch):
+At 20k–50k members, almost any modern stack handles the basic load, so the deciding factors are:
+1. **Members-only, behind login** — search engines never index it, so server-side rendering for SEO has no value.
+2. **Installable PWA** — works offline, fast on cheap Android phones and slow data.
+3. **Real-time chat and notifications** — thousands of open connections at once.
+4. **Reels** — video transcoding and streaming over a limited university uplink.
+5. **Maps and places** — geographic data and "near me" queries.
+6. **One self-hosted campus server**, run by students, with backups and a clean handover.
+7. **Privacy and security** — Kenya Data Protection Act, under-18 members, private chats.
+
+### Proposed stack
+
+| Need | Choice | Why it fits |
+|---|---|---|
+| App (PWA) | **React + Vite single-page app**, Workbox for offline | No SEO need (req. 1), so SSR (Next.js) adds server load for no benefit. An app-shell PWA caches and works offline well (req. 2). Mature libraries for virtualised feeds, video players and MapLibre. |
+| API | **Node.js + TypeScript** (Fastify or Express) | Holds thousands of WebSocket connections cheaply on one server (req. 3, 6). One language end to end: the same validation schemas (e.g. zod) on app and server. |
+| Database | **PostgreSQL + PostGIS** | Relational data (members, groups, follows) is its strength; built-in full-text search for launch; PostGIS for places and map queries (req. 5). |
+| Real-time | **WebSockets + Redis pub/sub** | The proven pattern for chat and live notifications (req. 3); Redis lets us run a second API process later. |
+| Background jobs | **Redis + BullMQ** | Video transcoding, emails and push run in the background so users don't wait. |
+| Reels | **ffmpeg → HLS at 360p/480p/720p, stored in MinIO** | Adaptive quality for a small uplink and cheap phones (req. 2, 4); stays on our server. Cap length and file size. |
+| Login | **Passwordless one-time code to the university email** | Matches the verification decision (section 5). No passwords to leak or reset; sessions in secure httpOnly cookies (req. 7). |
+| Search | Postgres full-text at launch → **Meilisearch** if it gets slow | Lightweight, self-hosted, typo-tolerant. |
+| Maps | **MapLibre GL JS + self-hosted Protomaps (PMTiles) + PostGIS** | Works offline, no API fees, data stays on our server (section 7). |
+| Push notifications | **Web Push (VAPID)** | Works in installed PWAs on Android and iPhone. |
+| Analytics | **Umami or Plausible (self-hosted)** | Data stays on our server (section 11). |
+| Server | **Docker Compose + Caddy** (automatic HTTPS), **restic** backups, **Uptime Kuma** + logs | Simple to run and rebuild on one machine; off-server backups (req. 6). |
+
+### Considered and ruled out
+
+| Option | Why not |
+|---|---|
+| Next.js | Server-side rendering we don't need for a login-only app; more load on one server. |
+| Self-hosted Supabase | About a dozen extra services to run and patch on one campus server — heavy operations for a student team. |
+| Firebase | Cannot be self-hosted; data leaves Kenya. |
+| Django | Capable, but real-time chat is weaker than in Node. |
+| Elixir / Phoenix | Best-in-class real-time, but niche — hard to hand over when the team graduates. |
+
+### Build or adopt?
+
+**HumHub** (open-source, self-hosted private social network for organisations, PHP) could run on campus in days. It does not fit our key features — reels, Today board, Ask a Senior, email-domain verification, campus map — without heavy changes, so **building is justified**. The team should still look at it and agree on this.
+
+The hard parts (video pipeline, real-time chat, running our own server) are new to everyone whatever the stack.
+
+### Operations (must have before launch)
+
 - **Nightly backups off the server** (database + files) to a second location, encrypted, with a tested restore.
 - **Power:** UPS/generator plan; who restarts the server out of hours.
 - **Uplink:** off-campus users (alumni, students at home) depend on the university's internet link; reels may need a quality cap or a CDN for video.
 - **Security:** isolated VM/network segment, only ports 80/443 exposed, regular patching, admin access limited and logged.
-- **Continuity:** handover plan when the founding team graduates.
+- **Continuity:** handover plan and runbook when the founding team graduates.
 
 ## 13. Draft data model (starting point, refine as needed)
 
@@ -224,7 +259,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat
 - Final name and domain (e.g. a tharaka.ac.ke subdomain or our own).
 - Alumni verification: do students keep their student.tharaka.ac.ke email after graduation? (See section 5.)
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
-- Self-hosted Supabase vs plain Postgres + auth library + Socket.IO.
+- Tech stack (section 12): challenge each row, then mark DECIDED. Build vs adopt (HumHub).
 - Reels in MVP or second release (bandwidth/storage).
 - Who moderates, and response time (especially for urgent/emergency reports).
 - Ad prices and how advertisers pay (outside the app).
@@ -236,9 +271,10 @@ Goal: agree the open questions above, not add features.
 1. **Walk-through of the brief (10 min)** — sections 1–4; Peter and Kim push back.
 2. **Verification (section 5)** — DECIDED: one-time code to a tharaka.ac.ke / student.tharaka.ac.ke email. Discuss how alumni verify.
 3. **MVP cut** — proposed first release: accounts & verification, feed, groups, one-to-one chat, Today board, Ask a Senior. Later: reels, campus map, ads, emergency button (or keep emergency in v1?).
-4. **Server** — who asks university ICT for server details (section 16) and written approval? Ask about an ERP verification link in the same meeting.
-5. **Team roles** — who owns frontend, backend, server/ops, and university liaison.
-6. **Name and domain** — keep "Hatua"? tharaka.ac.ke subdomain or our own domain?
-7. **Next steps** — owners and dates for each decision; set up git access for everyone.
+4. **Tech stack (section 12)** — go through the table row by row; agree or propose a better fit with a reason.
+5. **Server** — who asks university ICT for server details (section 16) and written approval? Ask about an ERP verification link in the same meeting.
+6. **Team roles** — who owns frontend, backend, server/ops, and university liaison.
+7. **Name and domain** — keep "Hatua"? tharaka.ac.ke subdomain or our own domain?
+8. **Next steps** — owners and dates for each decision; set up git access for everyone.
 
 Decisions from the meeting: _(record here and mark DECIDED in the relevant section)_
