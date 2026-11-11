@@ -84,9 +84,17 @@ Knowing a reg number exists is not enough. Reg numbers appear on exam lists, not
 | University email one-time code (if students have university email, especially if built from the reg number) | Yes | Yes | No — uses email the university already provides |
 | ERP lookup (read-only "does this reg number exist, does the name match?") | Yes | Needs a second step | Yes — formal data-sharing agreement |
 
-### Recommended approach
+### DECIDED: one-time code to a university email
 
-- **At launch:** reg number + **university email one-time code** if students have that email. If not: **class-rep vouching**, with ID upload as a fallback for edge cases. Format check always runs first to catch typos.
+- Sign-up requires an email ending in **`tharaka.ac.ke`**. A one-time code is sent there; entering it proves the person controls a university mailbox.
+- The domain sets the member type:
+  - `@student.tharaka.ac.ke` → student (fresher or continuing; the member picks which, and gives their reg number).
+  - `@tharaka.ac.ke` (no student subdomain) → staff (gives staff number; Staff badge after admin approval).
+- Match the domain exactly (the part after `@` must be `tharaka.ac.ke` or `student.tharaka.ac.ke`), so look-alikes such as `tharaka.ac.ke.evil.com` or `faketharaka.ac.ke` are rejected.
+- Reg number is still collected, format-checked and unique per account.
+- Re-verify periodically (e.g. yearly) so access ends when someone leaves.
+- **Open:** do alumni keep their student email after graduating? If not, alumni verify by reg number + graduation year + vouching/admin review, ideally verifying before their student email is closed (prompt final-year students to link a personal email).
+- **Fallback for edge cases** (no university email yet, e.g. a brand-new fresher): class-rep vouching or ID upload checked by a moderator.
 - **Alumni:** reg number + graduation year + vouching by verified members or admin review.
 - **Staff:** staff email or staff number + admin approval.
 - **Roles** (Student Leader, office accounts, etc.) are granted by admins, never self-claimed.
@@ -214,7 +222,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat
 ## 16. Open questions for the team
 
 - Final name and domain (e.g. a tharaka.ac.ke subdomain or our own).
-- Verification: do students have a university email (and is it built from the reg number)? If not, class-rep vouching at launch? (See section 5.)
+- Alumni verification: do students keep their student.tharaka.ac.ke email after graduation? (See section 5.)
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
 - Self-hosted Supabase vs plain Postgres + auth library + Socket.IO.
 - Reels in MVP or second release (bandwidth/storage).
@@ -226,7 +234,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat
 Goal: agree the open questions above, not add features.
 
 1. **Walk-through of the brief (10 min)** — sections 1–4; Peter and Kim push back.
-2. **Verification (section 5)** — does anyone know if students have university email? Pick the launch method (email code vs class-rep vouching).
+2. **Verification (section 5)** — DECIDED: one-time code to a tharaka.ac.ke / student.tharaka.ac.ke email. Discuss how alumni verify.
 3. **MVP cut** — proposed first release: accounts & verification, feed, groups, one-to-one chat, Today board, Ask a Senior. Later: reels, campus map, ads, emergency button (or keep emergency in v1?).
 4. **Server** — who asks university ICT for server details (section 16) and written approval? Ask about an ERP verification link in the same meeting.
 5. **Team roles** — who owns frontend, backend, server/ops, and university liaison.
