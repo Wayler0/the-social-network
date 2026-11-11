@@ -264,7 +264,11 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat
 - Who moderates, and response time (especially for urgent/emergency reports).
 - Ad prices and how advertisers pay (outside the app).
 
-## 17. Team meeting agenda — 11 Nov 2026 (afternoon)
+## 17. Roadmap
+
+Milestones, weekly tasks per person and the 20 Dec launch plan live in **ROADMAP.md**. Weekly briefing: Sundays 8:00 pm.
+
+## 18. Team meeting agenda — 11 Nov 2026 (afternoon)
 
 Goal: agree the open questions above, not add features.
 
