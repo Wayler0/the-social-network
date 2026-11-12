@@ -55,6 +55,38 @@ Expected size: ~20,000 members at launch, growing with each intake and as alumni
 11. **Sponsored content** — section 8.
 12. **Push notifications** — replies, messages, group activity, urgent announcements.
 
+### Club pages (DECIDED 12 Nov 2026)
+
+Clubs and societies use **groups, not a separate channels feature**. Fun groups stay ordinary groups.
+
+| | Societies & clubs | Fun groups | Offices |
+|---|---|---|---|
+| Set up as | Group with **Announcements** (admins only) + **Discussion** (members) tabs | Ordinary group | Office account |
+| Follow without joining | Yes: announcements appear in followers' feeds | No, members only | Yes |
+| Stories on the Today row | Yes, to followers, after official stories | No | Yes, first, for everyone |
+| Badge | CLUB, given by an admin after checking the Dean of Students' list of registered societies | None | OFFICIAL |
+| Handover to next leaders | Yes, like office accounts | Admins add new admins | Yes |
+
+- **Follow** = announcements in your feed. **Join** = you can also post in Discussion.
+- **v0.1:** "only admins can post" setting on groups + CLUB badge. **v0.2:** Follow, club stories, handover.
+
+### Stories / status (DECIDED 12 Nov 2026)
+
+Any verified member can post a story. The stories row at the top of Home shows, in order: **your own ("Your story +") → official accounts (always first among others, everyone sees them) → clubs you follow → people you follow**.
+
+| Rule | Why |
+|---|---|
+| Disappears after 24 h | Standard; keeps storage small |
+| Default audience: followers. Options: Close friends, hide from specific people | Privacy |
+| Under-18 members: only people they follow back see their stories | Child safety |
+| Staff can't see a student's story unless the student follows them | Student-first staff rule (section 6) |
+| Viewer list for the author | Expected; discourages lurking |
+| Replies go to chat as a message request | Reuses chat |
+| Report on every story; reported stories kept for moderators like deleted messages (section 6) | Moderation |
+| Photo and text only; video stories later with Reels | Data cost and storage |
+
+- **v0.1:** official accounts only. **v0.2:** personal and club stories (needs chat for replies, 24 h expiry jobs, viewer lists). **Later:** video stories.
+
 ### Later (not MVP)
 
 Group chats, events calendar, notes and past papers, alumni mentorship matching, own walking directions on campus (section 7), offline reading.
