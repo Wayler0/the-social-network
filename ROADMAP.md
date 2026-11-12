@@ -24,7 +24,7 @@ Only what a member needs to join and use it daily:
 7. **Installable PWA** on Android, iPhone and desktop.
 8. **Legal basics:** privacy policy, community guidelines, terms.
 
-**Not in v0.1** (planned, see "After launch"): one-to-one chat, push notifications, reels, campus map, ads, emergency button, search beyond basics.
+**Not in v0.1** (planned, see "After launch"): one-to-one chat, push notifications, reels, campus map, ads, emergency button, search beyond basics. The Reels tab is in the nav from v0.1 but shows a "Coming soon" screen.
 
 ---
 

@@ -306,7 +306,7 @@ Rules and consequences for the team:
 
 ## 14. Design reference
 
-Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create), Reels, Profile. Discover holds search, Groups, Ask a Senior, Events, Market. Today board = story circles at the top of Home (office accounts). Feed and profile follow Instagram patterns, reels follow TikTok, groups/events/market follow Facebook, camera and chat follow Snapchat — patterns only, own look. Emergency button reachable from the menu. Clearly labelled sponsored cards. Badges for Staff / Student Leader / Official / Club. Colours: violet #6A3DF5 (primary), coral #FF3D71 (likes, alerts), sunshine #FFC83D (highlights), mint #14C8A8, ink #111018. Fonts: Space Grotesk (headings), Inter (body). Screens: Hatua design canvas (Claude artifact).
+Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create), Reels, Profile (in v0.1 the Reels tab shows a "Coming soon" screen). Discover holds search, Groups, Ask a Senior, Events, Market. Today board = story circles at the top of Home (office accounts). Feed and profile follow Instagram patterns, reels follow TikTok, groups/events/market follow Facebook, camera and chat follow Snapchat — patterns only, own look. Emergency button reachable from the menu. Clearly labelled sponsored cards. Badges for Staff / Student Leader / Official / Club. Colours: violet #6A3DF5 (primary), coral #FF3D71 (likes, alerts), sunshine #FFC83D (highlights), mint #14C8A8, ink #111018. Fonts: Space Grotesk (headings), Inter (body). Screens: Hatua design canvas (Claude artifact).
 
 ## 15. Launch plan
 
@@ -323,7 +323,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create
 - Alumni verification: do students keep their student.tharaka.ac.ke email after graduation? (See section 5.)
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
 - Tech stack (section 12): challenge each row, then mark DECIDED. Build vs adopt (HumHub).
-- Reels in MVP or second release (bandwidth/storage).
+- ~~Reels in MVP or second release~~ **DECIDED 12 Nov:** not built in v0.1. The Reels tab stays in the bottom nav and opens a "Coming soon" screen (short line on what Reels will be, no fake content, no upload).
 - Who moderates, and response time (especially for urgent/emergency reports).
 - Ad prices and how advertisers pay (outside the app).
 
