@@ -71,9 +71,9 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 
 Sign-in and sign-up are **the same flow**: request a code, enter it. A new email creates an account; a known email signs in. The web screens already call these two endpoints with exactly these shapes (`apps/web/src/lib/api.ts`).
 
-### Tables (migration `002_auth.sql`, CLAUDE.md section 13)
+### Tables (migration `002_users_sessions.sql` ✅, CLAUDE.md section 13)
 `users` (at least: `id, campus_id, email, member_type, name, member_number, member_number_normalised, member_number_status, course, year_of_study, graduation_year, is_under_18, verified, verified_method, suspended_at, created_at, deleted_at`), `auth_codes`, `sessions`.
-Coordinate with Peter (#30) so there is one users migration, not two.
+Written for #30. Rate limits use the `rate_limit_events` table (one row per counted event). Further columns come as new migrations (003_…), never by editing 002.
 
 ### `POST /api/auth/request-code` *(public)*
 ```json
