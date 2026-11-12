@@ -1,3 +1,4 @@
+import { APP_NAME } from '../config';
 import { TopBar } from '../components/TopBar';
 import { Placeholder } from '../components/Placeholder';
 
@@ -6,7 +7,7 @@ export function Home() {
   return (
     <>
       <TopBar notifications={3} messages={2} />
-      <Placeholder title="Welcome to Hatua" text="Your campus feed and the Today board will appear here." />
+      <Placeholder title={`Welcome to ${APP_NAME}`} text="Your campus feed and the Today board will appear here." />
     </>
   );
 }

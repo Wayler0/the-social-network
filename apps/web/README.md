@@ -15,8 +15,10 @@ When the API runs on :3000, set `VITE_API_MOCK=false` — Vite forwards `/api` t
 
 | Path | Screen | Issue |
 |---|---|---|
-| `/welcome` | Sign-up (university email only) | #1 |
+| `/welcome` | Sign-up (campus email only) | #1 |
 | `/verify` | Code entry (paste, autofill, resend cooldown) | #2 |
 | `/` | Home (top bar; feed comes later) | #4 |
 | `/reels` | Reels — Coming soon | #8 |
 | `/profile` | Profile placeholder + log out | #7 |
+
+**Name and campuses:** the app name is a placeholder and lives in `src/config.ts` (plus `index.html` and `public/manifest.webmanifest`). Allowed email domains come from the campus list in the same file; adding a campus is adding an entry, not changing code.

@@ -1,3 +1,4 @@
+import { APP_SLUG } from '../config';
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 /**
@@ -6,7 +7,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
  * In mock mode we remember the flag in localStorage so a refresh keeps you signed in.
  */
 const MOCK = import.meta.env.VITE_API_MOCK === 'true';
-const KEY = 'hatua.mockSignedIn';
+const KEY = `${APP_SLUG}.mockSignedIn`;
 
 function readFlag(): boolean {
   if (!MOCK) return false;

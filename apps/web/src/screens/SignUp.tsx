@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { checkUniversityEmail, emailErrorText } from '../lib/email';
+import { APP_SLUG, CAMPUSES } from '../config';
+import { allowedDomains, checkCampusEmail, emailErrorText } from '../lib/email';
 import { requestCode, ApiError } from '../lib/api';
 
-/** Issue #1 — sign-up / sign-in: university email only. Design: canvas screen 1. */
+/** Issue #1 — sign-up / sign-in: campus email only. Design: canvas screen 1. */
 export function SignUp() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -12,9 +13,9 @@ export function SignUp() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const check = checkUniversityEmail(email);
+    const check = checkCampusEmail(email);
     if (!check.ok) {
-      setError(emailErrorText[check.reason]);
+      setError(emailErrorText(check.reason));
       return;
     }
     setError(null);
@@ -33,17 +34,17 @@ export function SignUp() {
   return (
     <main className="auth">
       <div className="auth-hero">
-        <span className="wordmark">hatua<span>.</span></span>
+        <span className="wordmark">{APP_SLUG}<span>.</span></span>
         <h1 className="screen-title">Your campus, in one place.</h1>
-        <p>For Tharaka University students, staff and alumni. Join with your university email.</p>
+        <p>For the {CAMPUSES.map((c) => c.name).join(', ')} community: students, staff and alumni. Join with your campus email.</p>
       </div>
 
       <form className="auth-form" onSubmit={onSubmit} noValidate>
         <div className="field">
-          <label htmlFor="email">University email</label>
+          <label htmlFor="email">Campus email</label>
           <input
             id="email" className="input" type="email" inputMode="email" autoComplete="email"
-            autoCapitalize="none" spellCheck={false} placeholder="you@student.tharaka.ac.ke"
+            autoCapitalize="none" spellCheck={false} placeholder={`you@${allowedDomains()[0]}`}
             value={email} onChange={(e) => { setEmail(e.target.value); if (error) setError(null); }}
             aria-invalid={error ? 'true' : 'false'} aria-describedby="email-help"
           />
