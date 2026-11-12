@@ -243,7 +243,7 @@ The hard parts (video pipeline, real-time chat, running our own server) are new 
 
 ## 14. Design reference
 
-Mobile-first, one column, big tap targets. Bottom nav: Home, Reels, Groups, Chat, Profile. Search bar at top (people, posts, places). Today board at the top of Home on first open each day. Emergency button reachable from the menu. Clearly labelled sponsored cards. Badges for Staff / Student Leader / Official. Accent colour: green #0A7B54.
+Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create), Reels, Profile. Discover holds search, Groups, Ask a Senior, Events, Market. Today board = story circles at the top of Home (office accounts). Feed and profile follow Instagram patterns, reels follow TikTok, groups/events/market follow Facebook, camera and chat follow Snapchat — patterns only, own look. Emergency button reachable from the menu. Clearly labelled sponsored cards. Badges for Staff / Student Leader / Official / Club. Colours: violet #6A3DF5 (primary), coral #FF3D71 (likes, alerts), sunshine #FFC83D (highlights), mint #14C8A8, ink #111018. Fonts: Space Grotesk (headings), Inter (body). Screens: Hatua design canvas (Claude artifact).
 
 ## 15. Launch plan
 
