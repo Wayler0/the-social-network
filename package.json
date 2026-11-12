@@ -1,10 +1,16 @@
 {
   "name": "hatua",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev:web": "npm run dev -w apps/web",
     "build:web": "npm run build -w apps/web",
-    "test:web": "npm run test -w apps/web"
+    "test:web": "npm run test -w apps/web",
+    "dev:api": "npm run dev -w apps/api",
+    "migrate": "npm run migrate -w apps/api",
+    "test": "npm test --workspaces",
+    "db:up": "docker compose up -d db"
   }
 }
