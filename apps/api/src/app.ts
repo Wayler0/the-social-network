@@ -4,7 +4,7 @@ import type { Db } from './db.js';
 
 /**
  * Builds the API. Routes live under /api (the web server forwards /api here).
- * Feature routes are registered below as they are built — see docs/api-contract.md.
+ * Feature routes are registered below as they are built. Shapes, rules and owners: docs/api-contract.md.
  */
 export function buildApp(config: Config, db: Db): FastifyInstance {
   const app = Fastify({
