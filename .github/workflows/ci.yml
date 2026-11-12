@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22   # same as deploy/api.Dockerfile
           cache: npm
@@ -65,10 +65,11 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://hatua:ci-only-password@127.0.0.1:5432/hatua
-      NODE_ENV: production
+      # NODE_ENV=production only on the steps that run the built API: set job-wide,
+      # it makes `npm ci` skip dev tools (tsc), which broke run #1.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -76,13 +77,16 @@ jobs:
       - run: npm run build -w apps/api
 
       - name: Apply migrations
+        env: { NODE_ENV: production }
         run: npm run migrate:prod -w apps/api
 
       - name: Migrations are idempotent (second run applies nothing)
+        env: { NODE_ENV: production }
         run: npm run migrate:prod -w apps/api | tee out.txt && grep -q "up to date" out.txt
 
       - name: API starts and answers
         working-directory: apps/api
+        env: { NODE_ENV: production }
         run: |
           node dist/server.js &
           for i in $(seq 1 20); do curl -fs localhost:3000/api/health && break; sleep 1; done
@@ -94,6 +98,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build (not pushed)
         run: docker build -f deploy/api.Dockerfile -t hatua-api:ci .
