@@ -114,6 +114,16 @@ Unverified accounts cannot see or post anything.
   - No photos or videos of injured or dead people.
   - Moderators can hide such posts in one tap, and label or pin confirmed information from official accounts.
 - Chat: message requests from strangers, easy block, report a conversation.
+- **Deleting and disappearing messages (chat, v0.2):**
+
+  | Situation | The other person sees | The server keeps |
+  |---|---|---|
+  | Delete for me | No change | The message stays for them |
+  | Delete for everyone | "This message was deleted" (no content) | Content hidden for **7 days** so the other person can still report it, then erased |
+  | Reported before deletion | "This message was deleted" | Kept for moderators until the report is closed |
+  | Disappearing messages (24 h after seen, both people turned on) | No notice | Erased after 24 h unless reported |
+
+  Why the notice: the other person may already have seen it, replies to it must still make sense, and it stops "send then delete" harassment. Keeping deleted content only for reports, for a fixed time, follows DPA data minimisation.
 - Reels/images: moderation tools for nudity, violence and harassment.
 
 ## 7. Campus map, places search & directions
