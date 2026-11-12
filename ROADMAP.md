@@ -55,7 +55,7 @@ Hours are per person.
 | Fri 13 – Sun 15 | Claude sprint: repo skeleton, Docker Compose, DB schema + migrations, auth (email code), PWA shell + design tokens, CI, docs, GitHub issue backlog | Review the auth design and API structure; set up locally | Review schema + Docker setup; set up locally |
 | Sun 15 | **Briefing #1:** walk through the skeleton, assign week-1 issues | | |
 
-**This week (Solomon): email university ICT** for the server (specs, VM, public IP or port forwarding, a `tharaka.ac.ke` subdomain, an SMTP relay for sending emails). We need access by **Sun 29 Nov** — this is the critical path.
+**Server request to university ICT: DONE (made in person).** Follow up for the server (specs, VM, public IP or port forwarding, a `tharaka.ac.ke` subdomain, an SMTP relay for sending emails). We need access by **Sun 29 Nov** — this is the critical path.
 
 ### Week 1 — Mon 16 to Sun 22 Nov (build: ~2 h/day on weekdays)
 
