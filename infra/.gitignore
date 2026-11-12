@@ -1,0 +1,4 @@
+# Secrets and local overrides — never commit.
+.env
+.env.*
+!.env.example
