@@ -1,0 +1,36 @@
+/* Design tokens — from the design canvas (CLAUDE.md §14). */
+:root {
+  --violet: #6a3df5;
+  --violet-dark: #5228d9;
+  --violet-soft: #efeaff;
+  --coral: #ff3d71;
+  --coral-soft: #ffe3eb;
+  --sunshine: #ffc83d;
+  --mint: #14c8a8;
+  --ink: #111018;
+
+  --text: var(--ink);
+  --text-2: #5e5b6b;
+  --text-3: #6b6878;
+  --surface: #ffffff;
+  --surface-2: #f7f6fb;
+  --fill: #f2f1f6;
+  --line: #eceaf2;
+  --danger: #c4183c;
+
+  --accent: var(--violet);
+  --accent-press: var(--violet-dark);
+
+  --font-heading: 'Space Grotesk', Inter, system-ui, sans-serif;
+  --font-body: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-s: 12px;
+  --radius-m: 16px;
+  --radius-l: 20px;
+  --radius-pill: 999px;
+
+  --tap: 44px; /* minimum tap target */
+  --topbar-h: 56px;
+  --nav-h: 64px;
+  --max-w: 480px; /* one column, phone-first */
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Hatua",
+  "short_name": "Hatua",
+  "description": "Your campus community, in one place.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6A3DF5",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

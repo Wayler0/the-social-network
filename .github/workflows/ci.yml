@@ -1,0 +1,103 @@
+# Runs on every push and pull request. A red check means: don't merge.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Type-check, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22   # same as deploy/api.Dockerfile
+          cache: npm
+      - run: npm ci
+
+      - name: Type-check
+        run: |
+          npx -w apps/web tsc -b
+          npm run typecheck -w apps/api
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: |
+          npm run build -w apps/web
+          npm run build -w apps/api
+
+      # CLAUDE.md, Positioning: campus names and email domains are data, never code.
+      - name: No hard-coded campus in app code
+        run: |
+          if grep -rniI "tharaka" apps/web/src apps/api/src \
+               --exclude=config.ts --exclude='*.test.ts'; then
+            echo "::error::Campus name or domain hard-coded above. Put it in config or the campuses table."
+            exit 1
+          fi
+
+  database:
+    name: Migrations + API against real Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      db:
+        image: postgis/postgis:16-3.4-alpine   # same as docker-compose.yml
+        env:
+          POSTGRES_DB: hatua
+          POSTGRES_USER: hatua
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hatua -d hatua"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://hatua:ci-only-password@127.0.0.1:5432/hatua
+      # NODE_ENV=production only on the steps that run the built API: set job-wide,
+      # it makes `npm ci` skip dev tools (tsc), which broke run #1.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w apps/api
+
+      - name: Apply migrations
+        env: { NODE_ENV: production }
+        run: npm run migrate:prod -w apps/api
+
+      - name: Migrations are idempotent (second run applies nothing)
+        env: { NODE_ENV: production }
+        run: npm run migrate:prod -w apps/api | tee out.txt && grep -q "up to date" out.txt
+
+      - name: API starts and answers
+        working-directory: apps/api
+        env: { NODE_ENV: production }
+        run: |
+          node dist/server.js &
+          for i in $(seq 1 20); do curl -fs localhost:3000/api/health && break; sleep 1; done
+          curl -fs localhost:3000/api/health | grep -q '"db":"up"'
+          curl -fs localhost:3000/api/campuses | grep -q '"slug":"tharaka"'
+
+  docker:
+    name: API image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build (not pushed)
+        run: docker build -f deploy/api.Dockerfile -t hatua-api:ci .

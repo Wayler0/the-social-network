@@ -1,6 +1,12 @@
 # Project Brief: Hatua — Tharaka University Social Network
 
-Working name "Hatua" (Swahili: "step") is a placeholder.
+Working name "Hatua" (Swahili: "step") is a **placeholder** — the final name is not decided. Keep the name in one config value (app name, logo text, email sender) so it can be changed in one place; never hard-code it in screens or emails.
+
+**Positioning (DECIDED 12 Nov):** this is an independent app **used by** the Tharaka University community — not an official Tharaka University app. Tharaka is the first campus; the app may later open to other campuses. What this means:
+- **No university branding or implied endorsement:** no university logo or crest, no "official app of" wording. Official office accounts are verified pages *on* the app.
+- **Own domain,** not a tharaka.ac.ke subdomain. A placeholder subdomain is fine until the name is chosen.
+- **Campus is data, not code:** a `campuses` table holds each campus's name and allowed email domains (section 13). Nothing in code may hard-code "tharaka" or its email domains. v0.1 has one row.
+- **We are the data controller** under the Data Protection Act (section 10), not the university. University approval is still needed for what touches the university: hosting on the campus server and verifying members by university email.
 Read this whole brief before writing code. Ask the team before changing any decision marked DECIDED.
 
 ## 1. What we're building
@@ -285,6 +291,11 @@ Rules and consequences for the team:
 
 PostgreSQL 16 + PostGIS. Every table has an internal `id` (UUID) primary key; identifiers people type (email, reg number) are unique columns, never keys. Reviewed 12 Nov — gaps found by the team are fixed below (marked *fixed 12 Nov*).
 
+**Campuses** — *added 12 Nov (independent, multi-campus ready)*
+- campuses — id, name, slug, status (active | coming_soon), created_at
+- campus_email_domains — campus_id, domain (unique, e.g. student.tharaka.ac.ke), member_type (student | staff)
+- users, groups, posts, announcements, office_accounts and places each carry **campus_id**; every feed and search query filters by it. v0.1 has one campus, and members only see their own campus.
+
 **Accounts & sign-in**
 - users — id, name, email (unique, lower-case), member_type (fresher | continuing | alumni | staff), **member_number** (reg no. for students/alumni, staff no. for staff), **member_number_normalised** (unique; upper-case, spaces/dashes removed), member_number_status (unverified | verified | disputed), course, year_of_study, graduation_year, verified, verified_method (email_code | admin | erp), is_under_18, created_at, deleted_at — *fixed 12 Nov: reg/staff number (section 5). Private: never returned by public APIs, only to the member and admins.*
 - auth_codes — id, email, **code_hash** (never the plain code), purpose (sign_in | change_email), expires_at (10 min), attempts (max 5), consumed_at, request_ip, created_at — *fixed 12 Nov.* Index on (email, created_at) for rate limits; delete rows older than 24 h.
@@ -339,7 +350,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create
 
 ## 16. Open questions for the team
 
-- Final name and domain (e.g. a tharaka.ac.ke subdomain or our own).
+- Final name ("Hatua" is a placeholder) and our own domain. ~~tharaka.ac.ke subdomain~~ ruled out 12 Nov: the app is independent of the university.
 - Alumni verification: do students keep their student.tharaka.ac.ke email after graduation? (See section 5.)
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
 - Tech stack (section 12): challenge each row, then mark DECIDED. Build vs adopt (HumHub).

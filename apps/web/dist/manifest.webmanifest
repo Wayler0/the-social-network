@@ -1,7 +1,7 @@
 {
   "name": "Hatua",
   "short_name": "Hatua",
-  "description": "The Tharaka University community network.",
+  "description": "Your campus community, in one place.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
