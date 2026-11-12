@@ -1,0 +1,10 @@
+{
+  "name": "Hatua",
+  "short_name": "Hatua",
+  "description": "The Tharaka University community network.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6A3DF5",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

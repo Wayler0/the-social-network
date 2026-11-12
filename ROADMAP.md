@@ -42,6 +42,23 @@ Only what a member needs to join and use it daily:
 
 ---
 
+## User involvement (user-centred design) — DECIDED 12 Nov
+
+Users are involved **every week before the feature freeze**, so their feedback can still change the design, not just fix bugs. Five people per round is enough to find most usability problems; many small rounds beat one big one.
+
+| When | Who takes part | What we learn | Owner |
+|---|---|---|---|
+| **Week 0 (now – Sun 15 Nov)** | 8–10 short interviews (10 min): freshers (18+ only), continuing students, 1–2 staff, an alumnus. Plus a short anonymous Google Form shared in class groups | Real needs and pain points; checks the v0.1 feature list and priorities | Everyone (3 interviews each); Solomon runs the form |
+| **Week 1 (by Sun 22 Nov)** | 5 students try the design canvas on a phone (tasks: "find the ISACA club", "ask a senior a question") | Do navigation and screens make sense before we code them? | Solomon |
+| **Week 2 (by Sun 29 Nov)** | 5 students test real sign-up and feed on their own phones, on campus Wi-Fi and mobile data | Do code emails arrive? Speed on cheap phones? Confusing steps? | Solomon + Peter |
+| **Week 3 (by Sun 6 Dec)** | Beta group of 15–20 (class reps, IEEE/ISACA members) uses it for real; in-app feedback link | Do people come back the next day? What's missing? | Solomon |
+| **Exams (7–17 Dec)** | Pilot (below) + a 3-question survey at the end | Launch blockers | All |
+| **After launch** | Monthly feedback form + analytics (sign-ups, return visits) | What to build in v0.2 | Solomon |
+
+**Rules:** say what we're testing and get verbal consent; anonymous notes only ("Year 1, BSc CS") — no names, faces or recordings; under-18s are not interviewed unless the university approves. Every finding becomes a GitHub issue labelled `user-feedback` and is discussed at the Sunday briefing. Interview guide and form questions: `docs/research/`.
+
+---
+
 ## Week-by-week plan
 
 Hours are per person.

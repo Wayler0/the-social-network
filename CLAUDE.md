@@ -308,6 +308,8 @@ Rules and consequences for the team:
 
 Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create), Reels, Profile (in v0.1 the Reels tab shows a "Coming soon" screen). Discover holds search, Groups, Ask a Senior, Events, Market. Today board = story circles at the top of Home (office accounts). Feed and profile follow Instagram patterns, reels follow TikTok, groups/events/market follow Facebook, camera and chat follow Snapchat — patterns only, own look. Emergency button reachable from the menu. Clearly labelled sponsored cards. Badges for Staff / Student Leader / Official / Club. Colours: violet #6A3DF5 (primary), coral #FF3D71 (likes, alerts), sunshine #FFC83D (highlights), mint #14C8A8, ink #111018. Fonts: Space Grotesk (headings), Inter (body). Screens: Hatua design canvas (Claude artifact).
 
+**User-centred design (DECIDED 12 Nov):** real users are involved every week before the 6 Dec feature freeze — interviews and an anonymous form (week 0), canvas tests (week 1), sign-up/feed tests on real phones (week 2), a beta group (week 3), then the pilot. Findings become `user-feedback` issues. Plan: ROADMAP.md "User involvement"; materials: `docs/research/`.
+
 ## 15. Launch plan
 
 1. Get university approval (ICT for hosting; administration for name/logo and office accounts).
