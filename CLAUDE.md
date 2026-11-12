@@ -283,26 +283,44 @@ Rules and consequences for the team:
 
 ## 13. Draft data model (starting point, refine as needed)
 
-- users — id, name, email, member_type (fresher | continuing | alumni | staff), course, year_of_study, graduation_year, verified, verified_method, is_under_18, created_at
+PostgreSQL 16 + PostGIS. Every table has an internal `id` (UUID) primary key; identifiers people type (email, reg number) are unique columns, never keys. Reviewed 12 Nov — gaps found by the team are fixed below (marked *fixed 12 Nov*).
+
+**Accounts & sign-in**
+- users — id, name, email (unique, lower-case), member_type (fresher | continuing | alumni | staff), **member_number** (reg no. for students/alumni, staff no. for staff), **member_number_normalised** (unique; upper-case, spaces/dashes removed), member_number_status (unverified | verified | disputed), course, year_of_study, graduation_year, verified, verified_method (email_code | admin | erp), is_under_18, created_at, deleted_at — *fixed 12 Nov: reg/staff number (section 5). Private: never returned by public APIs, only to the member and admins.*
+- auth_codes — id, email, **code_hash** (never the plain code), purpose (sign_in | change_email), expires_at (10 min), attempts (max 5), consumed_at, request_ip, created_at — *fixed 12 Nov.* Index on (email, created_at) for rate limits; delete rows older than 24 h.
+- sessions — id, user_id, **token_hash** (cookie holds the random token; DB holds only its SHA-256), user_agent, ip, created_at, last_seen_at, expires_at, revoked_at — *fixed 12 Nov.* Logout revokes one; "log out everywhere" revokes all; delete account revokes all.
+- member_number_disputes — id, member_number_normalised, reporter_user_id, details, status (open | resolved), created_at (the "someone has claimed my reg number" button, section 5)
+
+**Roles & offices**
 - roles — id, user_id, role (staff | student_leader | club_leader | moderator | admin), title, starts_at, ends_at
 - office_accounts — id, name, type (department | office | student_council | club), verified, created_at
 - office_members — office_id, user_id, role (owner | editor), starts_at, ends_at
-- follows — follower_id, followee_id (user or office), created_at
-- groups — id, name, description, visibility (public | private), student_only, auto_type (course_year | none), created_by, created_at
+- follows — follower_id, **target_type (user | office | group)**, target_id, created_at; primary key (follower_id, target_type, target_id) — *fixed 12 Nov: explicit type. `group` covers Follow on club pages (v0.2).* Integrity is checked in the API (a polymorphic column can't have a foreign key); a nightly job reports orphans.
+
+**Groups & clubs**
+- groups — id, name, description, visibility (public | private), student_only, auto_type (course_year | none), **kind (group | club)**, **posting (everyone | admins_only)**, **club_verified_at**, **club_verified_by**, office_account_id (nullable, for handover), created_by, created_at — *fixed 12 Nov: admin-only posting + CLUB badge for v0.1 (section 4). CLUB badge shows when kind = club and club_verified_at is set (checked against the Dean of Students' list).*
 - group_members — group_id, user_id, role (admin | member), status (pending | active), joined_at
-- posts — id, author_user_id, author_office_id (nullable), group_id (nullable), body, media_url, media_type (image | video), is_reel, created_at
+
+**Content**
+- posts — id, author_user_id, author_office_id (nullable), group_id (nullable), body, media_url, media_type (image | video), is_reel, hidden_at, created_at
 - announcements — id, office_id, title, body, urgency (urgent | normal), pinned_until, created_at
 - questions — id, user_id, hide_name, body, created_at (Ask a Senior); answers — id, question_id, user_id, body, created_at
-- comments — id, post_id, user_id, body, created_at
+- comments — id, post_id, user_id, body, hidden_at, created_at
 - likes — user_id, post_id, created_at
-- conversations — id, user_a_id, user_b_id, status (request | active | blocked), created_at
-- messages — id, conversation_id, sender_id, body, media_url, created_at, read_at
 - blocks — blocker_id, blocked_id, created_at
-- places — id, name, category, description, lat, lng, opening_hours, building, created_by, verified
-- emergency_alerts — id, user_id, message, lat, lng (optional, only if the user shares it), status, created_at
+- reports — id, reporter_id, target_type, target_id, reason, status, **evidence (jsonb, nullable)**, **franking_tag (nullable)**, created_at — chat reports carry the messages the reporter's app decrypted plus the franking tag (section 6)
+
+**Chat (v0.2, end-to-end encrypted)** — *fixed 12 Nov: no plaintext on the server (section 12).*
+- conversations — id, user_a_id, user_b_id, status (request | active | blocked), disappearing_seconds (nullable), created_at
+- messages — id, conversation_id, sender_id, sender_device_id, **ciphertext (bytea)**, **header (bytea, ratchet header)**, **franking_tag**, created_at, delivered_at, expires_at — no `body` or `media_url` columns: the server stores only ciphertext. Attachments are uploaded encrypted; their key travels inside the ciphertext.
+- devices — id, user_id, identity_key, signed_prekey, pq_prekey (ML-KEM), created_at, revoked_at; one_time_prekeys — device_id, key_id, public_key, used_at (exact shape follows the chosen library: libsignal or OpenMLS)
+- read state lives on devices, not the server (read receipts, if added, are sent as encrypted messages)
+
+**Map, safety, ads, analytics**
+- places — id, name, category, description, **location geography(Point, 4326)**, opening_hours, building, created_by, verified — *fixed 12 Nov: PostGIS instead of lat/lng columns.* GiST index on location for "near me" and search-by-distance.
+- emergency_alerts — id, user_id, message, **location geography(Point, 4326) (nullable, only if the user shares it)**, status, created_at
 - ads — id, category (job | course | product), advertiser_name, title, body, media_url, link, target (member types, courses, years), start_date, end_date, status
 - ad_events — id, ad_id, type (view | click), created_at
-- reports — id, reporter_id, target_type, target_id, reason, status
 
 ## 14. Design reference
 
