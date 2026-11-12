@@ -148,12 +148,14 @@ Unverified accounts cannot see or post anything.
 - Chat: message requests from strangers, easy block, report a conversation.
 - **Deleting and disappearing messages (chat, v0.2):**
 
-  | Situation | The other person sees | The server keeps |
+  Chats are end-to-end encrypted (section 12, Security & encryption), so the server only ever holds ciphertext. Deleted content is kept on the **recipient's device**, not the server.
+
+  | Situation | The other person sees | What is kept, and where |
   |---|---|---|
-  | Delete for me | No change | The message stays for them |
-  | Delete for everyone | "This message was deleted" (no content) | Content hidden for **7 days** so the other person can still report it, then erased |
-  | Reported before deletion | "This message was deleted" | Kept for moderators until the report is closed |
-  | Disappearing messages (24 h after seen, both people turned on) | No notice | Erased after 24 h unless reported |
+  | Delete for me | No change | The message stays on their device |
+  | Delete for everyone | "This message was deleted" (no content) | Their app keeps the content hidden for **7 days** so they can still report it, then erases it |
+  | Reported (before or after deletion) | "This message was deleted" if deleted | The reporter's app sends the reported messages to moderators with a **franking tag** proving the sender really sent them; kept until the report is closed |
+  | Disappearing messages (24 h after seen, both people turned on) | No notice | Erased on both devices after 24 h unless reported; the server's ciphertext is deleted once delivered |
 
   Why the notice: the other person may already have seen it, replies to it must still make sense, and it stops "send then delete" harassment. Keeping deleted content only for reports, for a fixed time, follows DPA data minimisation.
 - Reels/images: moderation tools for nudity, violence and harassment.
@@ -251,6 +253,25 @@ At 20k–50k members, almost any modern stack handles the basic load, so the dec
 **HumHub** (open-source, self-hosted private social network for organisations, PHP) could run on campus in days. It does not fit our key features — reels, Today board, Ask a Senior, email-domain verification, campus map — without heavy changes, so **building is justified**. The team should still look at it and agree on this.
 
 The hard parts (video pipeline, real-time chat, running our own server) are new to everyone whatever the stack.
+
+### Security & encryption (DECIDED 12 Nov 2026: post-quantum where it matters)
+
+Goal: everything Hatua sends is encrypted, private chats are **end-to-end encrypted**, and key exchange is **hybrid post-quantum** (a classical algorithm plus ML-KEM, NIST FIPS 203), so traffic recorded today can't be decrypted by a future quantum computer ("harvest now, decrypt later").
+
+| Layer | What | Post-quantum how | When |
+|---|---|---|---|
+| **Every connection** (app ↔ server, all features) | TLS 1.3 only, HSTS | Hybrid key exchange **X25519MLKEM768**. Caddy built on Go 1.24+ offers it by default; current Chrome, Edge and Firefox use it automatically; older browsers fall back to X25519. Verify on the live server in the week-4 security check | v0.1 |
+| **Private chats (1-to-1, later group chats)** | **End-to-end encrypted**: only the two phones hold the keys; the server relays ciphertext | Hybrid PQ key agreement (X25519 + ML-KEM-768) for session setup, then a double ratchet (AES-256, forward secrecy). **Use a proven library, never our own crypto:** first choice **libsignal** (Signal's PQXDH; licence AGPL-3.0, so our code must stay open source); alternative **MLS (RFC 9420)** via OpenMLS (MIT) with a hybrid PQ ciphersuite | v0.2, after an external review |
+| **Posts, groups, stories, reels, Ask a Senior** | **Not end-to-end** (shared with many people; the server must show them and moderators must review them). Encrypted in transit (above) and at rest | At rest: AES-256 (symmetric 256-bit keys are already considered quantum-safe) | v0.1 |
+| **Data at rest** | Encrypted disks/volumes on the VM, MinIO server-side encryption, encrypted database backups (restic, AES-256), secrets never in Git | AES-256 | v0.1 |
+| **Sessions and sign-in codes** | Short-lived tokens, codes hashed, rate limits | n/a (no long-term secret to harvest) | v0.1 |
+
+Rules and consequences for the team:
+- **No home-made cryptography.** Only audited libraries; one person owns key management; a security review before chat ships.
+- **Keys live on the device.** A PWA stores keys in the browser; clearing site data loses chat history. Offer an **encrypted key backup** protected by a passphrase the server never sees, and show a "safety number" to verify contacts.
+- **Moderation with E2E:** the server can't read chats, so safety relies on **reporting** (the reporter's device sends the messages, with a franking tag) and on metadata limits (rate limits, message requests from strangers, under-18 defaults). The team accepts this trade-off.
+- **Email sign-in codes** travel over email, which we don't control; codes are single-use and expire in 10 minutes.
+- **Honest labels:** call chats "end-to-end encrypted" only once E2E is actually shipped; until then say "encrypted in transit and at rest".
 
 ### Operations (must have before launch)
 
