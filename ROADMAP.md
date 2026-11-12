@@ -96,9 +96,17 @@ Hours are per person.
 
 ## After launch
 
-- **Holiday (21 Dec – Jan):** fix bugs, respond to feedback, moderate. Build **one-to-one chat** and **push notifications** (v0.2, aim mid-January).
-- **Semester 2 start:** adoption push with freshers, class reps and clubs; **v0.3:** campus map and places search, emergency button.
-- **Later:** reels (needs bandwidth and storage planning), ads, events.
+- **Holiday (21 Dec – Jan):** fix bugs, respond to feedback, moderate. Build **v0.2** (aim mid-January):
+  - **Chat** with optional **disappearing messages** (24 h after seen; reported messages are kept for moderators) and view-once photos.
+  - **Push notifications.**
+  - **Camera-first create** with **campus frames** (Freshers Week, Graduation, Sports, Clubs) and stickers.
+  - **Events** with Going / Interested.
+  - **Reactions** beyond like.
+- **Semester 2 start:** adoption push with freshers, class reps and clubs; **v0.3:** campus map and places search (places and events only, never live location of people), emergency button, **Campus Market** (verified members only, meet in person, no payments in the app; sponsored listings).
+- **Later:** reels (needs bandwidth and storage planning), ads.
+- **Deliberately not doing:** live location sharing, streaks (pressure on under-18s and during exams), fully disappearing posts (moderators need evidence).
+
+**Design:** screens for v0.1 and v0.2 are on the Hatua design canvas (Claude artifact, shared from the canvas's Share menu). Look: Instagram-style feed and profile, TikTok-style reels, Facebook-style groups/events/market, Snapchat-style camera and chat; own colours (violet `#6A3DF5`, coral `#FF3D71`, sunshine `#FFC83D`, mint `#14C8A8`).
 
 ---
 
