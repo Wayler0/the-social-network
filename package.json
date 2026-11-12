@@ -1,0 +1,10 @@
+{
+  "name": "hatua",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev:web": "npm run dev -w apps/web",
+    "build:web": "npm run build -w apps/web",
+    "test:web": "npm run test -w apps/web"
+  }
+}
