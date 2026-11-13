@@ -122,6 +122,8 @@ export async function managementRoutes(app: FastifyInstance, { db, requireUser }
     if (endsAt && endsAt.getTime() <= Date.now()) return fail(reply, 400, 'invalid_input', 'endsAt: must be in the future.');
 
     const result = await inTransaction(db, async (tx) => {
+      // One grant at a time per member: two identical requests at the same moment must not both pass the duplicate check.
+      await tx.query('select 1 from users where id = $1 and campus_id = $2 for update', [params.id, actor.campusId]);
       const target = await findUser(tx, actor.campusId, params.id);
       if (!target || target.deleted_at) return 'missing' as const;
       if (body.role === 'staff' && target.member_type !== 'staff') return 'not_staff' as const;

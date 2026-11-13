@@ -19,6 +19,15 @@ describe('cursor pagination', () => {
       expect(() => decodeCursor(bad), bad).toThrow(CursorError);
     }
   });
+  it('accepts only times PostgreSQL can read, so a made-up cursor never reaches the database', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    for (const good of ['2026-11-14 00:31:02+00', '2026-11-14 03:31:02.5+03', '2024-02-29 23:59:59.999999+05:30', '2026-11-13 19:31:02-05']) {
+      expect(decodeCursor(encodeCursor(good, id)), good).toEqual({ at: good, id });
+    }
+    for (const bad of ['2026', '1/2/3', '2026-11-14', '2026-11-14T00:31:02Z', '2026-02-29 00:00:00+00', '2026-13-01 00:00:00+00', '2026-11-14 24:00:00+00', '2026-11-14 00:31:02', '2026-11-14 00:31:02+00; drop table users']) {
+      expect(() => decodeCursor(encodeCursor(bad, id)), bad).toThrow(CursorError);
+    }
+  });
   it('gives a next cursor only when there is another page', () => {
     const rows = [1, 2, 3].map((n) => ({ id: `00000000-0000-4000-8000-00000000000${n}`, cursor_at: `2026-11-1${n}` }));
     expect(page(rows, 2)).toMatchObject({ rows: rows.slice(0, 2), nextCursor: encodeCursor('2026-11-12', rows[1]!.id) });
@@ -365,5 +374,87 @@ describe.skipIf(!url)('admin API (real database)', () => {
       ]) expect(res.statusCode).toBe(404);
       expect((await one<{ hidden: boolean }>('select hidden_at is not null as hidden from posts where id = $1', [P('feed:1')])).hidden).toBe(false);
     });
+  });
+
+  describe('edges of the lists', () => {
+    it('answers 400, not a server error, for a cursor that was made up', async () => {
+      const madeUp = encodeCursor('2026', '00000000-0000-4000-8000-000000000001');
+      for (const path of [`/api/admin/reports?cursor=${madeUp}`, `/api/admin/log?cursor=${madeUp}`, '/api/admin/log?cursor=garbage']) {
+        const res = await get(path);
+        expect([res.statusCode, res.json().error], path).toEqual([400, 'invalid_input']);
+      }
+    });
+
+    it('shows a reported group, and null for something that no longer exists', async () => {
+      const football = seedId('group:football');
+      const gone = '00000000-0000-4000-8000-00000000dead';
+      await client.query(
+        `insert into reports (campus_id, reporter_id, target_type, target_id, reason, created_at)
+         select campus_id, id, 'group', $2, 'other', now() + interval '1 minute' from users where id = $1`, [U('amina'), football]);
+      await client.query(
+        `insert into reports (campus_id, reporter_id, target_type, target_id, reason, created_at)
+         select campus_id, id, 'post', $2, 'spam', now() + interval '2 minutes' from users where id = $1`, [U('amina'), gone]);
+      const items = (await get('/api/admin/reports')).json().items;
+      expect(items.find((i: { targetId: string }) => i.targetId === football).target).toMatchObject({ kind: expect.any(String), visibility: expect.any(String), studentOnly: expect.any(Boolean) });
+      expect(items.find((i: { targetId: string }) => i.targetId === gone).target).toBeNull();
+    });
+
+    it('answers 500 in the contract shape, without details, when the database fails', async () => {
+      const real = client.query.bind(client);
+      const broken = (client as unknown as { query: unknown });
+      broken.query = (sql: string, params?: unknown[]) =>
+        typeof sql === 'string' && sql.includes('from admin_log l') ? Promise.reject(new Error('secret database detail')) : real(sql, params);
+      try {
+        const res = await get('/api/admin/log');
+        expect(res.statusCode).toBe(500);
+        expect(res.json()).toEqual({ error: 'internal', message: 'Something went wrong. Please try again.' });
+      } finally {
+        broken.query = real;
+      }
+    });
+  });
+});
+
+/**
+ * Two identical requests at the same moment need real, separate connections, so this test uses the
+ * real pool, commits, and removes what it made.
+ */
+describe.skipIf(!url)('admin API: requests at the same moment (real database)', () => {
+  it('grants a role once, however many identical requests arrive together', async () => {
+    const pool = new pg.Pool({ connectionString: url, max: 6 });
+    let signedIn = '';
+    const mediaDir = await mkdtemp(path.join(tmpdir(), 'hatua-admin-race-'));
+    const app = buildApp(loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, MEDIA_DIR: mediaDir }), pool, {
+      requireUser: async () => ({ id: signedIn }),
+    });
+    const ids: string[] = [];
+    try {
+      await app.ready();
+      const campus = (await pool.query<{ id: string }>(`select id from campuses where status = 'active' order by created_at limit 1`)).rows[0]!.id;
+      for (const who of ['admin', 'target']) {
+        ids.push((await pool.query<{ id: string }>(
+          `insert into users (campus_id, email, member_type, name) values ($1, $2, 'continuing', $3) returning id`,
+          [campus, `admin-race-${who}-${process.pid}@example.org`, `Race ${who}`])).rows[0]!.id);
+      }
+      const [admin, target] = ids as [string, string];
+      await pool.query(`insert into roles (user_id, role) values ($1, 'admin')`, [admin]);
+      signedIn = admin;
+      // Open every connection first, so the five requests really do run side by side.
+      await Promise.all(Array.from({ length: 5 }, () => pool.query('select pg_sleep(0.05)')));
+
+      const answers = await Promise.all(Array.from({ length: 5 }, () =>
+        app.inject({ method: 'POST', url: `/api/admin/users/${target}/roles`, payload: { role: 'moderator' } })));
+      expect(answers.map((a) => a.statusCode).sort()).toEqual([201, 409, 409, 409, 409]);
+      const held = await pool.query(`select count(*)::int as n from roles where user_id = $1 and role = 'moderator'`, [target]);
+      expect(held.rows[0]!.n).toBe(1);
+    } finally {
+      if (ids.length) {
+        await pool.query(`delete from admin_log where admin_user_id = any($1::uuid[]) or target_id = any($1::uuid[])`, [ids]);
+        await pool.query(`delete from users where id = any($1::uuid[])`, [ids]);
+      }
+      await app.close();
+      await pool.end();
+      await rm(mediaDir, { recursive: true, force: true });
+    }
   });
 });
