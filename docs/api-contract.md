@@ -160,6 +160,14 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 - `memberType`: students choose `fresher | continuing | alumni`; staff are always `staff`.
 - `memberNumber`: normalise (upper-case, remove spaces and `-`, keep `/`), check format, unique per campus → `409 member_number_taken` (the screen offers the "someone has my reg number" dispute).
 - `isUnder18` sets safer defaults (CLAUDE.md section 6).
+- After saving, in the **same transaction**, put the member in the right class group (Peter's helper):
+  ```ts
+  import { syncClassGroup } from '../groups/class-groups.js';
+  await syncClassGroup(client, user.id);   // → { groupId, created, left }
+  ```
+  It creates the class group if the member is the first of their class, joins them, and takes them out of their old
+  one when course, year or member type changes. Staff, alumni and unfinished profiles get no class group.
+  Call it from `DELETE /api/me` too (after setting `deleted_at`) so the account leaves its class group.
 
 ### `POST /api/me/member-number-dispute`
 `{ "memberNumber": "…", "details": "…" }` → `202`. Goes to the admin queue.
@@ -268,7 +276,7 @@ Protected routes get the member from `requireUser(req)` (`apps/api/src/guard.ts`
 | `POST /api/groups/:id/requests/:userId` | Admins: `{ approve: true\|false }` |
 | `GET /api/groups/:id/posts?limit&cursor` | Members only |
 
-Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile.
+Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
 **Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null }`
 
