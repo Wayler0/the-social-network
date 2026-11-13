@@ -11,6 +11,7 @@
     "migrate:prod": "node dist/migrate.js",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
     "email:test": "tsx --env-file-if-exists=../../.env src/email/send-test.ts",
+    "admin:grant": "tsx --env-file-if-exists=../../.env src/admin/grant-admin.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

@@ -16,7 +16,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Groups | Kim | #25 | ⬜ |
 | Today board | Kim | #26 | ⬜ |
 | Ask a Senior | Kim | #27 | ⬜ |
-| Admin | Peter | #37 | ⬜ |
+| Admin | Peter | #37 | ✅ |
 
 ---
 
@@ -304,21 +304,55 @@ Posting into a group uses `POST /api/posts` with `groupId`; if the group's `post
 
 ---
 
-## 11. Admin (Peter, #37) — admins only, `403` otherwise
+## 11. Admin (Peter, #37) ✅
+
+Code: `apps/api/src/admin/`. Everything is limited to the staff member's own campus (anything else is `404`).
+`401` without a session; `403 forbidden` without the role.
+
+- **Moderators** (role `moderator`): the report queue and hiding content.
+- **Admins** (role `admin`): everything.
+- A role counts only while it is in force, and never for a suspended or deleted account.
+- **The first admin** of a campus is made on the server, after that person has signed in once:
+  `docker compose --profile server exec api node dist/admin/grant-admin.js <email>`
+  (development: `npm run admin:grant -w apps/api -- <email>`).
+
+### Moderation (moderators and admins)
 
 | Method & path | Notes |
 |---|---|
-| `GET /api/admin/reports?status=open&limit&cursor` | Queue, with the reported item and report count |
-| `POST /api/admin/reports/:id/resolve` | `{ action: "hide"\|"dismiss" }` |
-| `POST /api/admin/content/:type/:id/hide` / `…/unhide` | Posts, comments, questions, answers |
-| `POST /api/admin/users/:id/suspend` | `{ reason, until? }` — also revokes sessions |
-| `POST /api/admin/users/:id/unsuspend` | |
-| `POST /api/admin/offices` | `{ name, type }` |
-| `POST /api/admin/offices/:id/members` | `{ userId, role: "owner"\|"editor" }` |
-| `POST /api/admin/groups/:id/verify-club` | Sets the CLUB badge |
-| `GET /api/admin/disputes` | Member-number disputes |
+| `GET /api/admin/reports?status=open\|hidden\|dismissed&limit&cursor` | Open reports oldest first (a queue); closed ones newest first. Each item: `{ id, targetType, targetId, reason, details, status, createdAt, resolvedAt, reporter, resolvedBy, reportCount, target }`. `target` is the reported item as it is now (`body`, `author`, `hiddenAt`, `autoHidden`, … or a member's/group's name), or `null` if it no longer exists |
+| `POST /api/admin/reports/:id/resolve` | `{ action: "hide"\|"dismiss" }` → `{ status, resolved }`. Decides **every** open report on the same item. `dismiss` also lifts an automatic hide. `hide` is for posts, comments, questions and answers only (`400` for members and groups: suspend the member instead). `409 already_resolved` if done |
+| `POST /api/admin/content/:type/:id/hide` | `type`: `post\|comment\|question\|answer`. Optional `{ reason }`. Closes open reports on the item → `{ hidden: true, resolved }` |
+| `POST /api/admin/content/:type/:id/unhide` | → `{ hidden: false, resolved: 0 }` |
 
-Every admin action is written to an `admin_log` table (who, what, when).
+### Management (admins only)
+
+| Method & path | Notes |
+|---|---|
+| `GET /api/admin/users?q=` | Find members by name, email or member number (2+ characters, max 20 results). Returns **AdminUser** |
+| `POST /api/admin/users/:id/suspend` | `{ reason, until? }` — `until` is an ISO time in the future; leave it out for "until an admin lifts it". Signs the member out everywhere. Not yourself. → **AdminUser** |
+| `POST /api/admin/users/:id/unsuspend` | → **AdminUser** |
+| `POST /api/admin/users/:id/roles` | `{ role: "staff"\|"student_leader"\|"club_leader"\|"moderator"\|"admin", title?, endsAt? }` → `201` **AdminUser**. `staff` only for accounts that signed up with a staff email. `409 already_has_role` |
+| `DELETE /api/admin/roles/:id` | Ends the role now (kept as history) → `204`. You cannot end your own admin role |
+| `GET /api/admin/offices` | `{ items: [{ id, name, type, verified, createdAt, members: [{ id, name, role, since }] }] }` |
+| `POST /api/admin/offices` | `{ name, type: "department"\|"office"\|"student_council"\|"club" }` → `201`. Offices made here are official (`verified`). `409 office_name_taken` |
+| `POST /api/admin/offices/:id/members` | `{ userId, role: "owner"\|"editor" }` → `204`. Adds, changes the role, or brings someone back |
+| `DELETE /api/admin/offices/:id/members/:userId` | Handover: the person leaves, the office and its history stay → `204` |
+| `POST /api/admin/groups/:id/verify-club` / `…/unverify-club` | The CLUB badge → `{ clubVerified }`. Not for class groups |
+| `GET /api/admin/disputes?status=open\|resolved` | `{ items: [{ id, memberNumber, details, status, createdAt, resolvedAt, reporter: { id, name, email }, holder: { id, name, email, memberSince } \| null }] }` |
+| `POST /api/admin/disputes/:id/resolve` | `{ releaseNumber: true\|false }` → `{ status, numberReleased }`. `true` takes the number off the account holding it so its owner can claim it |
+| `GET /api/admin/log?limit&cursor` | Who did what, newest first: `{ id, action, targetType, targetId, details, createdAt, by }` |
+
+**AdminUser** `{ id, name, email, memberType, memberNumber, memberNumberStatus, course, yearOfStudy, graduationYear, isUnder18, verified, createdAt, deleted, suspended: { since, until, reason } | null, roles: [{ id, role, title, endsAt }] }` — includes email and member number; admin endpoints only.
+
+Every action is written to `admin_log` (who, what, on what, when, and the reason where one is given).
+
+### What other endpoints must respect (Kim)
+
+- **Suspended** means `suspended_at is not null and (suspended_until is null or suspended_until > now())`. The session check should answer `403 suspended` for such a member.
+- **Hidden** content has `hidden_at` set. `hidden_by is null` means the three-reports rule hid it (section 7): set `hidden_at = now()` and leave `hidden_by` empty when the third open report from a different member arrives.
+- **Active role / office member** means `starts_at <= now() and (ends_at is null or ends_at > now())`. Use it for badges, `isAdmin`, and "office members only" in section 9.
+- **Pagination** helper for all lists: `apps/api/src/paging.ts`. **Transactions:** `inTransaction(db, async (tx) => { … })` in `apps/api/src/db.ts`.
 
 ---
 
