@@ -1,17 +1,43 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { adminRoutes } from './admin/routes.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
+import { createMailer, type Mailer } from './email/mailer.js';
+import { nobodySignedIn, type RequireUser } from './guard.js';
+import { imageRoutes } from './images/routes.js';
+
+/**
+ * Pieces other features plug in. `requireUser` is the session check (Kim, #17–#19);
+ * `mailer` replaces the real email sender in tests.
+ */
+export type AppDeps = { requireUser?: RequireUser; mailer?: Mailer };
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** Sends email (sign-in codes). Use `app.mailer.sendSignInCode(email, code)` — see docs/email.md. */
+    mailer: Mailer;
+  }
+}
 
 /**
  * Builds the API. Routes live under /api (the web server forwards /api here).
  * Feature routes are registered below as they are built. Shapes, rules and owners: docs/api-contract.md.
  */
-export function buildApp(config: Config, db: Db): FastifyInstance {
+export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyInstance {
+  const requireUser = deps.requireUser ?? nobodySignedIn;
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },
     trustProxy: true, // we sit behind the server's existing web server
     bodyLimit: 1_048_576, // 1 MB JSON; image uploads get their own route and limit
   });
+
+  const mailer = deps.mailer ?? createMailer(config, {
+    info: (details, message) => app.log.info(details, message),
+    warn: (details, message) => app.log.warn(details, message),
+    error: (details, message) => app.log.error(details, message),
+  });
+  app.decorate('mailer', mailer);
+  app.addHook('onClose', () => mailer.close());
 
   app.get('/api/health', async (_req, reply) => {
     try {
@@ -41,6 +67,8 @@ export function buildApp(config: Config, db: Db): FastifyInstance {
 
   // --- Feature routes go here (owners in docs/api-contract.md) ---
   // app.register(authRoutes, { prefix: '/api/auth' });   // Kim — issues #17, #18, #19
+  app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
+  app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 
   return app;
 }

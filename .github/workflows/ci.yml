@@ -84,6 +84,19 @@ jobs:
         env: { NODE_ENV: production }
         run: npm run migrate:prod -w apps/api | tee out.txt && grep -q "up to date" out.txt
 
+      - name: Tests that need a real database (they roll back; nothing is left behind)
+        run: TEST_DATABASE_URL="$DATABASE_URL" npm test -w apps/api
+
+      - name: Dev seed loads, and loading it twice adds nothing
+        run: |
+          npm run seed -w apps/api
+          npm run seed -w apps/api | tee seed.txt && grep -q "Nothing new" seed.txt
+
+      - name: Dev seed refuses to run in production
+        env: { NODE_ENV: production }
+        run: |
+          if npm run seed -w apps/api; then echo "seed ran in production"; exit 1; fi
+
       - name: API starts and answers
         working-directory: apps/api
         env: { NODE_ENV: production }

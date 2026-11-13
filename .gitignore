@@ -6,3 +6,7 @@ dist/
 .DS_Store
 coverage/
 *.tsbuildinfo
+# Uploaded images in local development
+/apps/api/media/
+# Backup working folders (database dumps, restores, practice repository) — never commit
+/backups/
