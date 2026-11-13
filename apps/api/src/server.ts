@@ -26,7 +26,15 @@ async function shutdown(signal: string) {
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
-app.listen({ host: config.HOST, port: config.PORT }).catch((err) => {
-  app.log.error(err);
-  process.exit(1);
-});
+app
+  .listen({ host: config.HOST, port: config.PORT })
+  .then(async () => {
+    // Say at start-up whether sign-in emails can go out, instead of finding out from the first member.
+    const mail = await app.mailer.check();
+    if (mail.ok) app.log.info({ mail: mail.detail }, 'email ready');
+    else app.log.error({ mail: mail.detail }, 'EMAIL IS NOT WORKING: nobody can sign in until this is fixed (docs/email.md)');
+  })
+  .catch((err) => {
+    app.log.error(err);
+    process.exit(1);
+  });

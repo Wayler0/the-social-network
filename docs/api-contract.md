@@ -43,6 +43,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
   | 413 | Upload too big | `too_large` |
   | 429 | Rate limited; include `Retry-After` header and `retryAfterSeconds` in the body | `rate_limited` |
   | 500 | Bug | `internal` (never leak stack traces) |
+  | 503 | A service we depend on is down; safe to try again | `email_unavailable` |
 
 - **Pagination** (cursor-based, newest first):
   request `?limit=20&cursor=<opaque>` (limit 1–50, default 20);
@@ -87,7 +88,18 @@ Written for #30. Rate limits use the `rate_limit_events` table (one row per coun
    - same IP: 20 per hour → `429`
 3. Generate a 6-digit code with `crypto.randomInt(0, 1_000_000)`, zero-padded. **Never** `Math.random`.
 4. Store only its hash: `code_hash = HMAC-SHA256(CODE_PEPPER, email + ':' + code)` (`CODE_PEPPER` is a new env var). Expires in **10 minutes**. A new code invalidates older unused codes for that email.
-5. Send the email (Peter's #35 builds the sender; until then, in development **log the code to the console**, never in production).
+5. Send the email with `app.mailer` (Peter's #35 ✅, `docs/email.md`):
+   ```ts
+   import { EmailError } from '../email/mailer.js';
+   try { await app.mailer.sendSignInCode(email, code); }
+   catch (err) {
+     if (err instanceof EmailError) return reply.code(503).send({ error: 'email_unavailable', message: "We couldn't send your code. Please try again in a few minutes." });
+     throw err;
+   }
+   ```
+   In development (`EMAIL_MODE=log`, the default) the code is printed to the API console instead of sent. In production
+   `log` mode refuses to send and never prints a code. **Never log the code yourself.** If sending fails, delete or
+   consume the code row you just stored, so a code that never arrived cannot be used.
 6. Always answer the same way whether or not the email already has an account (don't reveal who is a member).
 
 ### `POST /api/auth/verify-code` *(public)*

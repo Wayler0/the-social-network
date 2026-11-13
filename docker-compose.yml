@@ -35,6 +35,15 @@ services:
       APP_URL: ${APP_URL:-https://hatua.nextup.co.ke}
       NODE_OPTIONS: --max-old-space-size=128
       MEDIA_DIR: /data/media
+      # Email (sign-in codes): set these in .env on the server — docs/email.md
+      EMAIL_MODE: ${EMAIL_MODE:-log}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
     volumes:
       - media:/data/media   # uploaded images — include this volume in backups
     command: sh -c "node dist/migrate.js && node dist/server.js"
