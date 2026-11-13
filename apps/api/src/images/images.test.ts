@@ -35,6 +35,7 @@ function fakeDb(start: { uploadsThisHour?: number } = {}) {
         if (row) row.attached = true;
         return { rows: row ? [row] : [] };
       }
+      if (sql.includes('delete from rate_limit_events')) { uploads = 0; return { rows: [] }; }
       if (sql.includes('delete from images')) {
         const gone = images.filter((i) => !i.attached);
         return { rows: gone.map((i) => ({ id: i.id, path: i.path })) };

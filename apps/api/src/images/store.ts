@@ -57,8 +57,9 @@ const UNATTACHED_AFTER_HOURS = 24;
 const STALE_UPLOAD_MS = 60 * 60 * 1000;
 
 /**
- * Housekeeping (run hourly): deletes images nobody attached within 24 h, and upload
- * leftovers in <mediaDir>/tmp older than an hour. Returns how many images were removed.
+ * Housekeeping (run hourly): deletes images nobody attached within 24 h, upload counts older
+ * than a day, and upload leftovers in <mediaDir>/tmp older than an hour.
+ * Returns how many images were removed.
  */
 export async function cleanupImages(db: Queryable, mediaDir: string): Promise<number> {
   const { rows } = await db.query<{ id: string; path: string }>(
@@ -72,6 +73,9 @@ export async function cleanupImages(db: Queryable, mediaDir: string): Promise<nu
   for (const row of rows) {
     if (IMAGE_PATH.test(row.path)) await rm(path.join(mediaDir, row.path), { recursive: true, force: true });
   }
+
+  // Upload counts older than a day are no longer needed for the hourly limit.
+  await db.query(`delete from rate_limit_events where bucket = 'image_upload' and created_at < now() - interval '1 day'`);
 
   const tmpDir = path.join(mediaDir, 'tmp');
   for (const name of await readdir(tmpDir).catch(() => [] as string[])) {
