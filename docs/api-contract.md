@@ -200,7 +200,7 @@ The thumbnail is the same address ending `320.webp`.
 | 400 | `invalid_image` | Not a JPEG/PNG/WebP (checked by content, not file name), or over 50 megapixels |
 | 400 | `heic_not_supported` | iPhone HEIC photo — see note below |
 | 413 | `too_large` | Over 8 MB |
-| 429 | `rate_limited` | More than 30 uploads by one member in an hour |
+| 429 | `rate_limited` | More than 30 upload attempts by one member in an hour (rejected files count too) |
 
 **HEIC is not accepted in v0.1** (the image library's standard build cannot read it). On the web app use
 `<input type="file" accept="image/jpeg,image/png,image/webp">` — iPhones then hand over a JPEG automatically.
@@ -210,6 +210,8 @@ An image not attached to a post or profile within 24 h is deleted (hourly job).
 ### `GET /media/<path>/1080.webp` and `…/320.webp`
 Members only (`401` without a session), `image/webp`, cached by the browser for a year (the address never changes).
 In development Vite forwards `/media` to the API; **on the server the web server must forward `/media` to the API too**, like `/api`.
+The web server must also let request bodies of 8 MB through to `/api/images`: nginx stops at 1 MB by default
+(`client_max_body_size 10m;`), which would reject most phone photos before they reach the API.
 
 ### Using an image from other endpoints (Kim)
 ```ts

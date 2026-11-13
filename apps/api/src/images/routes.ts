@@ -16,8 +16,12 @@ type Options = { config: Config; db: Db; requireUser: RequireUser };
 const fail = (reply: FastifyReply, status: number, error: string, message: string, extra: object = {}) =>
   reply.code(status).send({ error, message, ...extra });
 
-/** Only this many images are converted at once; the rest wait their turn (memory is tight). */
-const MAX_AT_ONCE = 2;
+/**
+ * Only this many images are converted at once; the rest wait their turn. One, because the API
+ * container is capped at 192 MB: a large photo needs about 50 MB while it is converted, and two
+ * at once measured about 100 MB on top of the API's own memory.
+ */
+const MAX_AT_ONCE = 1;
 let running = 0;
 const waiting: Array<() => void> = [];
 async function oneAtATime<T>(work: () => Promise<T>): Promise<T> {
@@ -50,7 +54,9 @@ export async function imageRoutes(app: FastifyInstance, { config, db, requireUse
 
   // Upload errors in the contract's shape; never leak details.
   app.setErrorHandler((err: FastifyError, req, reply) => {
-    if (err.code === 'FST_REQ_FILE_TOO_LARGE' || err.statusCode === 413) return tooLarge(reply);
+    // Extra fields or files also arrive as 413 from the upload parser; they are bad input, not a big file.
+    const extraParts = err.code === 'FST_PARTS_LIMIT' || err.code === 'FST_FILES_LIMIT' || err.code === 'FST_FIELDS_LIMIT';
+    if (!extraParts && (err.code === 'FST_REQ_FILE_TOO_LARGE' || err.statusCode === 413)) return tooLarge(reply);
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
       return fail(reply, 400, 'invalid_input', 'Send one image in a form field called "file".');
     }
@@ -77,6 +83,8 @@ export async function imageRoutes(app: FastifyInstance, { config, db, requireUse
       reply.header('Retry-After', String(retryAfterSeconds));
       return fail(reply, 429, 'rate_limited', 'You have uploaded a lot of images. Please try again later.', { retryAfterSeconds });
     }
+    // Count the attempt now, not only on success: rejected files cost disk and CPU too.
+    await db.query(`insert into rate_limit_events (bucket, key) values ('image_upload', $1)`, [user.id]);
 
     const part = await req.file();
     if (!part || part.fieldname !== 'file') {
@@ -103,7 +111,6 @@ export async function imageRoutes(app: FastifyInstance, { config, db, requireUse
             'insert into images (user_id, path, width, height, bytes) values ($1, $2, $3, $4, $5) returning id',
             [user.id, imagePath, image.width, image.height, image.bytes],
           );
-          await db.query(`insert into rate_limit_events (bucket, key) values ('image_upload', $1)`, [user.id]);
           const body = { imageId: saved.rows[0]!.id, url: imageUrls(imagePath).url, width: image.width, height: image.height };
           answer = (r) => r.code(201).send(body);
         } catch (err) {

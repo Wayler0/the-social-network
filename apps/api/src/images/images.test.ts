@@ -7,7 +7,7 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { Db } from '../db.js';
 import type { RequireUser } from '../guard.js';
-import { attachImage, cleanupImages, imageUrls } from './store.js';
+import { attachImage, cleanupImages, deleteImage, imageUrls } from './store.js';
 
 const USER = '00000000-0000-4000-c000-000000000001';
 const signedIn: RequireUser = async () => ({ id: USER });
@@ -149,6 +149,28 @@ describe('POST /api/images', () => {
     expect([json.statusCode, json.json().error]).toEqual([400, 'invalid_input']);
   });
 
+  it('answers 400, not "too large", when the form carries an extra field', async () => {
+    const boundary = '----hatuatest';
+    const payload = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="note"\r\n\r\nhello\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
+      await picture(10, 10).jpeg().toBuffer(),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const res = await appWith(fakeDb().db).inject({
+      method: 'POST', url: '/api/images', payload, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+    });
+    expect([res.statusCode, res.json().error]).toEqual([400, 'invalid_input']);
+  });
+
+  it('counts rejected files towards the rate limit too', async () => {
+    const app = appWith(fakeDb().db, signedIn, { IMAGE_UPLOADS_PER_HOUR: '1' });
+    const notAnImage = await app.inject({ method: 'POST', url: '/api/images', ...form(Buffer.from('not an image')) });
+    expect(notAnImage.statusCode).toBe(400);
+    const next = await app.inject({ method: 'POST', url: '/api/images', ...form(await picture(10, 10).jpeg().toBuffer()) });
+    expect(next.statusCode).toBe(429);
+  });
+
   it('rate-limits a member with 429 and Retry-After', async () => {
     const { db } = fakeDb({ uploadsThisHour: 30 });
     const res = await appWith(db).inject({ method: 'POST', url: '/api/images', ...form(await picture(10, 10).jpeg().toBuffer()) });
@@ -190,6 +212,13 @@ describe('GET /media/*', () => {
 });
 
 describe('attachImage and cleanupImages', () => {
+  it('treats an id that is not a UUID as "no such image" without touching the database', async () => {
+    const noDb = { query: async () => { throw new Error('the database must not be asked'); } } as unknown as Db;
+    expect(await attachImage(noDb, 'not-a-uuid', USER)).toBeNull();
+    expect(await attachImage(noDb, "1' or '1'='1", USER)).toBeNull();
+    await expect(deleteImage(noDb, mediaDir, 'not-a-uuid')).resolves.toBeUndefined();
+  });
+
   it('attaches once, only for the uploader, and cleanup removes what was never attached', async () => {
     const { db, images } = fakeDb();
     const app = appWith(db);
