@@ -1,12 +1,18 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
+import { nobodySignedIn, type RequireUser } from './guard.js';
+import { imageRoutes } from './images/routes.js';
+
+/** Pieces other features plug in. `requireUser` is the session check (Kim, #17–#19). */
+export type AppDeps = { requireUser?: RequireUser };
 
 /**
  * Builds the API. Routes live under /api (the web server forwards /api here).
  * Feature routes are registered below as they are built. Shapes, rules and owners: docs/api-contract.md.
  */
-export function buildApp(config: Config, db: Db): FastifyInstance {
+export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyInstance {
+  const requireUser = deps.requireUser ?? nobodySignedIn;
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },
     trustProxy: true, // we sit behind the server's existing web server
@@ -41,6 +47,7 @@ export function buildApp(config: Config, db: Db): FastifyInstance {
 
   // --- Feature routes go here (owners in docs/api-contract.md) ---
   // app.register(authRoutes, { prefix: '/api/auth' });   // Kim — issues #17, #18, #19
+  app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
 
   return app;
 }

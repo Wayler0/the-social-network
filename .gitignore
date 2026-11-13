@@ -6,3 +6,5 @@ dist/
 .DS_Store
 coverage/
 *.tsbuildinfo
+# Uploaded images in local development
+/apps/api/media/

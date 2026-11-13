@@ -12,6 +12,12 @@ const schema = z.object({
   APP_URL: z.string().url().default('http://localhost:5180'),
   /** Small on purpose: the server is shared and short on memory. */
   DB_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
+  /** Folder where uploaded images are kept (docs/api-contract.md section 6). Must be writable and backed up. */
+  MEDIA_DIR: z.string().min(1).default('media'),
+  /** Largest upload accepted, in bytes (8 MB). */
+  IMAGE_MAX_BYTES: z.coerce.number().int().min(1024).max(26_214_400).default(8_388_608),
+  /** Uploads one member may make per hour. */
+  IMAGE_UPLOADS_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(30),
 });
 
 export type Config = z.infer<typeof schema>;

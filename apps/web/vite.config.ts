@@ -6,8 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5180,
-    // The API (Kim) will run on :3000; requests to /api are forwarded there.
-    proxy: { '/api': 'http://localhost:3000' },
+    // The API runs on :3000; requests to /api and /media (uploaded images) are forwarded there.
+    proxy: { '/api': 'http://localhost:3000', '/media': 'http://localhost:3000' },
   },
   test: { environment: 'node' },
 });

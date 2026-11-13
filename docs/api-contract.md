@@ -12,7 +12,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Me / profile / delete account | Kim | #20, #21 | ⬜ |
 | Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
 | Report and block | Kim | #23 | ⬜ |
-| Image upload | Peter | #32 | ⬜ |
+| Image upload | Peter | #32 | ✅ |
 | Groups | Kim | #25 | ⬜ |
 | Today board | Kim | #26 | ⬜ |
 | Ask a Senior | Kim | #27 | ⬜ |
@@ -185,13 +185,46 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 
 ---
 
-## 6. Images (Peter, #32)
+## 6. Images (Peter, #32) ✅
 
 ### `POST /api/images`
-`multipart/form-data`, one file field `file`, JPEG/PNG/WebP/HEIC, max **8 MB** → `413`.
-Server re-encodes to WebP (max 1080 px wide + a 320 px thumbnail), **strips EXIF and location**, saves to the media folder on disk (no MinIO in v0.1).
-`201 { "imageId": "…", "url": "/media/…/1080.webp", "width": 1080, "height": 1350 }`
-An image not attached to a post within 24 h is deleted.
+`multipart/form-data`, one file field `file`, JPEG/PNG/WebP, max **8 MB** → `413 too_large`.
+Server re-encodes to WebP (max 1080 px wide + a 320 px thumbnail), turns sideways phone photos the right way up,
+**strips EXIF and location**, never enlarges, and saves to the media folder on disk (no MinIO in v0.1).
+`201 { "imageId": "…", "url": "/media/2026/11/<uuid>/1080.webp", "width": 1080, "height": 1350 }`
+The thumbnail is the same address ending `320.webp`.
+
+| Status | `error` | When |
+|---|---|---|
+| 400 | `invalid_input` | Not multipart, no `file` field, or an empty file |
+| 400 | `invalid_image` | Not a JPEG/PNG/WebP (checked by content, not file name), or over 50 megapixels |
+| 400 | `heic_not_supported` | iPhone HEIC photo — see note below |
+| 413 | `too_large` | Over 8 MB |
+| 429 | `rate_limited` | More than 30 uploads by one member in an hour |
+
+**HEIC is not accepted in v0.1** (the image library's standard build cannot read it). On the web app use
+`<input type="file" accept="image/jpeg,image/png,image/webp">` — iPhones then hand over a JPEG automatically.
+
+An image not attached to a post or profile within 24 h is deleted (hourly job).
+
+### `GET /media/<path>/1080.webp` and `…/320.webp`
+Members only (`401` without a session), `image/webp`, cached by the browser for a year (the address never changes).
+In development Vite forwards `/media` to the API; **on the server the web server must forward `/media` to the API too**, like `/api`.
+
+### Using an image from other endpoints (Kim)
+```ts
+import { attachImage, deleteImage } from './images/store.js';
+// inside the transaction that saves the post (or the profile photo):
+const image = await attachImage(client, imageId, user.id);   // null → 400 invalid_input
+// image = { id, url, thumbUrl, width, height }  → Post.image is { url, width, height }
+await deleteImage(db, config.MEDIA_DIR, imageId);             // when a post or account is deleted
+```
+`attachImage` returns null if the image does not exist, belongs to another member, or is already used.
+
+### Session check hook
+Protected routes get the member from `requireUser(req)` (`apps/api/src/guard.ts`). Until the session check
+(#17–#19) is built it always answers "nobody", so these routes return `401`. Kim: pass yours in —
+`buildApp(config, db, { requireUser })` — returning `{ id }` or `null`.
 
 ---
 

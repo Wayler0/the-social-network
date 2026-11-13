@@ -14,5 +14,8 @@ COPY apps/api/package.json ./
 RUN cd /app && npm ci -w apps/api --omit=dev --include-workspace-root=false && npm cache clean --force
 COPY --from=build /app/apps/api/dist ./dist
 COPY apps/api/migrations ./migrations
+# Uploaded images live here; docker-compose.yml mounts a volume on it (owned by node).
+RUN mkdir -p /data/media && chown node:node /data/media
+ENV MEDIA_DIR=/data/media
 USER node
 EXPOSE 3000
