@@ -8,13 +8,11 @@ import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
 import type { RequireUser } from '../guard.js';
+import { fail } from '../http.js';
 import { FULL_WIDTH, ImageError, processImage, THUMB_WIDTH } from './process.js';
 import { IMAGE_PATH, imageUrls, newImagePath } from './store.js';
 
 type Options = { config: Config; db: Db; requireUser: RequireUser };
-
-const fail = (reply: FastifyReply, status: number, error: string, message: string, extra: object = {}) =>
-  reply.code(status).send({ error, message, ...extra });
 
 /**
  * Only this many images are converted at once; the rest wait their turn. One, because the API

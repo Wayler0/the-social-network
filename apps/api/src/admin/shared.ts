@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { fail } from '../http.js';
 import type { Db } from '../db.js';
 import type { RequireUser } from '../guard.js';
 import type { Queryable } from '../images/store.js';
@@ -7,8 +8,8 @@ import type { Queryable } from '../images/store.js';
 /** The staff member making the request: who they are, which campus they manage, and how much they may do. */
 export type Actor = { id: string; campusId: string; isAdmin: boolean };
 
-export const fail = (reply: FastifyReply, status: number, error: string, message: string) =>
-  reply.code(status).send({ error, message });
+// The general helpers moved to ../http.ts; re-exported so admin code keeps importing from here.
+export { fail, idParam, iso, parse, uuid } from '../http.js';
 
 /**
  * Who may use the admin API (docs/api-contract.md section 11):
@@ -50,19 +51,6 @@ export async function logAction(
   );
 }
 
-export const uuid = z.string().uuid();
-export const idParam = z.object({ id: uuid });
-
-/** Validates input the contract's way: unknown fields are rejected, and the first problem is reported. */
-export function parse<S extends z.ZodTypeAny>(schema: S, value: unknown, reply: FastifyReply): z.infer<S> | null {
-  const result = schema.safeParse(value ?? {});
-  if (result.success) return result.data;
-  const issue = result.error.issues[0];
-  const where = issue?.path.length ? `${issue.path.join('.')}: ` : '';
-  fail(reply, 400, 'invalid_input', `${where}${issue?.message ?? 'Invalid input.'}`);
-  return null;
-}
-
 /** The moderated content types and where they live. Table and column names are constants, never user input. */
 export const CONTENT = {
   post:     { table: 'posts',     campus: 't.campus_id' },
@@ -72,5 +60,3 @@ export const CONTENT = {
 } as const;
 export type ContentType = keyof typeof CONTENT;
 export const contentType = z.enum(['post', 'comment', 'question', 'answer']);
-
-export const iso = (value: Date | null) => (value ? value.toISOString() : null);
