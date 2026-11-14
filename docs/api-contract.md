@@ -9,7 +9,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 |---|---|---|---|
 | Health, campuses | — | — | ✅ |
 | Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | ✅ |
-| Me / profile / delete account | Kim | #20, #21 | 🔨 GET/PATCH /me ✅ · dispute, public profile, delete next |
+| Me / profile / delete account | Kim | #20, #21 | ✅ |
 | Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
 | Report and block | Kim | #23 | ⬜ |
 | Image upload | Peter | #32 | ✅ |
@@ -178,14 +178,17 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
   one when course, year or member type changes. Staff, alumni and unfinished profiles get no class group.
   Call it from `DELETE /api/me` too (after setting `deleted_at`) so the account leaves its class group.
 
-### `POST /api/me/member-number-dispute`
-`{ "memberNumber": "…", "details": "…" }` → `202`. Goes to the admin queue.
+### `POST /api/me/member-number-dispute` ✅
+`{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
-### `GET /api/users/:id` — someone's public profile
-`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, badges, isFollowing }` — **no** email or member number. `404` if blocked either way.
+### `GET /api/users/:id` ✅ — someone's public profile
+`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, badges, isFollowing }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. `isFollowing` is always `false` until follows (v0.2).
 
-### `DELETE /api/me` — delete account
-`{ "confirm": "DELETE" }` → `204`. Sets `deleted_at`, revokes all sessions, clears personal fields, removes their posts' images; posts and comments show "Deleted member". Exact rules in #21.
+### `DELETE /api/me` ✅ — delete account
+`{ "confirm": "DELETE" }` → `204`, cookie cleared. Works for suspended members too.
+- **Removed:** email, name, photo, course, years, member number, under-18 answer; every image they uploaded (profile and post photos, files included); sessions (signed out everywhere), sign-in codes, likes, helpful votes, blocks, group memberships. Roles and office memberships are ended (rows kept as history).
+- **Kept, shown as "Deleted member":** posts, comments, questions, answers; reports and the admin log (moderation needs them).
+- The email and member number are free again; signing up with that email makes a new account.
 
 ---
 

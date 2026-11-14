@@ -3,9 +3,12 @@ import { z } from 'zod';
 import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
 import { normaliseCourse, syncClassGroup } from '../groups/class-groups.js';
-import { fail, parse, useContractErrors } from '../http.js';
+import { clearSessionCookie } from '../auth/sessions.js';
+import { takeRateLimits, waitText } from '../auth/rate-limit.js';
+import { fail, idParam, parse, useContractErrors } from '../http.js';
+import { notBlocked, type ViewerSql } from '../visibility.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
-import { isStudent, loadMe, meBody, normaliseMemberNumber, profileComplete } from './profile.js';
+import { badgesFor, isStudent, loadMe, meBody, normaliseMemberNumber, profileComplete } from './profile.js';
 
 const year = (min: number, max: number) => z.number().int().min(min).max(max);
 
@@ -22,9 +25,12 @@ const patchSchema = z.object({
 }).partial().strict();
 
 /**
- * Me and profile (docs/api-contract.md section 4, issue #20):
- *   GET   /api/me   the member's own profile, including private fields
- *   PATCH /api/me   onboarding and edit profile; send only what changes
+ * Me and profiles (docs/api-contract.md section 4, issues #20, #21):
+ *   GET    /api/me                          the member's own profile, including private fields
+ *   PATCH  /api/me                          onboarding and edit profile; send only what changes
+ *   POST   /api/me/member-number-dispute    "someone has claimed my number"
+ *   GET    /api/users/:id                   someone's public profile
+ *   DELETE /api/me                          delete the account
  */
 export async function meRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
@@ -126,6 +132,120 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
 
     if (outcome.oldPhoto) await deleteImage(db, config.MEDIA_DIR, outcome.oldPhoto);   // the files of a replaced photo
     return meBody((await loadMe(db, userId))!);
+  });
+
+  // ---- POST /api/me/member-number-dispute   "someone has claimed my reg number" -> admin queue
+  app.post('/api/me/member-number-dispute', async (req, reply) => {
+    const body = parse(z.object({ memberNumber: z.string().max(60), details: z.string().trim().max(2000).optional() }).strict(), req.body, reply);
+    if (!body) return;
+    const normalised = normaliseMemberNumber(body.memberNumber);
+    if (!normalised) return fail(reply, 400, 'invalid_input', 'memberNumber: that doesn’t look like a registration or staff number.');
+    const { userId, campusId } = req.auth!;
+
+    const outcome = await inTransaction(db, async (tx) => {
+      const mine = await tx.query('select 1 from users where id = $1 and member_number_normalised = $2', [userId, normalised]);
+      if (mine.rows.length > 0) return 'own' as const;
+      const wait = await takeRateLimits(tx, [{ bucket: 'dispute_user', key: userId, max: 3, windowSeconds: 86_400 }]);
+      if (wait) return wait;
+      await tx.query(
+        `insert into member_number_disputes (campus_id, member_number_normalised, reporter_user_id, details) values ($1, $2, $3, $4)`,
+        [campusId, normalised, userId, body.details || null],
+      );
+      // Flag the account holding it, unless an admin already confirmed it is theirs. Admins decide (admin API).
+      await tx.query(
+        `update users set member_number_status = 'disputed'
+          where campus_id = $1 and member_number_normalised = $2 and deleted_at is null and member_number_status = 'unverified'`,
+        [campusId, normalised],
+      );
+      return 'ok' as const;
+    });
+    if (outcome === 'own') return fail(reply, 400, 'invalid_input', 'memberNumber: that number is already on your account.');
+    if (typeof outcome === 'number') {
+      reply.header('Retry-After', String(outcome));
+      return fail(reply, 429, 'rate_limited', `You have reported enough numbers for today. Try again in ${waitText(outcome)}.`, { retryAfterSeconds: outcome });
+    }
+    // The same answer whether or not anyone holds the number.
+    return reply.code(202).send({ received: true });
+  });
+
+  // ---- GET /api/users/:id   someone's public profile: never email or member number
+  app.get('/api/users/:id', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    const notFound = () => fail(reply, 404, 'not_found', 'Member not found.');
+    if (!params.success) return notFound();
+    const viewer: ViewerSql = { id: '$1', campusId: '$2' };
+    const { rows } = await db.query<{
+      id: string; name: string | null; photo_url: string | null; member_type: string; course: string | null;
+      year_of_study: number | null; graduation_year: number | null; roles: string[];
+    }>(
+      `select u.id, u.name, u.photo_url, u.member_type, u.course, u.year_of_study, u.graduation_year,
+              coalesce(array(select distinct r.role from roles r
+                              where r.user_id = u.id and r.starts_at <= clock_timestamp()
+                                and (r.ends_at is null or r.ends_at > clock_timestamp())
+                              order by r.role), '{}') as roles
+         from users u
+        where u.id = $3 and u.campus_id = ${viewer.campusId} and u.deleted_at is null
+          and ${notBlocked('u.id', viewer)}`,
+      [req.auth!.userId, req.auth!.campusId, params.data.id],
+    );
+    const u = rows[0];
+    if (!u) return notFound();
+    return {
+      id: u.id, name: u.name, photoUrl: u.photo_url, memberType: u.member_type, course: u.course,
+      yearOfStudy: u.year_of_study, graduationYear: u.graduation_year, badges: badgesFor(u.roles),
+      isFollowing: false,   // follows arrive in v0.2
+    };
+  });
+
+  /**
+   * DELETE /api/me   { confirm: "DELETE" }  (Data Protection Act: erasure)
+   * Removed: email, name, photo, course, years, member number, under-18 answer, every uploaded
+   *   image (profile and post photos, files included), sessions, sign-in codes, likes, helpful
+   *   votes, blocks, group memberships. Roles and office memberships are ended (kept as history).
+   * Kept, shown as "Deleted member": posts, comments, questions and answers; reports and the
+   *   admin log, which moderation needs. The email is free to sign up again as a new member.
+   */
+  app.delete('/api/me', { config: { allowSuspended: true } }, async (req, reply) => {
+    const body = parse(z.object({ confirm: z.literal('DELETE') }).strict(), req.body, reply);
+    if (!body) return;
+    const userId = req.auth!.userId;
+
+    const imageIds = await inTransaction(db, async (tx) => {
+      const { rows } = await tx.query<{ email: string | null }>('select email from users where id = $1 and deleted_at is null for update', [userId]);
+      const email = rows[0]?.email ?? null;
+      const images = (await tx.query<{ id: string }>('select id from images where user_id = $1', [userId])).rows.map((r) => r.id);
+      await tx.query('update posts set image_id = null where author_user_id = $1 and image_id is not null', [userId]);
+      await tx.query(
+        `update users set email = null, name = null, photo_url = null, photo_image_id = null, course = null,
+                year_of_study = null, graduation_year = null, member_number = null, member_number_normalised = null,
+                member_number_status = 'unverified', is_under_18 = null, deleted_at = clock_timestamp()
+          where id = $1`,
+        [userId],
+      );
+      await tx.query('update sessions set revoked_at = clock_timestamp() where user_id = $1 and revoked_at is null', [userId]);
+      if (email) {
+        await tx.query('delete from auth_codes where email = $1', [email]);
+        await tx.query(`delete from rate_limit_events where bucket = 'code_email' and key = $1`, [email]);
+      }
+      await tx.query('delete from likes where user_id = $1', [userId]);
+      await tx.query('delete from answer_helpful where user_id = $1', [userId]);
+      await tx.query('delete from blocks where blocker_id = $1 or blocked_id = $1', [userId]);
+      await tx.query('delete from group_members where user_id = $1', [userId]);
+      for (const table of ['roles', 'office_members']) {
+        await tx.query(
+          `update ${table} set ends_at = greatest(clock_timestamp(), starts_at + interval '1 millisecond')
+            where user_id = $1 and (ends_at is null or ends_at > clock_timestamp())`,
+          [userId],
+        );
+      }
+      await syncClassGroup(tx, userId);
+      return images;
+    });
+
+    // Files last, once the database no longer points at them.
+    for (const id of imageIds) await deleteImage(db, config.MEDIA_DIR, id);
+    clearSessionCookie(reply, config);
+    return reply.code(204).send();
   });
 }
 

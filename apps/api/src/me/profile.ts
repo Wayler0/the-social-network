@@ -34,6 +34,9 @@ export async function loadMe(db: Queryable, userId: string): Promise<MeRow | nul
   return (await db.query<MeRow>(ME_SQL, [userId])).rows[0] ?? null;
 }
 
+/** Display names of the badges for a member's current roles. */
+export const badgesFor = (roles: string[]) => roles.map((r) => BADGES[r]).filter((b): b is string => Boolean(b));
+
 export const isStudent = (memberType: string) => memberType === 'fresher' || memberType === 'continuing';
 
 /**
@@ -62,7 +65,7 @@ export function meBody(u: MeRow) {
     memberNumber: u.member_number,
     memberNumberStatus: u.member_number_status,
     isUnder18: u.is_under_18,
-    badges: u.roles.map((r) => BADGES[r]).filter((b): b is string => Boolean(b)),
+    badges: badgesFor(u.roles),
     isAdmin: u.is_admin,
     profileComplete: profileComplete(u),
   };

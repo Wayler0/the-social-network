@@ -87,7 +87,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
       `insert into users (campus_id, email, member_type, verified, verified_method) values ($1, $2, $3, true, 'email_code') returning id`,
       [campusId, email, type])).rows[0]!.id;
     const token = await createSession(client, id, { userAgent: 'test', ip: '10.7.0.1' });
-    const as = (method: 'GET' | 'PATCH' | 'POST', url: string, payload?: object) =>
+    const as = (method: 'GET' | 'PATCH' | 'POST' | 'DELETE', url: string, payload?: object) =>
       app.inject({ method, url, cookies: { hatua_session: token }, ...(payload ? { payload } : {}) });
     return { id, email, as };
   }
@@ -222,5 +222,131 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     const theirs = await uploadedImage(other.id);
     expect((await m.as('PATCH', '/api/me', { photoImageId: theirs })).json().error).toBe('invalid_input');
     expect((await m.as('PATCH', '/api/me', { photoImageId: randomUUID() })).json().error).toBe('invalid_input');
+  });
+
+  // ---------------------------------------------------------------- disputes (#21)
+  const dispute = (m: Awaited<ReturnType<typeof member>>, memberNumber: string, details?: string) =>
+    m.as('POST', '/api/me/member-number-dispute', { memberNumber, ...(details ? { details } : {}) });
+
+  it('a dispute goes to the admin queue and flags the unverified holder', async () => {
+    const holder = await member('holder');
+    await holder.as('PATCH', '/api/me', { memberNumber: 'ABT5/777/23' });
+    const owner = await member('real.owner');
+    const res = await dispute(owner, 'abt5-777/23', 'This is my reg number, see my ID.');
+    expect([res.statusCode, res.json()]).toEqual([202, { received: true }]);
+    const row = (await client.query('select member_number_normalised, reporter_user_id, details, status from member_number_disputes where reporter_user_id = $1', [owner.id])).rows[0];
+    expect(row).toEqual({ member_number_normalised: 'ABT5777/23', reporter_user_id: owner.id, details: 'This is my reg number, see my ID.', status: 'open' });
+    expect((await client.query('select 1 from users where id = $1', [holder.id])).rows).toHaveLength(1);
+    expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('unverified');   // normalised differently: ABT5/777/23
+    await dispute(owner, 'ABT5/777/23');
+    expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('disputed');
+  });
+
+  it('an admin-verified holder stays verified; nobody learns whether a number is held', async () => {
+    const holder = await member('verified.holder');
+    await holder.as('PATCH', '/api/me', { memberNumber: 'ABT5/888/23' });
+    await client.query(`update users set member_number_status = 'verified' where id = $1`, [holder.id]);
+    const claimer = await member('claimer');
+    const held = await dispute(claimer, 'ABT5/888/23');
+    const free = await dispute(claimer, 'ABT5/999/23');
+    expect([held.statusCode, held.body]).toEqual([free.statusCode, free.body]);
+    expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('verified');
+  });
+
+  it('refuses your own number, nonsense, and more than 3 disputes a day', async () => {
+    const m = await member('disputer');
+    await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/1/23' });
+    expect((await dispute(m, 'abt5/1/23')).json().error).toBe('invalid_input');
+    expect((await dispute(m, 'nope')).json().error).toBe('invalid_input');
+    for (let i = 2; i <= 4; i++) expect((await dispute(m, `ABT5/${i}/23`)).statusCode).toBe(202);
+    const fourth = await dispute(m, 'ABT5/5/23');
+    expect([fourth.statusCode, fourth.json().error]).toEqual([429, 'rate_limited']);
+  });
+
+  // ---------------------------------------------------------------- public profile (#21)
+  it('a public profile shows public fields only: never email or member number', async () => {
+    const them = await member('public.person');
+    await them.as('PATCH', '/api/me', onboarding);
+    await client.query(`insert into roles (user_id, role) values ($1, 'student_leader')`, [them.id]);
+    const me = await member('looker');
+    const res = await me.as('GET', `/api/users/${them.id}`);
+    expect(res.json()).toEqual({
+      id: them.id, name: 'Wanjiru M.', photoUrl: null, memberType: 'fresher', course: 'BSc Computer Science',
+      yearOfStudy: 1, graduationYear: null, badges: ['Student Leader'], isFollowing: false,
+    });
+    expect(res.body).not.toContain('@');
+    expect(res.body).not.toContain('09919');
+  });
+
+  it('404 for blocked (either way), deleted, other-campus and made-up members', async () => {
+    const me = await member('viewer');
+    const blockedByMe = await member('blocked.by.me');
+    const blocksMe = await member('blocks.me');
+    const gone = await member('gone.member');
+    await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2), ($3, $1)', [me.id, blockedByMe.id, blocksMe.id]);
+    await client.query('update users set email = null, deleted_at = now() where id = $1', [gone.id]);
+    const other = (await client.query<{ id: string }>(`insert into campuses (slug, name) values ('profile-test', 'Elsewhere') returning id`)).rows[0]!.id;
+    const far = (await client.query<{ id: string }>(`insert into users (campus_id, email, member_type) values ($1, 'far@elsewhere.example', 'continuing') returning id`, [other])).rows[0]!.id;
+    for (const id of [blockedByMe.id, blocksMe.id, gone.id, far, randomUUID(), 'not-a-uuid']) {
+      const res = await me.as('GET', `/api/users/${id}`);
+      expect([res.statusCode, res.json().error], id).toEqual([404, 'not_found']);
+    }
+  });
+
+  // ---------------------------------------------------------------- delete account (#21)
+  it('needs { confirm: "DELETE" }', async () => {
+    const m = await member('hesitant');
+    for (const body of [{}, { confirm: 'delete' }, { confirm: 'DELETE', reason: 'x' }]) {
+      expect((await m.as('DELETE', '/api/me', body)).json().error).toBe('invalid_input');
+    }
+    expect((await m.as('GET', '/api/me')).statusCode).toBe(200);
+  });
+
+  it('deletes personal data and files, signs out everywhere, keeps posts as "Deleted member"', async () => {
+    const m = await member('leaving');
+    await m.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/4242/23' });
+    const photo = await uploadedImage(m.id);
+    await m.as('PATCH', '/api/me', { photoImageId: photo });
+    const postImage = await uploadedImage(m.id);
+    const post = (await client.query<{ id: string }>(
+      `insert into posts (campus_id, author_user_id, body, image_id) values ($1, $2, 'my last post', $3) returning id`, [campusId, m.id, postImage])).rows[0]!.id;
+    const friend = await member('friend');
+    await client.query('insert into likes (user_id, post_id) values ($1, $2)', [m.id, post]);
+    await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2)', [friend.id, m.id]);
+    await client.query(`insert into roles (user_id, role) values ($1, 'student_leader')`, [m.id]);
+    const otherSession = await createSession(client, m.id, { userAgent: 'laptop', ip: '10.7.0.2' });
+    expect(await classGroupsOf(m.id)).toHaveLength(1);
+
+    const res = await m.as('DELETE', '/api/me', { confirm: 'DELETE' });
+    expect(res.statusCode).toBe(204);
+    expect(res.cookies.find((c) => c.name === 'hatua_session')!.value).toBe('');
+
+    const u = (await client.query('select * from users where id = $1', [m.id])).rows[0];
+    expect(u.deleted_at).not.toBeNull();
+    for (const col of ['email', 'name', 'photo_url', 'photo_image_id', 'course', 'year_of_study', 'graduation_year', 'member_number', 'member_number_normalised', 'is_under_18']) {
+      expect(u[col], col).toBeNull();
+    }
+    expect((await client.query('select 1 from images where user_id = $1', [m.id])).rows).toHaveLength(0);
+    expect((await client.query('select body, image_id from posts where id = $1', [post])).rows[0]).toEqual({ body: 'my last post', image_id: null });
+    expect((await client.query('select 1 from likes where user_id = $1', [m.id])).rows).toHaveLength(0);
+    expect((await client.query('select 1 from blocks where blocked_id = $1', [m.id])).rows).toHaveLength(0);
+    expect((await client.query('select 1 from roles where user_id = $1 and ends_at > clock_timestamp()', [m.id])).rows).toHaveLength(0);
+    expect(await classGroupsOf(m.id)).toEqual([]);
+    expect((await client.query('select 1 from sessions where user_id = $1 and revoked_at is null', [m.id])).rows).toHaveLength(0);
+
+    expect((await m.as('GET', '/api/me')).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/me', cookies: { hatua_session: otherSession } })).statusCode).toBe(401);
+    expect((await friend.as('GET', `/api/users/${m.id}`)).statusCode).toBe(404);
+
+    // The email and the reg number are free again.
+    const again = await member('leaving');
+    expect((await again.as('PATCH', '/api/me', { memberNumber: 'ABT5/4242/23' })).statusCode).toBe(200);
+  });
+
+  it('a suspended member can still delete their account', async () => {
+    const m = await member('suspended.leaver');
+    await client.query(`update users set suspended_at = now() where id = $1`, [m.id]);
+    expect((await m.as('GET', '/api/me')).statusCode).toBe(403);
+    expect((await m.as('DELETE', '/api/me', { confirm: 'DELETE' })).statusCode).toBe(204);
   });
 });

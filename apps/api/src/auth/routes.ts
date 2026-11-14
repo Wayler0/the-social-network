@@ -155,11 +155,11 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
   });
 }
 
-/** Housekeeping (hourly): old sign-in codes, their rate-limit counts, and sessions ended over 30 days ago. Returns rows removed. */
+/** Housekeeping (hourly): old sign-in codes, sign-in and dispute rate-limit counts, and sessions ended over 30 days ago. Returns rows removed. */
 export async function cleanupAuth(db: Queryable): Promise<number> {
   const codes = await db.query(`delete from auth_codes where created_at < now() - interval '24 hours'`);
   const counts = await db.query(
-    `delete from rate_limit_events where bucket in ('code_email', 'code_ip', 'verify_ip') and created_at < now() - interval '1 day'`,
+    `delete from rate_limit_events where bucket in ('code_email', 'code_ip', 'verify_ip', 'dispute_user') and created_at < now() - interval '1 day'`,
   );
   const sessions = await db.query(
     `delete from sessions where coalesce(revoked_at, expires_at) < now() - interval '30 days'`,
