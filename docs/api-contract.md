@@ -9,7 +9,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 |---|---|---|---|
 | Health, campuses | — | — | ✅ |
 | Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | ✅ |
-| Me / profile / delete account | Kim | #20, #21 | ⬜ |
+| Me / profile / delete account | Kim | #20, #21 | 🔨 GET/PATCH /me ✅ · dispute, public profile, delete next |
 | Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
 | Report and block | Kim | #23 | ⬜ |
 | Image upload | Peter | #32 | ✅ |
@@ -156,7 +156,7 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
 
 ## 4. Me and profile (#20, #21)
 
-### `PATCH /api/me` — onboarding and edit profile
+### `GET /api/me` ✅ · `PATCH /api/me` ✅ — onboarding and edit profile
 ```json
 { "name": "Wanjiru M.", "memberType": "fresher", "course": "BSc Computer Science",
   "yearOfStudy": 1, "memberNumber": "ABT5/09919/23", "isUnder18": false }
@@ -165,6 +165,10 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 - `memberType`: students choose `fresher | continuing | alumni`; staff are always `staff`.
 - `memberNumber`: normalise (upper-case, remove spaces and `-`, keep `/`), check format, unique per campus → `409 member_number_taken` (the screen offers the "someone has my reg number" dispute).
 - `isUnder18` sets safer defaults (CLAUDE.md section 6).
+- `photoImageId`: the `imageId` from `POST /api/images` sets the profile photo (`photoUrl` is its 320 px thumbnail); `null` removes it. A replaced photo's files are deleted. Migration 008 adds `users.photo_image_id`.
+- `yearOfStudy` is kept only for freshers and continuing students, `graduationYear` only for alumni; the other is cleared.
+- A changed `memberNumber` goes back to `memberNumberStatus: "unverified"`.
+- Routes that need a finished profile call `requireCompleteProfile(db, req, reply)` (`apps/api/src/me/routes.ts`).
 - After saving, in the **same transaction**, put the member in the right class group (Peter's helper):
   ```ts
   import { syncClassGroup } from '../groups/class-groups.js';
