@@ -14,7 +14,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Report and block | Kim | #23 | ✅ |
 | Image upload | Peter | #32 | ✅ |
 | Groups | Kim | #25 | ✅ |
-| Today board | Kim | #26 | ⬜ |
+| Today board | Kim | #26 | ✅ |
 | Ask a Senior | Kim | #27 | ⬜ |
 | Admin | Peter | #37 | ✅ |
 
@@ -317,13 +317,22 @@ Rules (code: `apps/api/src/groups/routes.ts`):
 
 ---
 
-## 9. Today board (#26)
+## 9. Today board (#26) ✅
 
 | Method & path | Notes |
 |---|---|
-| `GET /api/announcements?limit&cursor` | Pinned and urgent first, then newest |
-| `POST /api/announcements` | Office members only: `{ officeId, title, body, urgency: "normal"\|"urgent", pinnedUntil? }` |
-| `DELETE /api/announcements/:id` | Office owner or admin |
+| `GET /api/announcements?limit&cursor` | First page: every current pin (urgent first, then newest), then unpinned newest first. Later pages: unpinned only |
+| `POST /api/announcements` | Current owners/editors of a **verified** office: `{ officeId, title, body, urgency: "normal"\|"urgent", pinnedUntil? }` → `201` Announcement |
+| `DELETE /api/announcements/:id` | Office owner or admin → `204` |
+| `GET /api/me/offices` | Offices the member can post for: `{ items: [{ id, name, photoUrl, verified, role: "owner"\|"editor" }] }` |
+
+**Announcement** `{ id, office: { id, name, photoUrl, verified }, title, body, urgency, pinned, pinnedUntil, createdAt }` — who typed it is not shown.
+
+Rules (code: `apps/api/src/announcements/`):
+- `pinnedUntil` must be in the future and at most 14 days ahead. After it passes, the announcement drops into the unpinned list.
+- At most **5 normal pinned** announcements per campus at once → `409 pin_limit`. Urgent ones are never blocked by the limit.
+- The web app shows `urgent` pins always, and lets members collapse `normal` ones (CLAUDE.md section 4.7).
+- 10 announcements per office per day (`429`). Title 1–140 characters, body 1–5000.
 
 ---
 
