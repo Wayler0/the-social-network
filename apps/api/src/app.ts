@@ -4,6 +4,7 @@ import { adminRoutes } from './admin/routes.js';
 import { authRoutes } from './auth/routes.js';
 import { meRoutes } from './me/routes.js';
 import { postRoutes } from './posts/routes.js';
+import { safetyRoutes } from './safety/routes.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import { createMailer, type Mailer } from './email/mailer.js';
@@ -76,6 +77,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   app.register(authRoutes, { config, db });              // Kim — issues #17, #18, #19
   app.register(meRoutes, { config, db });                // Kim — issues #20, #21
   app.register(postRoutes, { config, db });              // Kim — issues #22, #24
+  app.register(safetyRoutes, { db });                    // Kim — issue #23
   app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
   app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 

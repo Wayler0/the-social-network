@@ -11,7 +11,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | ✅ |
 | Me / profile / delete account | Kim | #20, #21 | ✅ |
 | Posts, comments, likes, feed | Kim | #22, #24 | ✅ |
-| Report and block | Kim | #23 | ⬜ |
+| Report and block | Kim | #23 | ✅ |
 | Image upload | Peter | #32 | ✅ |
 | Groups | Kim | #25 | ⬜ |
 | Today board | Kim | #26 | ⬜ |
@@ -271,7 +271,7 @@ Protected routes get the member from `requireUser(req)` (`apps/api/src/guard.ts`
 
 ---
 
-## 7. Report and block (#23)
+## 7. Report and block (#23) ✅
 
 | Method & path | Body | Response |
 |---|---|---|
@@ -280,7 +280,12 @@ Protected routes get the member from `requireUser(req)` (`apps/api/src/guard.ts`
 | `DELETE /api/users/:id/block` | | `204` |
 | `GET /api/me/blocks` | | `{ items: [{ id, name }] }` |
 
-3 open reports from different members on the same item **auto-hide** it until an admin reviews it.
+3 open reports from different members on the same item **auto-hide** it until an admin reviews it (posts, comments, questions, answers; `hidden_by` stays null to mark it as hidden by reports). People and groups are never auto-hidden.
+
+Rules (code: `apps/api/src/safety/`):
+- Members report only what they can see; anything else is `404`. A person can be reported after being blocked. You cannot report or block yourself.
+- Reporting the same item again while your report is open changes nothing (`202`). 20 reports per member per hour (`429`).
+- `POST /api/reports` answers `202 { "received": true }`. Block and unblock are idempotent.
 
 ---
 
