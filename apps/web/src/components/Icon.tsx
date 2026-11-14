@@ -9,6 +9,7 @@ const paths = {
   heart: <path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" />,
   send: (<><path d="M21 3 10 14" /><path d="M21 3l-7 18-4-7-7-4z" /></>),
   back: <path d="M15 5l-7 7 7 7" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   lock: (<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>),
 } as const;
 
