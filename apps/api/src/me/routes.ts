@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
+import { ensureGroupHasAdmin } from '../groups/admins.js';
 import { normaliseCourse, syncClassGroup } from '../groups/class-groups.js';
 import { clearSessionCookie } from '../auth/sessions.js';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
@@ -201,7 +202,8 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
    * DELETE /api/me   { confirm: "DELETE" }  (Data Protection Act: erasure)
    * Removed: email, name, photo, course, years, member number, under-18 answer, every uploaded
    *   image (profile and post photos, files included), sessions, sign-in codes, likes, helpful
-   *   votes, blocks, group memberships. Roles and office memberships are ended (kept as history).
+   *   votes, blocks, group memberships (a group they ran alone gets a new admin). Roles and office
+ *   memberships are ended (kept as history).
    * Kept, shown as "Deleted member": posts, comments, questions and answers; reports and the
    *   admin log, which moderation needs. The email is free to sign up again as a new member.
    */
@@ -230,7 +232,11 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
       await tx.query('delete from likes where user_id = $1', [userId]);
       await tx.query('delete from answer_helpful where user_id = $1', [userId]);
       await tx.query('delete from blocks where blocker_id = $1 or blocked_id = $1', [userId]);
-      await tx.query('delete from group_members where user_id = $1', [userId]);
+      const adminOf = (await tx.query<{ group_id: string; role: string }>(
+        `delete from group_members where user_id = $1 returning group_id, role`, [userId])).rows
+        .filter((r) => r.role === 'admin').map((r) => r.group_id);
+      // A group this member ran alone gets its longest-standing member as admin.
+      for (const groupId of adminOf) await ensureGroupHasAdmin(tx, groupId);
       for (const table of ['roles', 'office_members']) {
         await tx.query(
           `update ${table} set ends_at = greatest(clock_timestamp(), starts_at + interval '1 millisecond')

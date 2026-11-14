@@ -8,7 +8,8 @@ import { isStudent, loadMe } from '../me/profile.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
 import { POST_SELECT, postBody, type PostRow } from '../posts/shape.js';
-import { visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
+import { notBlocked, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
+import { ensureGroupHasAdmin } from './admins.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
 const V: ViewerSql = { id: '$1', campusId: '$2' };
@@ -144,17 +145,8 @@ export async function groupRoutes(app: FastifyInstance, { db }: { db: Db }) {
       await tx.query('select 1 from groups where id = $1 for update', [g.id]);   // one leave at a time per group
       const { rows } = await tx.query<{ role: string; status: string }>(
         'delete from group_members where group_id = $1 and user_id = $2 returning role, status', [g.id, req.auth!.userId]);
-      if (rows[0]?.role !== 'admin') return;
       // The last admin is leaving: the longest-standing member takes over, so no group is left without one.
-      await tx.query(
-        `update group_members set role = 'admin'
-          where (group_id, user_id) = (
-            select group_id, user_id from group_members
-             where group_id = $1 and status = 'active'
-               and not exists (select 1 from group_members a where a.group_id = $1 and a.role = 'admin' and a.status = 'active')
-             order by joined_at, user_id limit 1)`,
-        [g.id],
-      );
+      if (rows[0]?.role === 'admin') await ensureGroupHasAdmin(tx, g.id);
     });
     return reply.code(204).send();
   });
@@ -197,6 +189,73 @@ export async function groupRoutes(app: FastifyInstance, { db }: { db: Db }) {
     );
     if (!rowCount) return fail(reply, 404, 'not_found', 'No request from that member.');
     return { status: body.approve ? 'active' : 'none' };
+  });
+
+  // ---- GET /api/groups/:id/members   active members only, longest-standing first (each with their role)
+  app.get('/api/groups/:id/members', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    const q = parse(z.object(pageQuery).strict(), req.query, reply);
+    if (!q) return;
+    const g = params.success ? await loadGroup(db, req.auth!, params.data.id) : null;
+    if (!g) return notFound(reply);
+    if (g.my_status !== 'active') return fail(reply, 403, 'forbidden', 'Join the group to see who is in it.');
+    let cursor;
+    try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return badCursor(reply); throw e; }
+    const { rows } = await db.query<{ id: string; name: string | null; photo_url: string | null; member_type: string; role: string; joined_at: Date; cursor_at: string }>(
+      `select u.id, u.name, u.photo_url, u.member_type, m.role, m.joined_at, m.joined_at::text as cursor_at
+         from group_members m join users u on u.id = m.user_id
+        where m.group_id = $3 and m.status = 'active' and u.deleted_at is null and ${notBlocked('u.id', V)} and $2::uuid is not null
+          and ($4::timestamptz is null or (m.joined_at, u.id) > ($4::timestamptz, $5::uuid))
+        order by m.joined_at, u.id
+        limit $6`,
+      [req.auth!.userId, req.auth!.campusId, g.id, cursor?.at ?? null, cursor?.id ?? null, q.limit + 1],
+    );
+    const p = page(rows, q.limit);
+    return {
+      items: p.rows.map((r) => ({ id: r.id, name: r.name, photoUrl: r.photo_url, memberType: r.member_type, role: r.role, joinedAt: r.joined_at.toISOString() })),
+      nextCursor: p.nextCursor,
+    };
+  });
+
+  // ---- PUT /api/groups/:id/members/:userId/role   admins: { role: "admin" | "member" }
+  app.put('/api/groups/:id/members/:userId/role', async (req, reply) => {
+    const params = z.object({ id: uuid, userId: uuid }).safeParse(req.params);
+    const body = parse(z.object({ role: z.enum(['admin', 'member']) }).strict(), req.body, reply);
+    if (!body) return;
+    if (!params.success) return notFound(reply);
+    if (!(await asAdmin(req.auth!, params.data.id, reply))) return;
+    const outcome = await inTransaction(db, async (tx) => {
+      await tx.query('select 1 from groups where id = $1 for update', [params.data.id]);   // one role change at a time
+      const { rows } = await tx.query<{ role: string }>(
+        `select role from group_members where group_id = $1 and user_id = $2 and status = 'active'`, [params.data.id, params.data.userId]);
+      if (!rows[0]) return 'missing' as const;
+      if (body.role === 'member' && rows[0].role === 'admin') {
+        const others = await tx.query(
+          `select 1 from group_members where group_id = $1 and role = 'admin' and status = 'active' and user_id <> $2`, [params.data.id, params.data.userId]);
+        if (others.rows.length === 0) return 'last' as const;
+      }
+      await tx.query('update group_members set role = $3 where group_id = $1 and user_id = $2', [params.data.id, params.data.userId, body.role]);
+      return 'ok' as const;
+    });
+    if (outcome === 'missing') return fail(reply, 404, 'not_found', 'That person is not a member of this group.');
+    if (outcome === 'last') return fail(reply, 409, 'last_admin', 'A group needs at least one admin. Make someone else an admin first.');
+    return { role: body.role };
+  });
+
+  // ---- DELETE /api/groups/:id/members/:userId   admins remove a member (not another admin; not in class groups)
+  app.delete('/api/groups/:id/members/:userId', async (req, reply) => {
+    const params = z.object({ id: uuid, userId: uuid }).safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    const g = await asAdmin(req.auth!, params.data.id, reply);
+    if (!g) return;
+    if (g.auto_type === 'course_year') return fail(reply, 403, 'forbidden', 'Class groups follow members’ profiles.');
+    if (params.data.userId === req.auth!.userId) return fail(reply, 400, 'invalid_input', 'To leave the group, use leave.');
+    const { rows } = await db.query<{ role: string }>(
+      `select role from group_members where group_id = $1 and user_id = $2 and status = 'active'`, [g.id, params.data.userId]);
+    if (!rows[0]) return fail(reply, 404, 'not_found', 'That person is not a member of this group.');
+    if (rows[0].role === 'admin') return fail(reply, 403, 'forbidden', 'Make them a member first, then remove them.');
+    await db.query('delete from group_members where group_id = $1 and user_id = $2', [g.id, params.data.userId]);
+    return reply.code(204).send();
   });
 
   // ---- GET /api/groups/:id/posts   members only, newest first

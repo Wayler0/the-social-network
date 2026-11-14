@@ -301,6 +301,9 @@ Rules (code: `apps/api/src/safety/`):
 | `GET /api/groups/:id/requests` | Admins: pending requests |
 | `POST /api/groups/:id/requests/:userId` | Admins: `{ approve: true\|false }` |
 | `GET /api/groups/:id/posts?limit&cursor` | Members only |
+| `GET /api/groups/:id/members?limit&cursor` | Active members only: `{ items: [{ id, name, photoUrl, memberType, role, joinedAt }] }`, longest-standing first |
+| `PUT /api/groups/:id/members/:userId/role` | Admins: `{ role: "admin"\|"member" }` → `{ role }`. `409 last_admin` if it would leave no admin |
+| `DELETE /api/groups/:id/members/:userId` | Admins remove a member → `204`. Not other admins (demote first), not in class groups |
 
 Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
@@ -311,7 +314,7 @@ Rules (code: `apps/api/src/groups/routes.ts`):
 - Discover (`GET /api/groups`) leaves out other people's class groups; `mine=true` lists groups you are in or asked to join.
 - `POST /api/groups` body: `{ name, description?, visibility, studentOnly? }`; the creator becomes its admin. Only freshers and continuing students may set `studentOnly`. Finished profile needed; 5 groups a day.
 - `PUT …/membership` answers `{ status }` and changes nothing if you are already in or waiting. Class groups cannot be joined or left by hand (`403`).
-- When the last admin leaves, the longest-standing member becomes admin.
+- When the last admin leaves or deletes their account, the longest-standing member becomes admin.
 - `GET …/requests` answers `{ items: [{ id, name, photoUrl, memberType, requestedAt }] }`, oldest first. `POST …/requests/:userId` answers `{ status: "active" | "none" }`; `404` if there is no such request.
 - `GET …/posts`: `403` if you are not an active member, `404` if you cannot see the group.
 

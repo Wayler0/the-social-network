@@ -165,4 +165,51 @@ describe.skipIf(!url)('groups (real database, seed data)', () => {
       expect((await as('cynthia', 'GET', `/api/groups/${G('football')}/posts`)).json().items.map((p: { id: string }) => p.id)).toContain(P('photo2'));
     });
   });
+
+  describe('members and admins', () => {
+    it('members see who is in the group, longest-standing first, with roles; others cannot', async () => {
+      await client.query(`update group_members set joined_at = joined_at - interval '1 day' where group_id = $1 and user_id = $2`, [G('football'), U('brian')]);
+      const res = await as('david', 'GET', `/api/groups/${G('football')}/members`);
+      expect(res.json().items[0]).toMatchObject({ id: U('brian'), role: 'admin', joinedAt: expect.stringMatching(/Z$/) });
+      expect(res.json().items.map((m: { id: string }) => m.id).sort()).toEqual([U('brian'), U('david'), U('hassan')].sort());
+      expect(JSON.stringify(res.json())).not.toMatch(/@|memberNumber/);
+      expect((await as('cynthia', 'GET', `/api/groups/${G('football')}/members`)).json().error).toBe('forbidden');
+      const page1 = (await as('david', 'GET', `/api/groups/${G('football')}/members?limit=2`)).json();
+      const page2 = (await as('david', 'GET', `/api/groups/${G('football')}/members?limit=2&cursor=${page1.nextCursor}`)).json();
+      expect([...page1.items, ...page2.items]).toHaveLength(3);
+    });
+
+    it('leaves out members the viewer blocked, or who blocked them', async () => {
+      await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2)', [U('hassan'), U('david')]);
+      const ids = (await as('david', 'GET', `/api/groups/${G('football')}/members`)).json().items.map((m: { id: string }) => m.id);
+      expect(ids).not.toContain(U('hassan'));
+    });
+
+    it('admins promote and demote, but never remove the last admin', async () => {
+      const role = (who: string, target: string, r: string) => as(who, 'PUT', `/api/groups/${G('football')}/members/${U(target)}/role`, { role: r });
+      expect((await role('david', 'hassan', 'admin')).json().error).toBe('forbidden');            // not an admin
+      expect((await role('brian', 'brian', 'member')).json().error).toBe('last_admin');
+      expect((await role('brian', 'hassan', 'admin')).json()).toEqual({ role: 'admin' });
+      expect((await role('brian', 'brian', 'member')).json()).toEqual({ role: 'member' });       // another admin exists now
+      expect((await role('hassan', 'cynthia', 'admin')).statusCode).toBe(404);                   // not a member
+      expect((await role('hassan', 'david', 'owner')).json().error).toBe('invalid_input');
+    });
+
+    it('admins remove members, not other admins, and nobody in class groups', async () => {
+      const remove = (who: string, group: string, target: string) => as(who, 'DELETE', `/api/groups/${group}/members/${U(target)}`);
+      expect((await remove('david', G('football'), 'hassan')).statusCode).toBe(403);            // members cannot
+      expect((await remove('brian', G('football'), 'hassan')).statusCode).toBe(204);
+      expect(await membership(G('football'), 'hassan')).toBeNull();
+      expect((await remove('brian', G('football'), 'hassan')).statusCode).toBe(404);
+      await client.query(`update group_members set role = 'admin' where group_id = $1 and user_id = $2`, [G('football'), U('david')]);
+      expect((await remove('brian', G('football'), 'david')).json().message).toMatch(/member first/);
+      expect((await remove('brian', G('football'), 'brian')).json().error).toBe('invalid_input');
+    });
+
+    it('when a group\'s only admin deletes their account, the longest-standing member takes over', async () => {
+      await client.query(`update group_members set joined_at = joined_at - interval '1 day' where group_id = $1 and user_id = $2`, [G('football'), U('hassan')]);
+      expect((await as('brian', 'DELETE', '/api/me', { confirm: 'DELETE' })).statusCode).toBe(204);
+      expect(await membership(G('football'), 'hassan')).toEqual({ role: 'admin', status: 'active' });
+    });
+  });
 });
