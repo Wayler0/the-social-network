@@ -1,6 +1,9 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { seedId } from './seed.js';
+import { seed, seedId } from './seed.js';
 import { notBlocked, visibleAnswer, visibleComment, visibleGroup, visiblePost, visibleQuestion, type ViewerSql } from './visibility.js';
 
 describe('visibility helpers refuse anything that is not code', () => {
@@ -16,7 +19,8 @@ describe('visibility helpers refuse anything that is not code', () => {
 });
 
 /**
- * Against the development seed data (npm run seed), each test inside a rolled-back transaction.
+ * Against the development seed data, loaded inside each test's transaction and rolled back,
+ * so it works on an empty database (CI) as well as a seeded one.
  * Run with: npm run test:db -w apps/api
  */
 const url = process.env.TEST_DATABASE_URL;
@@ -28,14 +32,19 @@ const V: ViewerSql = { id: '$1', campusId: '$2' };
 describe.skipIf(!url)('visibility rules (real database, seed data)', () => {
   let db: pg.Client;
   let campus: string;
+  let mediaDir: string;
 
   beforeAll(async () => {
+    mediaDir = await mkdtemp(path.join(tmpdir(), 'hatua-visibility-'));
     db = new pg.Client({ connectionString: url });
     await db.connect();
+  });
+  afterAll(async () => { await db.end(); await rm(mediaDir, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    await db.query('begin');
+    await seed(db, { mediaDir });
     campus = (await db.query<{ campus_id: string }>('select campus_id from users where id = $1', [U('cynthia')])).rows[0]!.campus_id;
   });
-  afterAll(async () => { await db.end(); });
-  beforeEach(async () => { await db.query('begin'); });
   afterEach(async () => { await db.query('rollback'); });
 
   const canSee = async (who: string, table: string, cond: string, id: string, viewerCampus = campus) =>
