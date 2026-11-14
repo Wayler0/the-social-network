@@ -127,7 +127,14 @@ export async function managementRoutes(app: FastifyInstance, { db, requireUser }
       const target = await findUser(tx, actor.campusId, params.id);
       if (!target || target.deleted_at) return 'missing' as const;
       if (body.role === 'staff' && target.member_type !== 'staff') return 'not_staff' as const;
-      if ((target.roles ?? []).some((r) => r.role === body.role && r.title === (body.title ?? null))) return 'duplicate' as const;
+      // Checked here rather than from target.roles: that list filters on now(), which is when *this* transaction
+      // started. A grant that committed while we waited for the lock above can have a later starts_at and be missed.
+      const held = await tx.query(
+        `select 1 from roles where user_id = $1 and role = $2 and title is not distinct from $3
+            and (ends_at is null or ends_at > clock_timestamp())`,
+        [params.id, body.role, body.title ?? null],
+      );
+      if (held.rows.length > 0) return 'duplicate' as const;
       const made = await tx.query<{ id: string }>(
         'insert into roles (user_id, role, title, ends_at, granted_by) values ($1, $2, $3, $4, $5) returning id',
         [params.id, body.role, body.title ?? null, endsAt, actor.id],
