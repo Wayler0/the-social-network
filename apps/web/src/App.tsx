@@ -1,34 +1,27 @@
-import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
+import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { Profile } from './screens/Profile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
+import { Settings } from './screens/Settings';
 import { SignUp } from './screens/SignUp';
 import { VerifyCode } from './screens/VerifyCode';
 
-/** While the app asks the API who is signed in. */
 function Splash() {
-  return <main className="auth" aria-busy="true"><p className="hint" style={{ margin: 'auto' }}>Loading…</p></main>;
+  return <div className="splash" role="status" aria-label="Loading" />;
 }
 
-/** Signed in, with a finished profile (the API refuses posting and joining until then). */
+/** Signed in with a finished profile; otherwise send to sign-in or onboarding. */
 function RequireAuth() {
   const { status, me } = useAuth();
+  const { pathname } = useLocation();
   if (status === 'loading') return <Splash />;
-  if (status === 'signedOut') return <Navigate to="/welcome" replace />;
-  if (!me!.profileComplete) return <Navigate to="/onboarding" replace />;
-  return <Outlet />;
-}
-
-/** Signed in, profile not finished yet. */
-function RequireOnboarding() {
-  const { status, me } = useAuth();
-  if (status === 'loading') return <Splash />;
-  if (status === 'signedOut') return <Navigate to="/welcome" replace />;
-  if (me!.profileComplete) return <Navigate to="/" replace />;
+  if (status === 'signedOut' || !me) return <Navigate to="/welcome" replace />;
+  if (!me.profileComplete && pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
   return <Outlet />;
 }
 
@@ -46,11 +39,13 @@ export function App() {
         <Route path="/verify" element={<VerifyCode />} />
       </Route>
 
-      <Route element={<RequireOnboarding />}>
-        <Route path="/onboarding" element={<Onboarding />} />
-      </Route>
-
       <Route element={<RequireAuth />}>
+        <Route path="/onboarding" element={<Onboarding />} />
+        {/* Full-screen pages without the bottom nav, still in the one-column frame. */}
+        <Route element={<div className="shell"><Outlet /></div>}>
+          <Route path="/profile/edit" element={<EditProfile />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
         <Route element={<AppShell />}>
           <Route index element={<Home />} />
           <Route path="discover" element={<Placeholder title="Discover" text="Search, groups, Ask a Senior, Events and Market." />} />

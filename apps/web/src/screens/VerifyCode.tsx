@@ -10,7 +10,7 @@ const LENGTH = 6;
 export function VerifyCode() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { signIn } = useAuth();
   const state = location.state as { email?: string; resendAfterSeconds?: number } | null;
   const email = state?.email;
 
@@ -35,8 +35,8 @@ export function VerifyCode() {
     setError(null);
     try {
       await verifyCode(email!, code);
-      await refresh();   // the API has set the session cookie; ask who we are (onboarding comes first for new members)
-      navigate('/', { replace: true });
+      const me = await signIn();
+      navigate(me && !me.profileComplete ? '/onboarding' : '/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
       setDigits(Array(LENGTH).fill(''));

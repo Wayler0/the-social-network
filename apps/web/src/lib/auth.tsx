@@ -1,59 +1,56 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getMe, logout, onSignedOut, type Me } from './api';
+import { APP_SLUG } from '../config';
+import { getMe, logout } from './api';
+import type { Me } from './profile';
 
 /**
- * Signed-in state for the whole app, from GET /api/me. The session itself is an HttpOnly cookie
- * the API sets and the app never reads; asking the API is the only way to know.
- *   loading   – still asking (show a splash, not the sign-up screen)
- *   signedOut – no session
- *   signedIn  – `me` is the member; `me.profileComplete` false means onboarding comes first
+ * Who is signed in. The real session is an HttpOnly cookie set by the API, so on start we
+ * ask GET /api/me. In mock mode a localStorage flag stands in for the cookie.
  */
+const MOCK = import.meta.env.VITE_API_MOCK === 'true';
+const FLAG = `${APP_SLUG}.mockSignedIn`;
+
 type Status = 'loading' | 'signedOut' | 'signedIn';
 type Auth = {
   status: Status;
   me: Me | null;
-  /** Problem reaching the API on start-up (offline, server down); signed-out screens show it. */
-  error: string | null;
-  /** Ask the API again, e.g. right after verify-code set the cookie. */
-  refresh: () => Promise<void>;
-  /** Put an updated profile in place (PATCH /api/me returns it). */
-  setMe: (me: Me) => void;
+  /** Call after the code is verified: loads the member. */
+  signIn: () => Promise<Me | null>;
   signOut: () => Promise<void>;
+  /** Replace the cached member after an update. */
+  setMe: (me: Me | null) => void;
 };
 const AuthContext = createContext<Auth | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [me, setMeState] = useState<Me | null>(null);
   const [status, setStatus] = useState<Status>('loading');
-  const [error, setError] = useState<string | null>(null);
+  const [me, setMeState] = useState<Me | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const found = await getMe();
-      setMeState(found);
-      setStatus(found ? 'signedIn' : 'signedOut');
-      setError(null);
-    } catch (err) {
-      setMeState(null);
-      setStatus('signedOut');
-      setError(err instanceof Error ? err.message : 'Could not reach the server.');
-    }
+  const setMe = useCallback((next: Me | null) => {
+    setMeState(next);
+    setStatus(next ? 'signedIn' : 'signedOut');
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    let alive = true;
+    getMe()
+      .then((m) => { if (alive) setMe(m); })
+      .catch(() => { if (alive) setMe(null); }); // offline or server down: show sign-in, not a blank page
+    return () => { alive = false; };
+  }, [setMe]);
 
-  // Any 401 from the API (session expired, logged out elsewhere, account deleted) signs the app out.
-  useEffect(() => onSignedOut(() => { setMeState(null); setStatus('signedOut'); }), []);
-
-  const setMe = useCallback((next: Me) => { setMeState(next); setStatus('signedIn'); }, []);
+  const signIn = useCallback(async () => {
+    if (MOCK) try { localStorage.setItem(FLAG, '1'); } catch { /* storage blocked */ }
+    const m = await getMe();
+    setMe(m);
+    return m;
+  }, [setMe]);
 
   const signOut = useCallback(async () => {
-    try { await logout(); } catch { /* signed out on this device either way */ }
-    setMeState(null);
-    setStatus('signedOut');
-  }, []);
+    try { await logout(); } finally { setMe(null); }
+  }, [setMe]);
 
-  const value = useMemo(() => ({ status, me, error, refresh, setMe, signOut }), [status, me, error, refresh, setMe, signOut]);
+  const value = useMemo(() => ({ status, me, signIn, signOut, setMe }), [status, me, signIn, signOut, setMe]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
