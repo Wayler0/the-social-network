@@ -1,33 +1,56 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { APP_SLUG } from '../config';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { getMe, logout } from './api';
+import type { Me } from './profile';
 
 /**
- * Signed-in state for the app shell. The real session is an HttpOnly cookie set by the API;
- * once Kim's GET /api/me exists, this will ask the server instead.
- * In mock mode we remember the flag in localStorage so a refresh keeps you signed in.
+ * Who is signed in. The real session is an HttpOnly cookie set by the API, so on start we
+ * ask GET /api/me. In mock mode a localStorage flag stands in for the cookie.
  */
 const MOCK = import.meta.env.VITE_API_MOCK === 'true';
-const KEY = `${APP_SLUG}.mockSignedIn`;
+const FLAG = `${APP_SLUG}.mockSignedIn`;
 
-function readFlag(): boolean {
-  if (!MOCK) return false;
-  try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
-}
-
-type Auth = { signedIn: boolean; signIn: () => void; signOut: () => void };
+type Status = 'loading' | 'signedOut' | 'signedIn';
+type Auth = {
+  status: Status;
+  me: Me | null;
+  /** Call after the code is verified: loads the member. */
+  signIn: () => Promise<Me | null>;
+  signOut: () => Promise<void>;
+  /** Replace the cached member after an update. */
+  setMe: (me: Me | null) => void;
+};
 const AuthContext = createContext<Auth | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [signedIn, setSignedIn] = useState(readFlag);
-  const signIn = useCallback(() => {
-    setSignedIn(true);
-    if (MOCK) try { localStorage.setItem(KEY, '1'); } catch { /* storage blocked */ }
+  const [status, setStatus] = useState<Status>('loading');
+  const [me, setMeState] = useState<Me | null>(null);
+
+  const setMe = useCallback((next: Me | null) => {
+    setMeState(next);
+    setStatus(next ? 'signedIn' : 'signedOut');
   }, []);
-  const signOut = useCallback(() => {
-    setSignedIn(false);
-    try { localStorage.removeItem(KEY); } catch { /* storage blocked */ }
-  }, []);
-  const value = useMemo(() => ({ signedIn, signIn, signOut }), [signedIn, signIn, signOut]);
+
+  useEffect(() => {
+    let alive = true;
+    getMe()
+      .then((m) => { if (alive) setMe(m); })
+      .catch(() => { if (alive) setMe(null); }); // offline or server down: show sign-in, not a blank page
+    return () => { alive = false; };
+  }, [setMe]);
+
+  const signIn = useCallback(async () => {
+    if (MOCK) try { localStorage.setItem(FLAG, '1'); } catch { /* storage blocked */ }
+    const m = await getMe();
+    setMe(m);
+    return m;
+  }, [setMe]);
+
+  const signOut = useCallback(async () => {
+    try { await logout(); } finally { setMe(null); }
+  }, [setMe]);
+
+  const value = useMemo(() => ({ status, me, signIn, signOut, setMe }), [status, me, signIn, signOut, setMe]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

@@ -1,21 +1,34 @@
-import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
+import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
+import { Onboarding } from './screens/Onboarding';
 import { Profile } from './screens/Profile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
+import { Settings } from './screens/Settings';
 import { SignUp } from './screens/SignUp';
 import { VerifyCode } from './screens/VerifyCode';
 
+function Splash() {
+  return <div className="splash" role="status" aria-label="Loading" />;
+}
+
+/** Signed in with a finished profile; otherwise send to sign-in or onboarding. */
 function RequireAuth() {
-  const { signedIn } = useAuth();
-  return signedIn ? <Outlet /> : <Navigate to="/welcome" replace />;
+  const { status, me } = useAuth();
+  const { pathname } = useLocation();
+  if (status === 'loading') return <Splash />;
+  if (status === 'signedOut' || !me) return <Navigate to="/welcome" replace />;
+  if (!me.profileComplete && pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
+  return <Outlet />;
 }
 
 function GuestOnly() {
-  const { signedIn } = useAuth();
-  return signedIn ? <Navigate to="/" replace /> : <Outlet />;
+  const { status } = useAuth();
+  if (status === 'loading') return <Splash />;
+  return status === 'signedIn' ? <Navigate to="/" replace /> : <Outlet />;
 }
 
 export function App() {
@@ -27,6 +40,12 @@ export function App() {
       </Route>
 
       <Route element={<RequireAuth />}>
+        <Route path="/onboarding" element={<Onboarding />} />
+        {/* Full-screen pages without the bottom nav, still in the one-column frame. */}
+        <Route element={<div className="shell"><Outlet /></div>}>
+          <Route path="/profile/edit" element={<EditProfile />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
         <Route element={<AppShell />}>
           <Route index element={<Home />} />
           <Route path="discover" element={<Placeholder title="Discover" text="Search, groups, Ask a Senior, Events and Market." />} />

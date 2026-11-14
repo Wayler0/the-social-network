@@ -35,8 +35,8 @@ export function VerifyCode() {
     setError(null);
     try {
       await verifyCode(email!, code);
-      signIn();
-      navigate('/', { replace: true });
+      const me = await signIn();
+      navigate(me && !me.profileComplete ? '/onboarding' : '/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
       setDigits(Array(LENGTH).fill(''));
