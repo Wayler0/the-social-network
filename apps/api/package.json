@@ -13,7 +13,8 @@
     "email:test": "tsx --env-file-if-exists=../../.env src/email/send-test.ts",
     "admin:grant": "tsx --env-file-if-exists=../../.env src/admin/grant-admin.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db": "node --env-file-if-exists=../../.env node_modules/vitest/vitest.mjs run"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
