@@ -10,7 +10,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Health, campuses | — | — | ✅ |
 | Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | ✅ |
 | Me / profile / delete account | Kim | #20, #21 | ✅ |
-| Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
+| Posts, comments, likes, feed | Kim | #22, #24 | ✅ |
 | Report and block | Kim | #23 | ⬜ |
 | Image upload | Peter | #32 | ✅ |
 | Groups | Kim | #25 | ⬜ |
@@ -192,12 +192,12 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 
 ---
 
-## 5. Feed, posts, comments, likes (#22, #24)
+## 5. Feed, posts, comments, likes (#22, #24) ✅
 
 | Method & path | Body / query | Response |
 |---|---|---|
 | `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide, newest first |
-| `POST /api/posts` | `{ body, imageId?, groupId? }` (body 1–2000 chars; image from §6) | `201` Post |
+| `POST /api/posts` | `{ body, imageId?, groupId?, officeId? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to) | `201` Post |
 | `GET /api/posts/:id` | | Post |
 | `DELETE /api/posts/:id` | author or admin | `204` |
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
@@ -214,6 +214,15 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
   "likeCount": 12, "commentCount": 3, "likedByMe": false, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
+
+Rules (code: `apps/api/src/posts/`):
+- The feed is campus-wide posts only; group posts appear in their group (`GET /api/groups/:id/posts`).
+- `office` is `{ id, name, photoUrl, verified }` or null; `group` is `{ id, name }` or null.
+- An author who deleted their account shows as `{ "id": null, "name": "Deleted member", "photoUrl": null, "badges": [] }`.
+- Posting and commenting need a finished profile (`403 profile_incomplete`). Limits: 20 posts and 60 comments per member per hour (`429`).
+- Group posts: active members only (`403 forbidden`); clubs with `posting: "admins_only"` only by group admins. A group the member may not see is `404`.
+- Deleting a post deletes its image too, unless a report about it is still open (moderators need the evidence).
+- Anything the viewer may not see (hidden, deleted, blocked either way, group they are not in) is `404`, including for likes and comments.
 
 ---
 
