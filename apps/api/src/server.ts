@@ -1,5 +1,6 @@
 import { buildApp } from './app.js';
 import { cleanupAuth } from './auth/routes.js';
+import { cleanupGroups } from './groups/routes.js';
 import { cleanupPosts } from './posts/routes.js';
 import { cleanupSafety } from './safety/routes.js';
 import { loadConfig } from './config.js';
@@ -22,6 +23,7 @@ const housekeeping = setInterval(() => {
     .catch((err) => app.log.error(err, 'sign-in cleanup failed'));
   cleanupPosts(db).catch((err) => app.log.error(err, 'post rate-limit cleanup failed'));
   cleanupSafety(db).catch((err) => app.log.error(err, 'report rate-limit cleanup failed'));
+  cleanupGroups(db).catch((err) => app.log.error(err, 'group rate-limit cleanup failed'));
 }, HOUR);
 housekeeping.unref();
 

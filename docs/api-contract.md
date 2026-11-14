@@ -13,7 +13,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Posts, comments, likes, feed | Kim | #22, #24 | ✅ |
 | Report and block | Kim | #23 | ✅ |
 | Image upload | Peter | #32 | ✅ |
-| Groups | Kim | #25 | ⬜ |
+| Groups | Kim | #25 | ✅ |
 | Today board | Kim | #26 | ⬜ |
 | Ask a Senior | Kim | #27 | ⬜ |
 | Admin | Peter | #37 | ✅ |
@@ -289,7 +289,7 @@ Rules (code: `apps/api/src/safety/`):
 
 ---
 
-## 8. Groups (#25)
+## 8. Groups (#25) ✅
 
 | Method & path | Notes |
 |---|---|
@@ -304,7 +304,16 @@ Rules (code: `apps/api/src/safety/`):
 
 Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
-**Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null }`
+**Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, isClassGroup, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null }`
+
+Rules (code: `apps/api/src/groups/routes.ts`):
+- `memberCount` is `null` for a private group you are not in. `isClassGroup` is true for the automatic course/year groups.
+- Discover (`GET /api/groups`) leaves out other people's class groups; `mine=true` lists groups you are in or asked to join.
+- `POST /api/groups` body: `{ name, description?, visibility, studentOnly? }`; the creator becomes its admin. Only freshers and continuing students may set `studentOnly`. Finished profile needed; 5 groups a day.
+- `PUT …/membership` answers `{ status }` and changes nothing if you are already in or waiting. Class groups cannot be joined or left by hand (`403`).
+- When the last admin leaves, the longest-standing member becomes admin.
+- `GET …/requests` answers `{ items: [{ id, name, photoUrl, memberType, requestedAt }] }`, oldest first. `POST …/requests/:userId` answers `{ status: "active" | "none" }`; `404` if there is no such request.
+- `GET …/posts`: `403` if you are not an active member, `404` if you cannot see the group.
 
 ---
 
