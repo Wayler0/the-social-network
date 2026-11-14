@@ -151,3 +151,53 @@ describe.skipIf(!url)('Ask a Senior (real database, seed data)', () => {
     });
   });
 });
+
+describe.skipIf(!url)('deleting questions and answers (real database, seed data)', () => {
+  let client: pg.Client;
+  let app: FastifyInstance;
+  let mediaDir: string;
+  const tokens = new Map<string, string>();
+
+  beforeAll(async () => {
+    mediaDir = await mkdtemp(path.join(tmpdir(), 'hatua-ask-del-'));
+    client = new pg.Client({ connectionString: url });
+    await client.connect();
+    app = buildApp(loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, MEDIA_DIR: mediaDir }), rollbackPool(client));
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); await client.end(); await rm(mediaDir, { recursive: true, force: true }); });
+  beforeEach(async () => { await client.query('begin'); await seed(client, { mediaDir }); tokens.clear(); });
+  afterEach(async () => { await client.query('rollback'); });
+
+  async function as(who: string, method: 'GET' | 'DELETE' | 'PUT', url: string) {
+    let token = tokens.get(who);
+    if (!token) { token = await createSession(client, U(who), { userAgent: 'test', ip: '10.12.1.1' }); tokens.set(who, token); }
+    return app.inject({ method, url, cookies: { hatua_session: token } });
+  }
+
+  it('the asker deletes their question; it and its answers are gone for everyone, the row is kept', async () => {
+    expect((await as('cynthia', 'DELETE', `/api/questions/${Q('units')}`)).statusCode).toBe(403);
+    expect((await as('amina', 'DELETE', `/api/questions/${Q('units')}`)).statusCode).toBe(204);
+    expect((await as('cynthia', 'GET', `/api/questions/${Q('units')}`)).statusCode).toBe(404);
+    expect((await as('cynthia', 'GET', '/api/questions?q=units')).json().items).toEqual([]);
+    expect((await as('amina', 'PUT', `/api/answers/${A('units2')}/helpful`)).statusCode).toBe(404);
+    expect((await client.query('select deleted_at from questions where id = $1', [Q('units')])).rows[0].deleted_at).not.toBeNull();
+    expect((await as('amina', 'DELETE', `/api/questions/${Q('units')}`)).statusCode).toBe(404);
+  });
+
+  it('the author deletes their answer; counts and search follow', async () => {
+    expect((await as('amina', 'DELETE', `/api/answers/${A('hostel1')}`)).statusCode).toBe(403);
+    expect((await as('david', 'DELETE', `/api/answers/${A('hostel1')}`)).statusCode).toBe(204);
+    const q = (await as('brian', 'GET', `/api/questions/${Q('hostel')}`)).json();
+    expect([q.answerCount, q.answers]).toEqual([0, []]);
+    expect((await as('brian', 'GET', '/api/questions?q=dining%20hall')).json().items).toEqual([]);
+  });
+
+  it('admins may delete anything; an author may delete their own hidden question; others get 404', async () => {
+    expect((await as('hassan', 'DELETE', `/api/answers/${A('id2')}`)).statusCode).toBe(204);
+    expect((await as('cynthia', 'DELETE', `/api/questions/${Q('hidden')}`)).statusCode).toBe(404);
+    await client.query('update users set suspended_at = null where id = $1', [U('ivy')]);
+    expect((await as('ivy', 'DELETE', `/api/questions/${Q('hidden')}`)).statusCode).toBe(204);
+    expect((await as('amina', 'DELETE', '/api/answers/nope')).statusCode).toBe(404);
+  });
+});

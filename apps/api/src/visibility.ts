@@ -4,7 +4,7 @@
  * query is a privacy bug, so routes build their WHERE clauses from these helpers instead.
  *
  *   - only the viewer's own campus;
- *   - nothing hidden by moderators or reports, nothing deleted;
+ *   - nothing hidden by moderators or reports, nothing deleted (posts, comments, questions, answers);
  *   - nothing by someone the viewer blocked, or who blocked the viewer;
  *   - group posts only for active members of the group;
  *   - student-only groups never for staff.
@@ -82,12 +82,12 @@ export function visibleComment(alias: string, v: ViewerSql): string {
 /** An Ask a Senior question the viewer may read. */
 export function visibleQuestion(alias: string, v: ViewerSql): string {
   check(v, alias);
-  return `(${alias}.campus_id = ${v.campusId} and ${alias}.hidden_at is null
+  return `(${alias}.campus_id = ${v.campusId} and ${alias}.hidden_at is null and ${alias}.deleted_at is null
            and ${notBlocked(`${alias}.user_id`, v)})`;
 }
 
 /** An answer the viewer may read. Its question must be checked with visibleQuestion as well. */
 export function visibleAnswer(alias: string, v: ViewerSql): string {
   check(v, alias);
-  return `(${alias}.hidden_at is null and ${notBlocked(`${alias}.user_id`, v)})`;
+  return `(${alias}.hidden_at is null and ${alias}.deleted_at is null and ${notBlocked(`${alias}.user_id`, v)})`;
 }

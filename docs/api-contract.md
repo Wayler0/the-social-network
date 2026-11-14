@@ -344,6 +344,7 @@ Rules (code: `apps/api/src/announcements/`):
 | `POST /api/questions` | `{ body, hideName? }` → `201` Question. Finished profile; 10 an hour |
 | `GET /api/questions/:id` | Question plus `answers` (most helpful first, then oldest; up to 200) |
 | `POST /api/questions/:id/answers` | `{ body }` (1–5000 chars) → `201` Answer. Finished profile; 30 an hour |
+| `DELETE /api/questions/:id` · `DELETE /api/answers/:id` | The author or an admin → `204`. Kept as `deleted_at` (migration 009) for reports; a deleted question hides its answers. Someone else's: `403`, or `404` if you cannot see it |
 | `PUT /api/answers/:id/helpful` / `DELETE …` | Toggle "helpful" → `{ helpful, helpfulCount }`; idempotent; not on your own answer (`400`) |
 
 **Question** `{ id, body, author, nameHidden, isMine, answerCount, createdAt }`
@@ -351,7 +352,6 @@ Rules (code: `apps/api/src/announcements/`):
 
 - **Hidden names:** with `hideName: true`, `author` is `null` for every member except the asker, **moderators and admins** (staff and alumni included, CLAUDE.md section 4.5). The same applies to answers the anonymous asker writes on their own question (`byAsker: true`), so they cannot give themselves away.
 - Hidden questions and answers, and those between members who blocked each other, are left out (`404` for a question).
-- Deleting your own question or answer is not in v0.1; moderators hide them (section 11).
 
 ---
 

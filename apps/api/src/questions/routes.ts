@@ -22,7 +22,7 @@ const VIEWER_SEES_HIDDEN_NAMES = `exists (select 1 from roles vr where vr.user_i
 const QUESTION_SELECT = `
   select q.id, q.body, q.hide_name, q.created_at, q.created_at::text as cursor_at, (q.user_id = $1) as is_mine,
          ${authorColumns('au')},
-         (select count(*) from answers a where a.question_id = q.id and a.hidden_at is null)::int as answer_count,
+         (select count(*) from answers a where a.question_id = q.id and a.hidden_at is null and a.deleted_at is null)::int as answer_count,
          ${VIEWER_SEES_HIDDEN_NAMES} as sees_hidden
     from questions q join users au on au.id = q.user_id`;
 
@@ -94,7 +94,7 @@ export async function questionRoutes(app: FastifyInstance, { db }: { db: Db }) {
           and ($3::timestamptz is null or (q.created_at, q.id) < ($3::timestamptz, $4::uuid))
           and ($6::text is null
                or to_tsvector('english', q.body) @@ plainto_tsquery('english', $6)
-               or exists (select 1 from answers sa where sa.question_id = q.id and sa.hidden_at is null
+               or exists (select 1 from answers sa where sa.question_id = q.id and sa.hidden_at is null and sa.deleted_at is null
                            and to_tsvector('english', sa.body) @@ plainto_tsquery('english', $6)))
         order by q.created_at desc, q.id desc
         limit $5`,
@@ -163,6 +163,38 @@ export async function questionRoutes(app: FastifyInstance, { db }: { db: Db }) {
     const { rows } = await db.query<AnswerRow>(`${ANSWER_SELECT} where a.id = $2`, [viewer.userId, outcome.id]);
     return reply.code(201).send(answerBody(rows[0]!));
   });
+
+  // ---- DELETE /api/questions/:id and /api/answers/:id   the author, or an admin
+  // Kept with deleted_at (open reports and the admin log still need them); nobody sees them again.
+  // A deleted question takes its answers out of sight with it.
+  for (const kind of ['question', 'answer'] as const) {
+    app.delete(`/api/${kind}s/:id`, async (req, reply) => {
+      const params = idParam.safeParse(req.params);
+      const gone = () => fail(reply, 404, 'not_found', kind === 'question' ? 'Question not found.' : 'Answer not found.');
+      if (!params.success) return gone();
+      const { userId, campusId } = req.auth!;
+      const { rows } = await db.query<{ user_id: string; visible: boolean }>(
+        kind === 'question'
+          ? `select q.user_id, ${visibleQuestion('q', V)} as visible from questions q
+              where q.id = $3 and q.campus_id = $2 and q.deleted_at is null`
+          : `select a.user_id, (${visibleAnswer('a', V)} and ${visibleQuestion('q', V)}) as visible
+               from answers a join questions q on q.id = a.question_id
+              where a.id = $3 and q.campus_id = $2 and a.deleted_at is null`,
+        [userId, campusId, params.data.id],
+      );
+      const row = rows[0];
+      // Authors may delete their own even when it is hidden; anything else they cannot see is 404.
+      if (!row || (row.user_id !== userId && !row.visible)) return gone();
+      if (row.user_id !== userId) {
+        const admin = await db.query(
+          `select 1 from roles where user_id = $1 and role = 'admin'
+              and starts_at <= clock_timestamp() and (ends_at is null or ends_at > clock_timestamp())`, [userId]);
+        if (admin.rows.length === 0) return fail(reply, 403, 'forbidden', `You can only delete your own ${kind}s.`);
+      }
+      await db.query(`update ${kind}s set deleted_at = clock_timestamp() where id = $1`, [params.data.id]);
+      return reply.code(204).send();
+    });
+  }
 
   // ---- PUT / DELETE /api/answers/:id/helpful   idempotent; not on your own answer
   for (const helpful of [true, false]) {
