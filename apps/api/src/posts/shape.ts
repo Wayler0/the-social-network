@@ -14,7 +14,7 @@ export const activeRoles = (userCol: string) =>
                    order by r.role), '{}')`;
 
 /** Authors who deleted their account show as "Deleted member", with nothing that identifies them. */
-const authorColumns = (alias: string) => `
+export const authorColumns = (alias: string) => `
   case when ${alias}.deleted_at is null then ${alias}.id end as author_id,
   case when ${alias}.deleted_at is null then ${alias}.name end as author_name,
   case when ${alias}.deleted_at is null then ${alias}.photo_url end as author_photo,
@@ -35,7 +35,7 @@ export const POST_SELECT = `
     left join groups g on g.id = p.group_id
     left join images i on i.id = p.image_id`;
 
-type AuthorRow = { author_id: string | null; author_name: string | null; author_photo: string | null; author_roles: string[] };
+export type AuthorRow = { author_id: string | null; author_name: string | null; author_photo: string | null; author_roles: string[] };
 
 export type PostRow = AuthorRow & {
   id: string; body: string; created_at: Date; cursor_at: string;
@@ -45,7 +45,7 @@ export type PostRow = AuthorRow & {
   like_count: number; comment_count: number; liked_by_me: boolean;
 };
 
-function author(r: AuthorRow) {
+export function author(r: AuthorRow) {
   return r.author_id
     ? { id: r.author_id, name: r.author_name, photoUrl: r.author_photo, badges: badgesFor(r.author_roles) }
     : { id: null, name: 'Deleted member', photoUrl: null, badges: [] };

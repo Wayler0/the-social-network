@@ -15,7 +15,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Image upload | Peter | #32 | ✅ |
 | Groups | Kim | #25 | ✅ |
 | Today board | Kim | #26 | ✅ |
-| Ask a Senior | Kim | #27 | ⬜ |
+| Ask a Senior | Kim | #27 | ✅ |
 | Admin | Peter | #37 | ✅ |
 
 ---
@@ -336,15 +336,22 @@ Rules (code: `apps/api/src/announcements/`):
 
 ---
 
-## 10. Ask a Senior (#27)
+## 10. Ask a Senior (#27) ✅
 
 | Method & path | Notes |
 |---|---|
-| `GET /api/questions?limit&cursor` | Newest first |
-| `POST /api/questions` | `{ body, hideName }` — `hideName` hides the name from **students**; admins still see it |
-| `GET /api/questions/:id` | Question with answers (most helpful first) |
-| `POST /api/questions/:id/answers` | `{ body }` |
-| `PUT /api/answers/:id/helpful` / `DELETE …` | Toggle "helpful" |
+| `GET /api/questions?q&limit&cursor` | Newest first. `q` (2–200 chars) searches questions **and their answers** (English stemming: "registering" finds "register") |
+| `POST /api/questions` | `{ body, hideName? }` → `201` Question. Finished profile; 10 an hour |
+| `GET /api/questions/:id` | Question plus `answers` (most helpful first, then oldest; up to 200) |
+| `POST /api/questions/:id/answers` | `{ body }` (1–5000 chars) → `201` Answer. Finished profile; 30 an hour |
+| `PUT /api/answers/:id/helpful` / `DELETE …` | Toggle "helpful" → `{ helpful, helpfulCount }`; idempotent; not on your own answer (`400`) |
+
+**Question** `{ id, body, author, nameHidden, isMine, answerCount, createdAt }`
+**Answer** `{ id, body, author, byAsker, isMine, helpfulCount, helpfulByMe, createdAt }`
+
+- **Hidden names:** with `hideName: true`, `author` is `null` for every member except the asker, **moderators and admins** (staff and alumni included, CLAUDE.md section 4.5). The same applies to answers the anonymous asker writes on their own question (`byAsker: true`), so they cannot give themselves away.
+- Hidden questions and answers, and those between members who blocked each other, are left out (`404` for a question).
+- Deleting your own question or answer is not in v0.1; moderators hide them (section 11).
 
 ---
 
