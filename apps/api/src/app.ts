@@ -5,12 +5,13 @@ import { authRoutes } from './auth/routes.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import { createMailer, type Mailer } from './email/mailer.js';
-import { nobodySignedIn, type RequireUser } from './guard.js';
+import { installSessionCheck } from './auth/session-check.js';
+import type { RequireUser } from './guard.js';
 import { imageRoutes } from './images/routes.js';
 
 /**
- * Pieces other features plug in. `requireUser` is the session check (Kim, #17–#19);
- * `mailer` replaces the real email sender in tests.
+ * Pieces tests can swap: `requireUser` replaces the session check (no cookie needed),
+ * `mailer` replaces the real email sender.
  */
 export type AppDeps = { requireUser?: RequireUser; mailer?: Mailer };
 
@@ -26,7 +27,6 @@ declare module 'fastify' {
  * Feature routes are registered below as they are built. Shapes, rules and owners: docs/api-contract.md.
  */
 export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyInstance {
-  const requireUser = deps.requireUser ?? nobodySignedIn;
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },
     trustProxy: true, // we sit behind the server's existing web server
@@ -40,9 +40,11 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   });
   app.decorate('mailer', mailer);
   app.register(cookie); // reads the session cookie (docs/api-contract.md section 3)
+  // Every route not marked `config: { public: true }` needs a session (src/auth/session-check.ts).
+  const requireUser = deps.requireUser ?? installSessionCheck(app, config, db);
   app.addHook('onClose', () => mailer.close());
 
-  app.get('/api/health', async (_req, reply) => {
+  app.get('/api/health', { config: { public: true } }, async (_req, reply) => {
     try {
       await db.query('select 1');
       return { ok: true, name: config.APP_NAME, db: 'up' };
@@ -52,7 +54,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   });
 
   /** The campus list the sign-up screen needs (replaces the hard-coded list in apps/web/src/config.ts). */
-  app.get('/api/campuses', async () => {
+  app.get('/api/campuses', { config: { public: true } }, async () => {
     const { rows } = await db.query<{ slug: string; name: string; domain: string; member_type: string }>(
       `select c.slug, c.name, d.domain, d.member_type
          from campuses c join campus_email_domains d on d.campus_id = c.id

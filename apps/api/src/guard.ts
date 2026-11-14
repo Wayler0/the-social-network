@@ -4,14 +4,9 @@ import type { FastifyRequest } from 'fastify';
 export type SessionUser = { id: string };
 
 /**
- * Finds the signed-in member for a request, or null when there is no valid session.
- * Kim's session check (docs/api-contract.md section 3, issues #17–#19) is the real one:
- * pass it to buildApp as `requireUser`. It should also reject suspended members itself.
+ * Finds the signed-in member for a request, or null when there is none.
+ * The real one is the session check (src/auth/session-check.ts): by the time a protected route
+ * runs, it has already answered 401 or 403 for anyone without a valid session, so routes may
+ * still call this for the member's id. Tests pass their own to buildApp to skip cookies.
  */
 export type RequireUser = (req: FastifyRequest) => Promise<SessionUser | null>;
-
-/**
- * Used until the session check exists: nobody is signed in, so every protected route
- * answers 401. Safe by default — an upload endpoint must never be open to the public.
- */
-export const nobodySignedIn: RequireUser = async () => null;

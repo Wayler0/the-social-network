@@ -7,7 +7,7 @@ import { fail, parse, useContractErrors } from '../http.js';
 import type { Queryable } from '../images/store.js';
 import { findCampusDomain, hashCode, newCode, normaliseEmail, sameHash } from './codes.js';
 import { takeRateLimits, waitText } from './rate-limit.js';
-import { createSession, setSessionCookie } from './sessions.js';
+import { clearSessionCookie, createSession, setSessionCookie } from './sessions.js';
 
 /** Seconds before the web app offers "Resend code"; the same as the per-email limit below. */
 export const RESEND_SECONDS = 30;
@@ -16,11 +16,13 @@ export const RESEND_SECONDS = 30;
  * Sign-in and sign-up, one flow (docs/api-contract.md section 3, issues #17–#19):
  *   POST /api/auth/request-code   { email }         -> { resendAfterSeconds }
  *   POST /api/auth/verify-code    { email, code }   -> { newUser } + session cookie
+ *   POST /api/auth/logout                             -> 204, this session ends
+ *   POST /api/auth/logout-all                         -> 204, every session of this member ends
  */
 export async function authRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
 
-  app.post('/api/auth/request-code', async (req, reply) => {
+  app.post('/api/auth/request-code', { config: { public: true } }, async (req, reply) => {
     const body = parse(z.object({ email: z.string().max(320) }).strict(), req.body, reply);
     if (!body) return;
     const parsed = normaliseEmail(body.email);
@@ -70,7 +72,7 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
     return { resendAfterSeconds: RESEND_SECONDS };
   });
 
-  app.post('/api/auth/verify-code', async (req, reply) => {
+  app.post('/api/auth/verify-code', { config: { public: true } }, async (req, reply) => {
     const body = parse(z.object({ email: z.string().max(320), code: z.string().max(20) }).strict(), req.body, reply);
     if (!body) return;
 
@@ -138,13 +140,29 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
     setSessionCookie(reply, config, outcome.token);
     return { newUser: outcome.newUser };
   });
+
+  // Suspended members may still sign out.
+  app.post('/api/auth/logout', { config: { allowSuspended: true } }, async (req, reply) => {
+    await db.query('update sessions set revoked_at = clock_timestamp() where id = $1 and revoked_at is null', [req.auth!.sessionId]);
+    clearSessionCookie(reply, config);
+    return reply.code(204).send();
+  });
+
+  app.post('/api/auth/logout-all', { config: { allowSuspended: true } }, async (req, reply) => {
+    await db.query('update sessions set revoked_at = clock_timestamp() where user_id = $1 and revoked_at is null', [req.auth!.userId]);
+    clearSessionCookie(reply, config);
+    return reply.code(204).send();
+  });
 }
 
-/** Housekeeping (hourly): old sign-in codes and sign-in rate-limit counts. Returns rows removed. */
+/** Housekeeping (hourly): old sign-in codes, their rate-limit counts, and sessions ended over 30 days ago. Returns rows removed. */
 export async function cleanupAuth(db: Queryable): Promise<number> {
   const codes = await db.query(`delete from auth_codes where created_at < now() - interval '24 hours'`);
   const counts = await db.query(
     `delete from rate_limit_events where bucket in ('code_email', 'code_ip', 'verify_ip') and created_at < now() - interval '1 day'`,
   );
-  return (codes.rowCount ?? 0) + (counts.rowCount ?? 0);
+  const sessions = await db.query(
+    `delete from sessions where coalesce(revoked_at, expires_at) < now() - interval '30 days'`,
+  );
+  return (codes.rowCount ?? 0) + (counts.rowCount ?? 0) + (sessions.rowCount ?? 0);
 }

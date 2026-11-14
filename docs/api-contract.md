@@ -8,7 +8,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Area | Owner | Issues | Status |
 |---|---|---|---|
 | Health, campuses | — | — | ✅ |
-| Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | 🔨 request-code ✅ · verify-code ✅ · session check, logout next |
+| Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | ✅ |
 | Me / profile / delete account | Kim | #20, #21 | ⬜ |
 | Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
 | Report and block | Kim | #23 | ⬜ |
@@ -123,13 +123,14 @@ New students start as `memberType: "continuing"` and pick fresher/continuing/alu
    (`Secure` off only when `NODE_ENV=development`; read the cookie name from config, not the app name in code).
 7. Rate limit: 10 verify attempts per IP per 10 minutes → `429`.
 
-### `POST /api/auth/logout`
+### `POST /api/auth/logout` ✅
 Revokes the current session (`revoked_at = now()`), clears the cookie. `204`.
 
-### `POST /api/auth/logout-all`
+### `POST /api/auth/logout-all` ✅
 Revokes all of the member's sessions. `204`.
 
-### Session check (every protected route)
+### Session check (every protected route) ✅
+Code: `apps/api/src/auth/session-check.ts`. Every route is protected unless it says `{ config: { public: true } }`. Handlers read the member from `req.auth` (`{ userId, campusId, sessionId }`); Peter's `requireUser(req)` keeps working. Suspended members can still reach routes marked `allowSuspended` (logout).
 A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and rejects if missing, revoked, expired, or the user is deleted (`401`) or suspended (`403 suspended`). Extend `expires_at` (sliding) at most once a day, and update `last_seen_at` at most once every 5 minutes, to save writes.
 
 ### `GET /api/me`

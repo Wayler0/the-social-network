@@ -470,3 +470,128 @@ describe.skipIf(!url)('verify-code at the same moment (real database)', () => {
     }
   });
 });
+
+describe.skipIf(!url)('session check, logout and logout-all (real database)', () => {
+  let client: pg.Client;
+  let app: FastifyInstance;
+  let mail: ReturnType<typeof fakeMailer>;
+  let domain: string;
+
+  beforeAll(async () => {
+    client = new pg.Client({ connectionString: url });
+    await client.connect();
+    domain = (await client.query<{ domain: string }>(
+      `select d.domain from campus_email_domains d join campuses c on c.id = d.campus_id
+        where c.status = 'active' and d.member_type = 'student' order by c.created_at limit 1`)).rows[0]!.domain;
+    mail = fakeMailer();
+    app = buildApp(loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! }), rollbackPool(client), { mailer: mail.mailer });
+    app.get('/api/test/whoami', async (req) => req.auth);                     // a protected route, for these tests only
+    app.post('/api/test/whoami-public', { config: { public: true } }, async (req) => ({ auth: req.auth }));
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); await client.end(); });
+  beforeEach(async () => { await client.query('begin'); mail.sent.length = 0; });
+  afterEach(async () => { await client.query('rollback'); });
+
+  /** Signs up (or in) and returns the session token from the cookie. */
+  async function signIn(local: string): Promise<{ token: string; userId: string }> {
+    const email = `${local}@${domain}`;
+    await client.query('delete from rate_limit_events where key = $1', [email]);
+    await app.inject({ method: 'POST', url: '/api/auth/request-code', payload: { email }, remoteAddress: '10.6.0.1' });
+    const res = await app.inject({ method: 'POST', url: '/api/auth/verify-code', payload: { email, code: mail.sent.at(-1)!.code }, remoteAddress: '10.6.0.2' });
+    const token = res.cookies.find((c) => c.name === 'hatua_session')!.value;
+    const userId = (await client.query('select id from users where email = $1', [email])).rows[0].id;
+    return { token, userId };
+  }
+  const as = (token: string | null, method: 'GET' | 'POST', path: string) =>
+    app.inject({ method, url: path, ...(token ? { cookies: { hatua_session: token } } : {}) });
+  const session = async (token: string) => (await client.query(
+    `select revoked_at, last_seen_at, expires_at, round(extract(epoch from expires_at - clock_timestamp()) / 86400)::int as days_left
+       from sessions where token_hash = $1`, [createHash('sha256').update(token).digest()])).rows[0];
+
+  it('lets a signed-in member through and says who they are', async () => {
+    const { token, userId } = await signIn('whoami');
+    const res = await as(token, 'GET', '/api/test/whoami');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ userId, campusId: expect.any(String), sessionId: expect.any(String) });
+  });
+
+  it('401 without a cookie, with a malformed one, or with one we never issued', async () => {
+    for (const token of [null, 'nonsense', 'x'.repeat(43), 'a'.repeat(42) + '!']) {
+      const res = await as(token, 'GET', '/api/test/whoami');
+      expect([res.statusCode, res.json()], String(token)).toEqual([401, { error: 'not_signed_in', message: 'Please sign in.' }]);
+    }
+  });
+
+  it('public routes need no session', async () => {
+    expect((await as(null, 'GET', '/api/health')).statusCode).toBe(200);
+    expect((await as(null, 'GET', '/api/campuses')).statusCode).toBe(200);
+    expect((await as(null, 'POST', '/api/test/whoami-public')).json()).toEqual({ auth: null });
+  });
+
+  it('401 once the session is revoked or expired, or the account deleted', async () => {
+    const a = await signIn('revoked');
+    await client.query('update sessions set revoked_at = now() where user_id = $1', [a.userId]);
+    expect((await as(a.token, 'GET', '/api/test/whoami')).statusCode).toBe(401);
+
+    const b = await signIn('expired');
+    await client.query(`update sessions set created_at = now() - interval '31 days', expires_at = now() - interval '1 second' where user_id = $1`, [b.userId]);
+    expect((await as(b.token, 'GET', '/api/test/whoami')).statusCode).toBe(401);
+
+    const c = await signIn('deleted');
+    await client.query('update users set email = null, deleted_at = now() where id = $1', [c.userId]);
+    expect((await as(c.token, 'GET', '/api/test/whoami')).statusCode).toBe(401);
+  });
+
+  it('403 suspended for a member suspended after signing in; they can still log out', async () => {
+    const { token, userId } = await signIn('later.suspended');
+    await client.query(`update users set suspended_at = now(), suspended_until = now() + interval '1 day' where id = $1`, [userId]);
+    expect((await as(token, 'GET', '/api/test/whoami')).json().error).toBe('suspended');
+    expect((await as(token, 'POST', '/api/auth/logout')).statusCode).toBe(204);
+  });
+
+  it('logout ends this session only and clears the cookie', async () => {
+    const phone = await signIn('two.devices');
+    const laptop = await signIn('two.devices');
+    const res = await as(phone.token, 'POST', '/api/auth/logout');
+    expect(res.statusCode).toBe(204);
+    const cleared = res.cookies.find((c) => c.name === 'hatua_session')!;
+    expect(cleared.value).toBe('');
+    expect((cleared.expires as Date).getTime()).toBeLessThan(Date.now());
+    expect((await session(phone.token)).revoked_at).not.toBeNull();
+    expect((await as(phone.token, 'GET', '/api/test/whoami')).statusCode).toBe(401);
+    expect((await as(laptop.token, 'GET', '/api/test/whoami')).statusCode).toBe(200);
+    expect((await as(null, 'POST', '/api/auth/logout')).statusCode).toBe(401);
+  });
+
+  it('logout-all ends every session of the member, and nobody else\'s', async () => {
+    const phone = await signIn('everywhere');
+    const laptop = await signIn('everywhere');
+    const other = await signIn('someone.else');
+    expect((await as(phone.token, 'POST', '/api/auth/logout-all')).statusCode).toBe(204);
+    for (const t of [phone.token, laptop.token]) expect((await as(t, 'GET', '/api/test/whoami')).statusCode).toBe(401);
+    expect((await as(other.token, 'GET', '/api/test/whoami')).statusCode).toBe(200);
+  });
+
+  it('slides the expiry forward at most once a day, re-sending the cookie, and records last seen every 5 minutes', async () => {
+    const { token } = await signIn('slider');
+    const fresh = await as(token, 'GET', '/api/test/whoami');
+    expect(fresh.cookies).toHaveLength(0);                                    // just signed in: nothing to update
+
+    await client.query(`update sessions set expires_at = clock_timestamp() + interval '20 days', last_seen_at = clock_timestamp() - interval '2 days'
+                         where token_hash = $1`, [createHash('sha256').update(token).digest()]);
+    const res = await as(token, 'GET', '/api/test/whoami');
+    expect(res.cookies.find((c) => c.name === 'hatua_session')).toMatchObject({ value: token, maxAge: 2_592_000 });
+    const s = await session(token);
+    expect(s.days_left).toBe(30);
+    expect(Date.now() - new Date(s.last_seen_at).getTime()).toBeLessThan(60_000);
+  });
+
+  it('Peter\'s admin API now sees real signed-in members', async () => {
+    const { token, userId } = await signIn('real.admin');
+    expect((await as(token, 'GET', '/api/admin/reports')).json().error).toBe('forbidden');
+    await client.query(`insert into roles (user_id, role) values ($1, 'admin')`, [userId]);
+    expect((await as(token, 'GET', '/api/admin/reports')).statusCode).toBe(200);
+    expect((await as(null, 'GET', '/api/admin/reports')).statusCode).toBe(401);
+  });
+});
