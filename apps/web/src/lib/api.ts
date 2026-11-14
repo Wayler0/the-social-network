@@ -16,6 +16,17 @@ export class ApiError extends Error {
   }
 }
 
+type Listener = () => void;
+const signedOutListeners = new Set<Listener>();
+/**
+ * Called when a request answers 401 (session expired, logged out elsewhere, account deleted),
+ * so the app can go back to sign-in. The sign-in endpoints themselves don't count.
+ */
+export function onSignedOut(listener: Listener): () => void {
+  signedOutListeners.add(listener);
+  return () => { signedOutListeners.delete(listener); };
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -25,7 +36,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.message ?? 'Something went wrong. Try again.', res.status, data.error);
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/api/auth/')) signedOutListeners.forEach((l) => l());
+    throw new ApiError(data.message ?? 'Something went wrong. Try again.', res.status, data.error);
+  }
   return data as T;
 }
 
