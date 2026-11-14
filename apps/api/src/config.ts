@@ -13,6 +13,9 @@ export function senderAddress(from: string): string | null {
   return /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(address) ? address : null;
 }
 
+/** Used only in development and tests. Production refuses to start with it (see CODE_PEPPER). */
+export const DEV_CODE_PEPPER = 'dev-only-pepper-never-use-in-production-0000';
+
 /** All settings come from environment variables (see .env.example). Fails fast on bad config. */
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -23,6 +26,15 @@ const schema = z.object({
   APP_NAME: z.string().min(1).default('Hatua'),
   /** Public address of the web app, e.g. https://hatua.nextup.co.ke */
   APP_URL: z.string().url().default('http://localhost:5180'),
+  // ---- Sign-in (docs/api-contract.md section 3)
+  /**
+   * Secret key for hashing sign-in codes: code_hash = HMAC-SHA256(CODE_PEPPER, email:code).
+   * A leaked database alone then cannot be used to test the million possible codes.
+   * Generate with: openssl rand -base64 48. Changing it invalidates codes in flight (10 minutes' worth), nothing else.
+   */
+  CODE_PEPPER: blankIsUnset(z.string().min(32, 'must be at least 32 characters').default(DEV_CODE_PEPPER)),
+  /** Name of the session cookie. Lower-case letters, digits and _ only. */
+  SESSION_COOKIE: blankIsUnset(z.string().regex(/^[a-z0-9_]{1,40}$/, 'use a-z, 0-9 and _ only').default('hatua_session')),
   /** Small on purpose: the server is shared and short on memory. */
   DB_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
   /** Folder where uploaded images are kept (docs/api-contract.md section 6). Must be writable and backed up. */
@@ -48,6 +60,9 @@ const schema = z.object({
   SMTP_PASS: blankIsUnset(z.string().min(1).optional()),
 }).superRefine((c, ctx) => {
   const problem = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  if (c.NODE_ENV === 'production' && c.CODE_PEPPER === DEV_CODE_PEPPER) {
+    problem('CODE_PEPPER', 'must be set to your own secret in production (openssl rand -base64 48)');
+  }
   if (c.EMAIL_MODE === 'smtp') {
     if (!c.SMTP_HOST) problem('SMTP_HOST', 'is required when EMAIL_MODE=smtp');
     if (!c.EMAIL_FROM) problem('EMAIL_FROM', 'is required when EMAIL_MODE=smtp');

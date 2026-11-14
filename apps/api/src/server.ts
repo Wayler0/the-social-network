@@ -1,4 +1,5 @@
 import { buildApp } from './app.js';
+import { cleanupAuth } from './auth/routes.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
 import { cleanupImages } from './images/store.js';
@@ -7,12 +8,16 @@ const config = loadConfig();
 const db = createDb(config);
 const app = buildApp(config, db);
 
-// Housekeeping: remove images nobody attached within 24 h (docs/api-contract.md section 6).
+// Housekeeping: remove images nobody attached within 24 h (docs/api-contract.md section 6),
+// and sign-in codes and their rate-limit counts after a day (section 3).
 const HOUR = 60 * 60 * 1000;
 const housekeeping = setInterval(() => {
   cleanupImages(db, config.MEDIA_DIR)
     .then((removed) => removed && app.log.info({ removed }, 'unattached images removed'))
     .catch((err) => app.log.error(err, 'image cleanup failed'));
+  cleanupAuth(db)
+    .then((removed) => removed && app.log.info({ removed }, 'old sign-in codes removed'))
+    .catch((err) => app.log.error(err, 'sign-in cleanup failed'));
 }, HOUR);
 housekeeping.unref();
 

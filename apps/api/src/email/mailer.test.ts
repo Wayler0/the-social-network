@@ -5,6 +5,8 @@ import { loadConfig } from '../config.js';
 import { createMailer, EmailError, maskEmail, signInCodeMessage, type MailLog } from './mailer.js';
 
 const DB = 'postgres://u:p@localhost:5432/test';
+/** Production config refuses the built-in development pepper. */
+const PEPPER = 'test-pepper-0123456789abcdef0123456789';
 
 function recordingLog() {
   const lines: Array<{ level: string; details: Record<string, unknown>; message: string }> = [];
@@ -87,7 +89,7 @@ describe('log mode (development)', () => {
 
   it('in production: refuses, reports itself broken, and never writes the code to the log', async () => {
     const { log, text } = recordingLog();
-    const mailer = createMailer(loadConfig({ NODE_ENV: 'production', DATABASE_URL: DB }), log);
+    const mailer = createMailer(loadConfig({ NODE_ENV: 'production', DATABASE_URL: DB, CODE_PEPPER: PEPPER }), log);
     await expect(mailer.sendSignInCode('amina@student.example.ac.ke', '482913')).rejects.toMatchObject({ temporary: true });
     expect(text()).not.toContain('482913');
     expect(text()).not.toContain('amina@');
@@ -192,7 +194,7 @@ describe('smtp mode', () => {
 });
 
 describe('email settings', () => {
-  const base = { NODE_ENV: 'production', DATABASE_URL: DB };
+  const base = { NODE_ENV: 'production', DATABASE_URL: DB, CODE_PEPPER: PEPPER };
   it('defaults to log mode, and treats empty values (as Docker Compose passes them) as not set', () => {
     const c = loadConfig({ ...base, EMAIL_MODE: '', SMTP_HOST: '', SMTP_PORT: '', SMTP_USER: '', SMTP_PASS: '', EMAIL_FROM: '', SMTP_SECURE: '', SMTP_REQUIRE_TLS: '' });
     expect(c).toMatchObject({ EMAIL_MODE: 'log', SMTP_PORT: 587, SMTP_SECURE: false, SMTP_REQUIRE_TLS: true });

@@ -8,7 +8,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Area | Owner | Issues | Status |
 |---|---|---|---|
 | Health, campuses | — | — | ✅ |
-| Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | ⬜ **start here** |
+| Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | 🔨 request-code ✅ · verify-code, sessions next |
 | Me / profile / delete account | Kim | #20, #21 | ⬜ |
 | Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
 | Report and block | Kim | #23 | ⬜ |
@@ -76,7 +76,9 @@ Sign-in and sign-up are **the same flow**: request a code, enter it. A new email
 `users` (at least: `id, campus_id, email, member_type, name, member_number, member_number_normalised, member_number_status, course, year_of_study, graduation_year, is_under_18, verified, verified_method, suspended_at, created_at, deleted_at`), `auth_codes`, `sessions`.
 Written for #30. Rate limits use the `rate_limit_events` table (one row per counted event). Further columns come as new migrations (003_…), never by editing 002.
 
-### `POST /api/auth/request-code` *(public)*
+### `POST /api/auth/request-code` *(public)* ✅
+Code: `apps/api/src/auth/`. Needs `CODE_PEPPER` on the server (`openssl rand -base64 48`); the API refuses to start in production without it.
+
 ```json
 { "email": "abc.123@student.tharaka.ac.ke" }
 ```

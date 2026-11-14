@@ -65,6 +65,7 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://hatua:ci-only-password@127.0.0.1:5432/hatua
+      CODE_PEPPER: ci-only-pepper-not-a-secret-0123456789abcdef   # production config requires a real one
       # NODE_ENV=production only on the steps that run the built API: set job-wide,
       # it makes `npm ci` skip dev tools (tsc), which broke run #1.
     steps:

@@ -1,5 +1,7 @@
+import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { adminRoutes } from './admin/routes.js';
+import { authRoutes } from './auth/routes.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import { createMailer, type Mailer } from './email/mailer.js';
@@ -37,6 +39,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
     error: (details, message) => app.log.error(details, message),
   });
   app.decorate('mailer', mailer);
+  app.register(cookie); // reads the session cookie (docs/api-contract.md section 3)
   app.addHook('onClose', () => mailer.close());
 
   app.get('/api/health', async (_req, reply) => {
@@ -66,7 +69,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   });
 
   // --- Feature routes go here (owners in docs/api-contract.md) ---
-  // app.register(authRoutes, { prefix: '/api/auth' });   // Kim — issues #17, #18, #19
+  app.register(authRoutes, { config, db });              // Kim — issues #17, #18, #19
   app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
   app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 
