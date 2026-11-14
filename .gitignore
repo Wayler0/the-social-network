@@ -10,3 +10,4 @@ coverage/
 /apps/api/media/
 # Backup working folders (database dumps, restores, practice repository) — never commit
 /backups/
+.vite/
