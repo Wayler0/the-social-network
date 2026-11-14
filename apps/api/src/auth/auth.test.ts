@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -61,6 +62,20 @@ function fakeMailer() {
   return { mailer, sent, failNext: (err: Error | null) => { failWith = err; } };
 }
 
+/** Keeps every query on one test connection; the API's own transactions become savepoints. */
+function rollbackPool(client: pg.Client): Db {
+  const tx = {
+    query: (sql: string, params?: unknown[]) => {
+      if (sql === 'begin') return client.query('savepoint api_tx');
+      if (sql === 'commit') return client.query('release savepoint api_tx');
+      if (sql === 'rollback') return client.query('rollback to savepoint api_tx');
+      return client.query(sql, params);
+    },
+    release: () => {},
+  };
+  return { query: (sql: string, params?: unknown[]) => client.query(sql, params), connect: async () => tx } as unknown as Db;
+}
+
 /**
  * Against a real PostgreSQL with the migrations applied (npm run test:db -w apps/api).
  * Each test runs in one transaction that is rolled back.
@@ -75,20 +90,6 @@ describe.skipIf(!url)('POST /api/auth/request-code (real database)', () => {
   let staffDomain: string;
   const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url ?? 'postgres://x@y/z' });
 
-  /** Keeps every query on the test's connection; the API's transactions become savepoints. */
-  function rollbackPool(): Db {
-    const tx = {
-      query: (sql: string, params?: unknown[]) => {
-        if (sql === 'begin') return client.query('savepoint api_tx');
-        if (sql === 'commit') return client.query('release savepoint api_tx');
-        if (sql === 'rollback') return client.query('rollback to savepoint api_tx');
-        return client.query(sql, params);
-      },
-      release: () => {},
-    };
-    return { query: (sql: string, params?: unknown[]) => client.query(sql, params), connect: async () => tx } as unknown as Db;
-  }
-
   beforeAll(async () => {
     client = new pg.Client({ connectionString: url });
     await client.connect();
@@ -98,7 +99,7 @@ describe.skipIf(!url)('POST /api/auth/request-code (real database)', () => {
     studentDomain = domains.find((d) => d.member_type === 'student')!.domain;
     staffDomain = domains.find((d) => d.member_type === 'staff')!.domain;
     mail = fakeMailer();
-    app = buildApp(config, rollbackPool(), { mailer: mail.mailer });
+    app = buildApp(config, rollbackPool(client), { mailer: mail.mailer });
     await app.ready();
   });
   afterAll(async () => { await app.close(); await client.end(); });
@@ -254,6 +255,216 @@ describe.skipIf(!url)('request-code at the same moment (real database)', () => {
     } finally {
       await pool.query('delete from auth_codes where email = $1', [email]);
       await pool.query('delete from rate_limit_events where key = $1 or key like $2', [email, '10.1.1.%']);
+      await app.close();
+      await pool.end();
+    }
+  });
+});
+
+describe.skipIf(!url)('POST /api/auth/verify-code (real database)', () => {
+  let client: pg.Client;
+  let app: FastifyInstance;
+  let devApp: FastifyInstance;
+  let mail: ReturnType<typeof fakeMailer>;
+  let studentDomain: string;
+  let staffDomain: string;
+  let campusId: string;
+
+  beforeAll(async () => {
+    client = new pg.Client({ connectionString: url });
+    await client.connect();
+    const domains = (await client.query<{ domain: string; member_type: string; campus_id: string }>(
+      `select d.domain, d.member_type, d.campus_id from campus_email_domains d join campuses c on c.id = d.campus_id
+        where c.status = 'active' order by c.created_at`)).rows;
+    studentDomain = domains.find((d) => d.member_type === 'student')!.domain;
+    staffDomain = domains.find((d) => d.member_type === 'staff')!.domain;
+    campusId = domains[0]!.campus_id;
+    mail = fakeMailer();
+    app = buildApp(loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! }), rollbackPool(client), { mailer: mail.mailer });
+    devApp = buildApp(loadConfig({ NODE_ENV: 'development', DATABASE_URL: url! }), rollbackPool(client), { mailer: mail.mailer });
+    await Promise.all([app.ready(), devApp.ready()]);
+  });
+  afterAll(async () => { await app.close(); await devApp.close(); await client.end(); });
+  beforeEach(async () => { await client.query('begin'); mail.sent.length = 0; mail.failNext(null); });
+  afterEach(async () => { await client.query('rollback'); });
+
+  /** Asks for a code and returns it, as if read from the email. */
+  async function codeFor(email: string): Promise<string> {
+    await client.query('delete from rate_limit_events where key = $1', [email]);   // let tests ask again at once
+    const res = await app.inject({ method: 'POST', url: '/api/auth/request-code', payload: { email }, remoteAddress: '10.2.0.1' });
+    expect(res.statusCode).toBe(200);
+    return mail.sent.at(-1)!.code;
+  }
+  const verify = (email: string, code: string, ip = '10.3.0.1', on = app) =>
+    on.inject({ method: 'POST', url: '/api/auth/verify-code', payload: { email, code }, remoteAddress: ip, headers: { 'user-agent': 'TestPhone/1.0' } });
+  const wrongCode = (code: string) => (code === '000000' ? '000001' : '000000');
+  const user = async (email: string) => (await client.query(
+    'select id, campus_id, member_type, verified, verified_method from users where email = $1', [email])).rows[0];
+  const sessionsOf = async (userId: string) => (await client.query<{ token_hash: Buffer; user_agent: string; ip: string; days: number }>(
+    `select token_hash, user_agent, ip, round(extract(epoch from expires_at - created_at) / 86400)::int as days
+       from sessions where user_id = $1`, [userId])).rows;
+  const expectCodeWrong = (res: Awaited<ReturnType<typeof verify>>) => {
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'code_wrong', message: 'That code is wrong or has expired.' });
+    expect(res.cookies).toHaveLength(0);
+  };
+
+  it('signs up a new student: creates the account and a session, sets a safe cookie', async () => {
+    const email = `new.student@${studentDomain}`;
+    const res = await verify(email, await codeFor(email));
+    expect([res.statusCode, res.json()]).toEqual([200, { newUser: true }]);
+
+    const u = await user(email);
+    expect(u).toMatchObject({ campus_id: campusId, member_type: 'continuing', verified: true, verified_method: 'email_code' });
+
+    const cookie = res.cookies.find((c) => c.name === 'hatua_session')!;
+    expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 2_592_000 });
+    expect(cookie.value).toMatch(/^[A-Za-z0-9_-]{43}$/);                       // 32 random bytes
+
+    const [s] = await sessionsOf(u.id);
+    expect(s!.token_hash.equals(createHash('sha256').update(cookie.value).digest())).toBe(true);
+    expect(s!.token_hash.toString('base64url')).not.toBe(cookie.value);      // the token itself is never stored
+    expect(s).toMatchObject({ user_agent: 'TestPhone/1.0', ip: '10.3.0.1', days: 30 });
+  });
+
+  it('staff emails make staff accounts', async () => {
+    const email = `new.lecturer@${staffDomain}`;
+    expect((await verify(email, await codeFor(email))).json()).toEqual({ newUser: true });
+    expect((await user(email)).member_type).toBe('staff');
+  });
+
+  it('signs in an existing member: no second account, a second session', async () => {
+    const email = `twice@${studentDomain}`;
+    await verify(email, await codeFor(email));
+    const res = await verify(email, await codeFor(email));
+    expect([res.statusCode, res.json()]).toEqual([200, { newUser: false }]);
+    expect((await client.query('select count(*)::int as n from users where email = $1', [email])).rows[0].n).toBe(1);
+    expect(await sessionsOf((await user(email)).id)).toHaveLength(2);
+  });
+
+  it('accepts the email in any case and with spaces, like request-code', async () => {
+    const email = `case.test@${studentDomain}`;
+    const code = await codeFor(email);
+    expect((await verify(`  CASE.Test@${studentDomain.toUpperCase()} `, ` ${code} `)).statusCode).toBe(200);
+  });
+
+  it('a wrong code counts an attempt; the right code still works before the fifth', async () => {
+    const email = `typo@${studentDomain}`;
+    const code = await codeFor(email);
+    for (let i = 0; i < 4; i++) expectCodeWrong(await verify(email, wrongCode(code)));
+    expect((await client.query('select attempts from auth_codes where email = $1 and consumed_at is null', [email])).rows[0].attempts).toBe(4);
+    expect((await verify(email, code)).statusCode).toBe(200);
+  });
+
+  it('after 5 wrong tries the code is dead, even the right one', async () => {
+    const email = `guesser@${studentDomain}`;
+    const code = await codeFor(email);
+    for (let i = 0; i < 5; i++) expectCodeWrong(await verify(email, wrongCode(code)));
+    expectCodeWrong(await verify(email, code));
+    expect(await user(email)).toBeUndefined();
+  });
+
+  it('a code works once', async () => {
+    const email = `once@${studentDomain}`;
+    const code = await codeFor(email);
+    expect((await verify(email, code)).statusCode).toBe(200);
+    expectCodeWrong(await verify(email, code));
+  });
+
+  it('an expired code fails', async () => {
+    const email = `late@${studentDomain}`;
+    const code = await codeFor(email);
+    await client.query(`update auth_codes set created_at = created_at - interval '11 minutes', expires_at = expires_at - interval '11 minutes' where email = $1`, [email]);
+    expectCodeWrong(await verify(email, code));
+  });
+
+  it('only the newest code works', async () => {
+    const email = `newest@${studentDomain}`;
+    const first = await codeFor(email);
+    const second = await codeFor(email);
+    if (first !== second) expectCodeWrong(await verify(email, first));
+    expect((await verify(email, second)).statusCode).toBe(200);
+  });
+
+  it('a code only works for the email it was sent to', async () => {
+    const code = await codeFor(`owner@${studentDomain}`);
+    expectCodeWrong(await verify(`thief@${studentDomain}`, code));
+  });
+
+  it('nonsense and non-campus emails get the same code_wrong answer; malformed bodies get invalid_input', async () => {
+    for (const [email, code] of [[`x@${studentDomain}`, '12345'], [`x@${studentDomain}`, 'abcdef'], ['x@gmail.com', '123456'], ['nope', '123456']]) {
+      expectCodeWrong(await verify(email!, code!));
+    }
+    const bad = await app.inject({ method: 'POST', url: '/api/auth/verify-code', payload: { email: 'a@b.example', code: '123456', newUser: true } });
+    expect([bad.statusCode, bad.json().error]).toEqual([400, 'invalid_input']);
+  });
+
+  it('a deleted account\'s email signs up as a new member; the old account stays deleted', async () => {
+    const email = `returning@${studentDomain}`;
+    await verify(email, await codeFor(email));
+    const old = (await user(email)).id;
+    await client.query(`update users set email = null, deleted_at = now() where id = $1`, [old]);
+    const res = await verify(email, await codeFor(email));
+    expect(res.json()).toEqual({ newUser: true });
+    expect((await user(email)).id).not.toBe(old);
+    expect((await client.query('select deleted_at from users where id = $1', [old])).rows[0].deleted_at).not.toBeNull();
+  });
+
+  it('a suspended member gets 403 suspended and no session; it ends when the suspension does', async () => {
+    const email = `suspended@${studentDomain}`;
+    await verify(email, await codeFor(email));
+    const id = (await user(email)).id;
+    await client.query('delete from sessions where user_id = $1', [id]);
+    await client.query(`update users set suspended_at = now(), suspended_until = now() + interval '7 days' where id = $1`, [id]);
+    const res = await verify(email, await codeFor(email));
+    expect([res.statusCode, res.json().error]).toEqual([403, 'suspended']);
+    expect(res.cookies).toHaveLength(0);
+    expect(await sessionsOf(id)).toHaveLength(0);
+
+    await client.query(`update users set suspended_until = now() - interval '1 second' where id = $1`, [id]);
+    expect((await verify(email, await codeFor(email))).statusCode).toBe(200);
+  });
+
+  it('allows 10 tries per IP address per 10 minutes', async () => {
+    const email = `ip.limit@${studentDomain}`;
+    const code = await codeFor(email);
+    for (let i = 0; i < 10; i++) await verify(`someone${i}@${studentDomain}`, '123456', '10.4.0.1');
+    const blocked = await verify(email, code, '10.4.0.1');
+    expect([blocked.statusCode, blocked.json().error]).toEqual([429, 'rate_limited']);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    expect((await verify(email, code, '10.4.0.2')).statusCode).toBe(200);    // the code was not used up
+  });
+
+  it('the cookie is not Secure only in local development (http://localhost)', async () => {
+    const email = `dev.cookie@${studentDomain}`;
+    const res = await verify(email, await codeFor(email), '10.3.0.1', devApp);
+    const cookie = res.cookies.find((c) => c.name === 'hatua_session')!;
+    expect(cookie.httpOnly).toBe(true);
+    expect(cookie.secure).toBeFalsy();
+  });
+});
+
+describe.skipIf(!url)('verify-code at the same moment (real database)', () => {
+  it('the same right code sent twice at once signs in once', async () => {
+    const pool = new pg.Pool({ connectionString: url, max: 4 });
+    const mail = fakeMailer();
+    const app = buildApp(loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! }), pool, { mailer: mail.mailer });
+    const domain = (await pool.query<{ domain: string }>(
+      `select d.domain from campus_email_domains d join campuses c on c.id = d.campus_id where c.status = 'active' and d.member_type = 'student' limit 1`)).rows[0]!.domain;
+    const email = `verify.race.${process.pid}@${domain}`;
+    try {
+      await app.ready();
+      await app.inject({ method: 'POST', url: '/api/auth/request-code', payload: { email }, remoteAddress: '10.5.0.1' });
+      const code = mail.sent[0]!.code;
+      await Promise.all(Array.from({ length: 4 }, () => pool.query('select pg_sleep(0.05)')));
+      const answers = await Promise.all([1, 2].map((i) =>
+        app.inject({ method: 'POST', url: '/api/auth/verify-code', payload: { email, code }, remoteAddress: `10.5.1.${i}` })));
+      expect(answers.map((a) => a.statusCode).sort()).toEqual([200, 400]);
+      expect((await pool.query('select count(*)::int as n from users where email = $1', [email])).rows[0].n).toBe(1);
+    } finally {
+      await pool.query('delete from users where email = $1', [email]);       // sessions go with it
+      await pool.query('delete from auth_codes where email = $1', [email]);
+      await pool.query(`delete from rate_limit_events where key = $1 or key like '10.5.%'`, [email]);
       await app.close();
       await pool.end();
     }

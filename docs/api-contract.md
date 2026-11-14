@@ -8,7 +8,7 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 | Area | Owner | Issues | Status |
 |---|---|---|---|
 | Health, campuses | — | — | ✅ |
-| Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | 🔨 request-code ✅ · verify-code, sessions next |
+| Auth (sign-in codes, sessions) | Kim | #17, #18, #19 | 🔨 request-code ✅ · verify-code ✅ · session check, logout next |
 | Me / profile / delete account | Kim | #20, #21 | ⬜ |
 | Posts, comments, likes, feed | Kim | #22, #24 | ⬜ |
 | Report and block | Kim | #23 | ⬜ |
@@ -104,7 +104,9 @@ Code: `apps/api/src/auth/`. Needs `CODE_PEPPER` on the server (`openssl rand -ba
    consume the code row you just stored, so a code that never arrived cannot be used.
 6. Always answer the same way whether or not the email already has an account (don't reveal who is a member).
 
-### `POST /api/auth/verify-code` *(public)*
+### `POST /api/auth/verify-code` *(public)* ✅
+New students start as `memberType: "continuing"` and pick fresher/continuing/alumni in onboarding. A suspended member gets `403 suspended` and no session.
+
 ```json
 { "email": "abc.123@student.tharaka.ac.ke", "code": "482913" }
 ```

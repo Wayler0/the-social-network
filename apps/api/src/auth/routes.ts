@@ -5,8 +5,9 @@ import { inTransaction, type Db } from '../db.js';
 import { CODE_MINUTES, EmailError } from '../email/mailer.js';
 import { fail, parse, useContractErrors } from '../http.js';
 import type { Queryable } from '../images/store.js';
-import { findCampusDomain, hashCode, newCode, normaliseEmail } from './codes.js';
+import { findCampusDomain, hashCode, newCode, normaliseEmail, sameHash } from './codes.js';
 import { takeRateLimits, waitText } from './rate-limit.js';
+import { createSession, setSessionCookie } from './sessions.js';
 
 /** Seconds before the web app offers "Resend code"; the same as the per-email limit below. */
 export const RESEND_SECONDS = 30;
@@ -14,7 +15,7 @@ export const RESEND_SECONDS = 30;
 /**
  * Sign-in and sign-up, one flow (docs/api-contract.md section 3, issues #17–#19):
  *   POST /api/auth/request-code   { email }         -> { resendAfterSeconds }
- *   POST /api/auth/verify-code    { email, code }   -> { newUser } + session cookie   (next step)
+ *   POST /api/auth/verify-code    { email, code }   -> { newUser } + session cookie
  */
 export async function authRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
@@ -68,13 +69,82 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
     }
     return { resendAfterSeconds: RESEND_SECONDS };
   });
+
+  app.post('/api/auth/verify-code', async (req, reply) => {
+    const body = parse(z.object({ email: z.string().max(320), code: z.string().max(20) }).strict(), req.body, reply);
+    if (!body) return;
+
+    // Every attempt counts, right or wrong, before anything else is looked at.
+    const wait = await inTransaction(db, (tx) =>
+      takeRateLimits(tx, [{ bucket: 'verify_ip', key: req.ip, max: 10, windowSeconds: 600 }]));
+    if (wait) {
+      reply.header('Retry-After', String(wait));
+      return fail(reply, 429, 'rate_limited', `Too many tries. Try again in ${waitText(wait)}.`, { retryAfterSeconds: wait });
+    }
+
+    // One message for every way a code can fail (wrong, expired, used, too many tries): no help for guessing.
+    const codeWrong = () => fail(reply, 400, 'code_wrong', 'That code is wrong or has expired.');
+    const parsed = normaliseEmail(body.email);
+    const code = body.code.trim();
+    if (!parsed || !/^\d{6}$/.test(code)) return codeWrong();
+    const campus = await findCampusDomain(db, parsed.domain);
+    if (!campus) return codeWrong();
+    const { email } = parsed;
+
+    const outcome = await inTransaction(db, async (tx) => {
+      // Locked, so the same code tried twice at once cannot be used twice.
+      const found = await tx.query<{ id: string; code_hash: Buffer; attempts: number }>(
+        `select id, code_hash, attempts from auth_codes
+          where email = $1 and purpose = 'sign_in' and consumed_at is null
+            and expires_at > clock_timestamp() and attempts < 5
+          order by created_at desc limit 1
+          for update`,
+        [email],
+      );
+      const row = found.rows[0];
+      if (!row) return { result: 'wrong' as const };
+      if (!sameHash(row.code_hash, hashCode(config.CODE_PEPPER, email, code))) {
+        await tx.query('update auth_codes set attempts = attempts + 1 where id = $1', [row.id]);  // dead at 5
+        return { result: 'wrong' as const };
+      }
+      await tx.query('update auth_codes set consumed_at = clock_timestamp() where id = $1', [row.id]);
+
+      // A deleted account has no email, so its old address signs up as a new member.
+      const existing = await tx.query<{ id: string; suspended: boolean }>(
+        `select id, (suspended_at is not null and (suspended_until is null or suspended_until > clock_timestamp())) as suspended
+           from users where email = $1 and deleted_at is null`,
+        [email],
+      );
+      let user = existing.rows[0];
+      let newUser = false;
+      if (!user) {
+        const made = await tx.query<{ id: string }>(
+          `insert into users (campus_id, email, member_type, verified, verified_method)
+           values ($1, $2, $3, true, 'email_code') returning id`,
+          // Students choose fresher, continuing or alumni during onboarding (PATCH /api/me).
+          [campus.campusId, email, campus.memberType === 'staff' ? 'staff' : 'continuing'],
+        );
+        user = { id: made.rows[0]!.id, suspended: false };
+        newUser = true;
+      }
+      if (user.suspended) return { result: 'suspended' as const };
+
+      const token = await createSession(tx, user.id, { userAgent: req.headers['user-agent'], ip: req.ip });
+      return { result: 'ok' as const, token, newUser };
+    });
+
+    if (outcome.result === 'wrong') return codeWrong();
+    if (outcome.result === 'suspended') return fail(reply, 403, 'suspended', 'This account is suspended. Contact the moderators if you think this is a mistake.');
+    setSessionCookie(reply, config, outcome.token);
+    return { newUser: outcome.newUser };
+  });
 }
 
 /** Housekeeping (hourly): old sign-in codes and sign-in rate-limit counts. Returns rows removed. */
 export async function cleanupAuth(db: Queryable): Promise<number> {
   const codes = await db.query(`delete from auth_codes where created_at < now() - interval '24 hours'`);
   const counts = await db.query(
-    `delete from rate_limit_events where bucket in ('code_email', 'code_ip') and created_at < now() - interval '1 day'`,
+    `delete from rate_limit_events where bucket in ('code_email', 'code_ip', 'verify_ip') and created_at < now() - interval '1 day'`,
   );
   return (codes.rowCount ?? 0) + (counts.rowCount ?? 0);
 }
