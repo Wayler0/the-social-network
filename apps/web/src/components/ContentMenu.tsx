@@ -9,8 +9,10 @@ type Step = 'menu' | 'report' | 'block' | 'delete' | 'reported';
  * The "…" menu on a post or comment: report, block the author, delete (own, or admin / post author for comments).
  * Report and block are on every piece of content (CLAUDE.md section 6). Every destructive step asks first, in the sheet.
  */
-export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete, onBlocked, onClose }: {
-  kind: 'post' | 'comment';
+export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete, onBlocked, onClose, startAt = 'menu' }: {
+  kind: 'post' | 'comment' | 'group' | 'question' | 'answer';
+  /** Open straight on a step, e.g. 'report' when the caller has its own menu. */
+  startAt?: 'menu' | 'report';
   targetId: string;
   author: Author;
   isOwn: boolean;
@@ -19,7 +21,7 @@ export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete
   onBlocked: (authorId: string) => void;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<Step>('menu');
+  const [step, setStep] = useState<Step>(startAt);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete
 
   if (step === 'menu') {
     return (
-      <Sheet title={kind === 'post' ? 'Post options' : 'Comment options'} onClose={onClose}>
+      <Sheet title={`${kind[0]!.toUpperCase()}${kind.slice(1)} options`} onClose={onClose}>
         <div className="sheet-actions">
           {!isOwn && <button type="button" className="sheet-row" onClick={() => setStep('report')}>Report {kind}</button>}
           {canBlock && <button type="button" className="sheet-row" onClick={() => setStep('block')}>Block {author.name}</button>}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PostCard } from '../components/PostCard';
+import { TodayBoard } from '../components/TodayBoard';
 import { TopBar } from '../components/TopBar';
 import { ApiError } from '../lib/api';
 import { getFeed, type Post } from '../lib/feed';
@@ -50,6 +51,7 @@ export function Home() {
   return (
     <>
       <TopBar />
+      <TodayBoard />
       {status === 'loading' && <FeedSkeleton />}
 
       {status === 'error' && posts.length === 0 && (

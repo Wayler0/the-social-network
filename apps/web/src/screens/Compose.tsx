@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { ApiError } from '../lib/api';
+import { getGroup } from '../lib/community';
 import { createPost, IMAGE_MAX_BYTES, IMAGE_TYPES, POST_MAX, uploadImage } from '../lib/feed';
 
 type Photo = { preview: string; imageId: string | null; uploading: boolean };
 
-/** New post: text (required) and one optional photo (issues #22, #32). */
+/** New post: text (required) and one optional photo (issues #22, #32). `?group=<id>` posts into that group. */
 export function Compose() {
   const navigate = useNavigate();
+  const groupId = useSearchParams()[0].get('group');
+  const [groupName, setGroupName] = useState<string | null>(null);
+  useEffect(() => { if (groupId) getGroup(groupId).then((g) => setGroupName(g.name)).catch(() => setGroupName(null)); }, [groupId]);
   const [body, setBody] = useState('');
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +45,8 @@ export function Compose() {
     if (!canPost) return;
     setPosting(true); setError(null);
     try {
-      await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}) });
-      navigate('/', { replace: true });
+      await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}) });
+      navigate(groupId ? `/groups/${groupId}` : '/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Your post didn’t send. Try again.');
       setPosting(false);
@@ -58,6 +62,7 @@ export function Compose() {
       </header>
 
       <div className="screen compose-body">
+        {groupId && <p className="notice">Posting in {groupName ?? 'the group'}. Only its members will see it.</p>}
         <label htmlFor="post-body" className="visually-hidden">What’s happening on campus?</label>
         <textarea id="post-body" className="compose-text" placeholder="What’s happening on campus?" autoFocus
           value={body} onChange={(e) => setBody(e.target.value)} aria-invalid={tooLong} aria-describedby="post-count" />

@@ -1,6 +1,8 @@
 export function initials(name: string | null): string {
   if (!name) return '?';
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+  // Words that start with a letter or digit only, so "Library (seed)" gives "L", not "L(".
+  return name.trim().split(/\s+/).filter((w) => /^[\p{L}\p{N}]/u.test(w)).slice(0, 2)
+    .map((w) => w[0]!.toUpperCase()).join('') || '?';
 }
 
 /** Round photo, or initials on a sunshine circle when there is no photo. Decorative: the name is always shown next to it. */
