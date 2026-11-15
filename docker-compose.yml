@@ -33,12 +33,52 @@ services:
       DATABASE_URL: postgres://hatua:${POSTGRES_PASSWORD}@db:5432/hatua
       APP_NAME: ${APP_NAME:-Hatua}
       APP_URL: ${APP_URL:-https://hatua.nextup.co.ke}
+      CODE_PEPPER: ${CODE_PEPPER:-}   # required: the API refuses to start in production without it
+      SESSION_COOKIE: ${SESSION_COOKIE:-}
       NODE_OPTIONS: --max-old-space-size=128
+      MEDIA_DIR: /data/media
+      # Email (sign-in codes): set these in .env on the server — docs/email.md
+      EMAIL_MODE: ${EMAIL_MODE:-log}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+    volumes:
+      - media:/data/media   # uploaded images — include this volume in backups
     command: sh -c "node dist/migrate.js && node dist/server.js"
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     mem_limit: 192m
     profiles: ["server"]   # local dev runs the API with `npm run dev:api` instead
 
+  # Encrypted off-server backups (restic). Not a running service: deploy/backup/*.sh start it
+  # for each backup or restore. Settings come from .env — see deploy/backup/README.md.
+  backup:
+    image: restic/restic:0.19.1
+    profiles: ["backup"]
+    hostname: hatua
+    environment:
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      # Keys for S3-compatible storage (most providers) or Backblaze B2; leave the unused ones empty.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      B2_ACCOUNT_ID: ${B2_ACCOUNT_ID:-}
+      B2_ACCOUNT_KEY: ${B2_ACCOUNT_KEY:-}
+      GOGC: "20"   # trade a little speed for less memory on this small server
+    volumes:
+      - media:/data/media:ro            # uploaded images (read-only)
+      - ./backups/stage:/data/db:ro     # the database dump waits here (read-only)
+      - ./backups/restore:/restore      # restores land here, never on live data
+      - ./backups/repo:/repo            # practice repository only (RESTIC_REPOSITORY=/repo); same disk = not a backup
+      - backupcache:/root/.cache/restic
+    mem_limit: 256m
+
 volumes:
   dbdata:
+  media:
+  backupcache:

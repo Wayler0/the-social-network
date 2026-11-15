@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { APP_SLUG } from '../config';
-import { getMe, logout } from './api';
+import { getMe, logout, onSignedOut } from './api';
 import type { Me } from './profile';
 
 /**
@@ -38,6 +38,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { if (alive) setMe(null); }); // offline or server down: show sign-in, not a blank page
     return () => { alive = false; };
   }, [setMe]);
+
+  // A 401 from any later request means the session ended: back to sign-in.
+  useEffect(() => onSignedOut(() => setMe(null)), [setMe]);
 
   const signIn = useCallback(async () => {
     if (MOCK) try { localStorage.setItem(FLAG, '1'); } catch { /* storage blocked */ }
