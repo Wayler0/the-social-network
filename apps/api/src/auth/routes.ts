@@ -13,6 +13,15 @@ import { clearSessionCookie, createSession, setSessionCookie } from './sessions.
 export const RESEND_SECONDS = 30;
 
 /**
+ * Per-IP limits are deliberately high. Campus Wi-Fi and mobile networks (carrier NAT) put hundreds of
+ * members behind one public address, and launch day means many sign-ups from campus at once.
+ * Guessing is stopped per email instead: 5 codes an hour, 5 tries per code (~25 guesses an hour
+ * against 1,000,000 codes). These only slow down one machine spraying many addresses.
+ */
+export const CODES_PER_IP_PER_HOUR = 300;
+export const VERIFIES_PER_IP_PER_10_MIN = 200;
+
+/**
  * Sign-in and sign-up, one flow (docs/api-contract.md section 3, issues #17–#19):
  *   POST /api/auth/request-code   { email }         -> { resendAfterSeconds }
  *   POST /api/auth/verify-code    { email, code }   -> { newUser } + session cookie
@@ -37,7 +46,7 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
       const wait = await takeRateLimits(tx, [
         { bucket: 'code_email', key: email, max: 1, windowSeconds: RESEND_SECONDS },
         { bucket: 'code_email', key: email, max: 5, windowSeconds: 3600 },
-        { bucket: 'code_ip', key: req.ip, max: 20, windowSeconds: 3600 },
+        { bucket: 'code_ip', key: req.ip, max: CODES_PER_IP_PER_HOUR, windowSeconds: 3600 },
       ]);
       if (wait) return { ok: false as const, wait };
       // A new code replaces any older unused one.
@@ -78,7 +87,7 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
 
     // Every attempt counts, right or wrong, before anything else is looked at.
     const wait = await inTransaction(db, (tx) =>
-      takeRateLimits(tx, [{ bucket: 'verify_ip', key: req.ip, max: 10, windowSeconds: 600 }]));
+      takeRateLimits(tx, [{ bucket: 'verify_ip', key: req.ip, max: VERIFIES_PER_IP_PER_10_MIN, windowSeconds: 600 }]));
     if (wait) {
       reply.header('Retry-After', String(wait));
       return fail(reply, 429, 'rate_limited', `Too many tries. Try again in ${waitText(wait)}.`, { retryAfterSeconds: wait });

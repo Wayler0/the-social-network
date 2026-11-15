@@ -8,6 +8,7 @@ import type { Db } from '../db.js';
 import { EmailError, type Mailer } from '../email/mailer.js';
 import { hashCode, newCode, normaliseEmail } from './codes.js';
 import { waitText } from './rate-limit.js';
+import { CODES_PER_IP_PER_HOUR, VERIFIES_PER_IP_PER_10_MIN } from './routes.js';
 
 describe('codes and emails', () => {
   it('makes 6-digit codes, zero-padded', () => {
@@ -207,10 +208,23 @@ describe.skipIf(!url)('POST /api/auth/request-code (real database)', () => {
     expect((await ask(email)).statusCode).toBe(200);
   });
 
-  it('allows 20 codes per IP address per hour, whatever the emails', async () => {
-    for (let i = 0; i < 20; i++) expect((await ask(`ip${i}@${studentDomain}`, '10.9.9.9')).statusCode).toBe(200);
-    expect((await ask(`ip20@${studentDomain}`, '10.9.9.9')).statusCode).toBe(429);
-    expect((await ask(`ip20@${studentDomain}`, '10.9.9.8')).statusCode).toBe(200);    // another address is not affected
+  it(`allows ${CODES_PER_IP_PER_HOUR} codes per IP address per hour (campus Wi-Fi shares one address)`, async () => {
+    for (let i = 0; i < CODES_PER_IP_PER_HOUR; i++) expect((await ask(`ip${i}@${studentDomain}`, '10.9.9.9')).statusCode).toBe(200);
+    expect((await ask(`ipx@${studentDomain}`, '10.9.9.9')).statusCode).toBe(429);
+    expect((await ask(`ipx@${studentDomain}`, '10.9.9.8')).statusCode).toBe(200);    // another address is not affected
+  });
+
+  it('reads the client address from the proxy, not from a header the client made up', async () => {
+    // The web server appends the real client (10.7.0.2) to whatever X-Forwarded-For the client sent.
+    const viaProxy = (email: string, fake: string) => app.inject({
+      method: 'POST', url: '/api/auth/request-code', payload: { email }, remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-for': `${fake}, 10.7.0.2` },
+    });
+    for (let i = 0; i < CODES_PER_IP_PER_HOUR; i++) {
+      expect((await viaProxy(`spoof${i}@${studentDomain}`, `203.0.113.${i % 250}`)).statusCode).toBe(200);
+    }
+    // Rotating the made-up address does not help: all of them counted against 10.7.0.2.
+    expect((await viaProxy(`spoofx@${studentDomain}`, '198.51.100.7')).statusCode).toBe(429);
   });
 
   it('a refused request does not count against the limits', async () => {
@@ -425,10 +439,10 @@ describe.skipIf(!url)('POST /api/auth/verify-code (real database)', () => {
     expect((await verify(email, await codeFor(email))).statusCode).toBe(200);
   });
 
-  it('allows 10 tries per IP address per 10 minutes', async () => {
+  it(`allows ${VERIFIES_PER_IP_PER_10_MIN} tries per IP address per 10 minutes`, async () => {
     const email = `ip.limit@${studentDomain}`;
     const code = await codeFor(email);
-    for (let i = 0; i < 10; i++) await verify(`someone${i}@${studentDomain}`, '123456', '10.4.0.1');
+    for (let i = 0; i < VERIFIES_PER_IP_PER_10_MIN; i++) await verify(`someone${i}@${studentDomain}`, '123456', '10.4.0.1');
     const blocked = await verify(email, code, '10.4.0.1');
     expect([blocked.statusCode, blocked.json().error]).toEqual([429, 'rate_limited']);
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);

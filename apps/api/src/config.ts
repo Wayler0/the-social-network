@@ -35,6 +35,12 @@ const schema = z.object({
   CODE_PEPPER: blankIsUnset(z.string().min(32, 'must be at least 32 characters').default(DEV_CODE_PEPPER)),
   /** Name of the session cookie. Lower-case letters, digits and _ only. */
   SESSION_COOKIE: blankIsUnset(z.string().regex(/^[a-z0-9_]{1,40}$/, 'use a-z, 0-9 and _ only').default('hatua_session')),
+  /**
+   * How many proxies sit in front of the API (the server's web server = 1). The client address is
+   * read from X-Forwarded-For only that many hops back, so a client cannot fake it by sending
+   * its own header. 0 = the API is reached directly (no proxy).
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   /** Small on purpose: the server is shared and short on memory. */
   DB_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
   /** Folder where uploaded images are kept (docs/api-contract.md section 6). Must be writable and backed up. */
