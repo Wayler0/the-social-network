@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { APP_NAME, APP_SLUG } from '../config';
 import { Icon } from './Icon';
 
-/** Home top bar: wordmark, notifications (heart), messages (paper plane). Counts are placeholders until the API exists. */
+/** Home top bar: wordmark, notifications (heart), messages (paper plane). Counts stay 0 until notifications and chat exist (no fake numbers). */
 export function TopBar({ notifications = 0, messages = 0 }: { notifications?: number; messages?: number }) {
   return (
     <header className="topbar">

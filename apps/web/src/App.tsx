@@ -4,7 +4,9 @@ import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
 import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
+import { Compose } from './screens/Compose';
 import { Onboarding } from './screens/Onboarding';
+import { PostDetail } from './screens/PostDetail';
 import { Profile } from './screens/Profile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
 import { Settings } from './screens/Settings';
@@ -45,11 +47,12 @@ export function App() {
         <Route element={<div className="shell"><Outlet /></div>}>
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/create" element={<Compose />} />
+          <Route path="/post/:id" element={<PostDetail />} />
         </Route>
         <Route element={<AppShell />}>
           <Route index element={<Home />} />
           <Route path="discover" element={<Placeholder title="Discover" text="Search, groups, Ask a Senior, Events and Market." />} />
-          <Route path="create" element={<Placeholder title="New post" text="The post composer arrives in week 2." />} />
           <Route path="reels" element={<ReelsComingSoon />} />
           <Route path="profile" element={<Profile />} />
           <Route path="notifications" element={<Placeholder title="Notifications" text="Likes, comments and replies will show here." />} />

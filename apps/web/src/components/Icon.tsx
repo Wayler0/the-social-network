@@ -11,6 +11,10 @@ const paths = {
   back: <path d="M15 5l-7 7 7 7" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   lock: (<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>),
+  more: (<><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>),
+  comment: <path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z" />,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
+  image: (<><rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="9" cy="10" r="2" /><path d="m21 16-5-5-8 9" /></>),
 } as const;
 
 export type IconName = keyof typeof paths;
