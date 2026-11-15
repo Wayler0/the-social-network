@@ -35,7 +35,9 @@ declare module 'fastify' {
 export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyInstance {
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },
-    trustProxy: true, // we sit behind the server's existing web server
+    // Behind the server's web server: trust exactly that many hops, never a client-supplied X-Forwarded-For.
+    // hop 0 is the socket peer (our web server), hop 1 the address it put last in X-Forwarded-For, and so on.
+    trustProxy: (_address: string, hop: number) => hop < config.TRUST_PROXY_HOPS,
     bodyLimit: 1_048_576, // 1 MB JSON; image uploads get their own route and limit
   });
 

@@ -1,0 +1,240 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Avatar } from '../components/Avatar';
+import { ContentMenu } from '../components/ContentMenu';
+import { Icon } from '../components/Icon';
+import { PostCard } from '../components/PostCard';
+import { Sheet } from '../components/Sheet';
+import { ApiError } from '../lib/api';
+import {
+  answerRequest, getGroup, getGroupPosts, getMembers, getRequests, joinGroup, leaveGroup,
+  type Group, type JoinRequest, type Member,
+} from '../lib/community';
+import type { Post } from '../lib/feed';
+import { GroupBadges } from './Groups';
+
+/** One group: about, join/leave, its posts (members only), members, and join requests for admins (issue #25). */
+export function GroupPage() {
+  const { id = '' } = useParams();
+  const navigate = useNavigate();
+  const [group, setGroup] = useState<Group | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  const [tab, setTab] = useState<'posts' | 'members' | 'requests'>('posts');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [menu, setMenu] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setGroup(await getGroup(id)); setState('ready'); } catch (err) {
+      setState(err instanceof ApiError && err.status === 404 ? 'missing' : 'error');
+    }
+  }, [id]);
+  useEffect(() => { void load(); }, [load]);
+
+  const top = (title: string) => (
+    <header className="topbar">
+      <button type="button" className="icon-btn" aria-label="Back" onClick={() => navigate(-1)}><Icon name="back" /></button>
+      <h1 className="topbar-title">{title}</h1>
+      {group ? <button type="button" className="icon-btn" aria-label="Group options" onClick={() => setMenu(true)}><Icon name="more" /></button>
+        : <span style={{ width: 44 }} />}
+    </header>
+  );
+
+  if (state === 'loading') return <>{top('Group')}<p className="feed-foot" role="status">Loading…</p></>;
+  if (state !== 'ready' || !group) {
+    return (<>{top('Group')}<section className="empty">
+      <h1>{state === 'missing' ? 'Group not available' : 'Didn’t load'}</h1>
+      <p>{state === 'missing' ? 'It may have been removed, or it isn’t open to you.' : 'Check your connection.'}</p>
+      {state === 'error' && <button type="button" className="btn secondary" style={{ maxWidth: 200 }} onClick={load}>Try again</button>}
+    </section></>);
+  }
+
+  const member = group.myStatus === 'active';
+  const admin = group.myRole === 'admin';
+  const canPost = member && (group.posting === 'everyone' || admin);
+
+  async function join() {
+    setBusy(true); setError(null);
+    try {
+      const r = await joinGroup(group!.id);
+      setGroup({ ...group!, myStatus: r.status, myRole: r.status === 'active' ? 'member' : null,
+        memberCount: r.status === 'active' && group!.memberCount !== null ? group!.memberCount + 1 : group!.memberCount });
+    } catch (err) { setError(err instanceof ApiError ? err.message : 'Couldn’t join. Try again.'); }
+    finally { setBusy(false); }
+  }
+
+  async function leave() {
+    setBusy(true); setError(null);
+    try {
+      await leaveGroup(group!.id);
+      setConfirmLeave(false);
+      await load();
+    } catch (err) { setError(err instanceof ApiError ? err.message : 'Couldn’t leave. Try again.'); setConfirmLeave(false); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      {top(group.name)}
+      <section className="group-head">
+        <span className="group-icon large" aria-hidden="true">{group.name.trim()[0]?.toUpperCase()}</span>
+        <h2>{group.name}</h2>
+        <GroupBadges g={group} />
+        {group.memberCount !== null && <p className="post-meta">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</p>}
+        {group.description && <p className="group-desc">{group.description}</p>}
+        {group.posting === 'admins_only' && <p className="hint">Only admins post here.</p>}
+
+        <div className="group-actions">
+          {group.myStatus === 'none' && !group.isClassGroup && (
+            <button type="button" className="btn" disabled={busy} onClick={join}>
+              {group.visibility === 'public' ? 'Join group' : 'Ask to join'}
+            </button>
+          )}
+          {group.myStatus === 'pending' && <button type="button" className="btn secondary" disabled>Request sent</button>}
+          {canPost && <Link to={`/create?group=${group.id}`} className="btn btn-link">Write a post</Link>}
+        </div>
+        {error && <p className="error" role="alert">{error}</p>}
+      </section>
+
+      {member ? (
+        <>
+          <div className="tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'posts'} className={tab === 'posts' ? 'active' : ''} onClick={() => setTab('posts')}>Posts</button>
+            <button type="button" role="tab" aria-selected={tab === 'members'} className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Members</button>
+            {admin && group.visibility === 'private' && !group.isClassGroup && (
+              <button type="button" role="tab" aria-selected={tab === 'requests'} className={tab === 'requests' ? 'active' : ''} onClick={() => setTab('requests')}>Requests</button>
+            )}
+          </div>
+          {tab === 'posts' && <GroupPosts groupId={group.id} />}
+          {tab === 'members' && <Members groupId={group.id} />}
+          {tab === 'requests' && <Requests groupId={group.id} onApproved={() => setGroup((g) => (g && g.memberCount !== null ? { ...g, memberCount: g.memberCount + 1 } : g))} />}
+        </>
+      ) : (
+        <p className="feed-foot">{group.visibility === 'private' ? 'Posts are visible to members only.' : 'Join to see and write posts.'}</p>
+      )}
+
+      {menu && (
+        <GroupMenu group={group} onClose={() => setMenu(false)}
+          onLeave={() => { setMenu(false); setConfirmLeave(true); }} />
+      )}
+      {confirmLeave && (
+        <Sheet title={`Leave ${group.name}?`} onClose={() => setConfirmLeave(false)}>
+          <p className="sheet-text">{group.visibility === 'private' ? 'To come back you’ll need an admin to accept you again.' : 'You can join again any time.'}</p>
+          <div className="sheet-actions">
+            <button type="button" className="btn danger" disabled={busy} onClick={leave}>{busy ? 'Leaving…' : 'Leave group'}</button>
+            <button type="button" className="sheet-row muted" onClick={() => setConfirmLeave(false)}>Cancel</button>
+          </div>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+/** Report the group, or leave it. Reporting uses the shared menu with the group as the target. */
+function GroupMenu({ group, onClose, onLeave }: { group: Group; onClose: () => void; onLeave: () => void }) {
+  const [reporting, setReporting] = useState(false);
+  if (reporting) {
+    return (
+      <ContentMenu kind="group" targetId={group.id} author={{ id: null, name: group.name, photoUrl: null, badges: [] }}
+        isOwn={false} canDelete={false} startAt="report" onDelete={async () => {}} onBlocked={() => {}} onClose={onClose} />
+    );
+  }
+  const canLeave = group.myStatus !== 'none' && !group.isClassGroup;
+  return (
+    <Sheet title="Group options" onClose={onClose}>
+      <div className="sheet-actions">
+        <button type="button" className="sheet-row" onClick={() => setReporting(true)}>Report group</button>
+        {canLeave && <button type="button" className="sheet-row danger" onClick={onLeave}>{group.myStatus === 'pending' ? 'Cancel request' : 'Leave group'}</button>}
+        <button type="button" className="sheet-row muted" onClick={onClose}>Cancel</button>
+      </div>
+    </Sheet>
+  );
+}
+
+function GroupPosts({ groupId }: { groupId: string }) {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const load = useCallback(async (from: string | null) => {
+    try {
+      const page = await getGroupPosts(groupId, from);
+      setPosts((prev) => (from ? [...prev, ...page.items] : page.items));
+      setCursor(page.nextCursor); setState('ready');
+    } catch { setState('error'); }
+  }, [groupId]);
+  useEffect(() => { void load(null); }, [load]);
+
+  if (state === 'loading') return <p className="feed-foot" role="status">Loading…</p>;
+  if (state === 'error') return <p className="feed-foot" role="alert">Posts didn’t load. <button type="button" className="linkish" onClick={() => load(null)}>Try again</button></p>;
+  if (posts.length === 0) return <p className="feed-foot">No posts yet.</p>;
+  return (
+    <div className="feed">
+      {posts.map((p) => (
+        <PostCard key={p.id} post={{ ...p, group: null }}
+          onChange={(n) => setPosts((l) => l.map((x) => (x.id === n.id ? n : x)))}
+          onRemoved={(rid) => setPosts((l) => l.filter((x) => x.id !== rid))}
+          onBlocked={(aid) => setPosts((l) => l.filter((x) => x.author.id !== aid))} />
+      ))}
+      {cursor && <button type="button" className="linkish comments-more" onClick={() => load(cursor)}>Show more</button>}
+    </div>
+  );
+}
+
+function Members({ groupId }: { groupId: string }) {
+  const [items, setItems] = useState<Member[] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const load = useCallback(async (from: string | null) => {
+    try {
+      const page = await getMembers(groupId, from);
+      setItems((prev) => (from && prev ? [...prev, ...page.items] : page.items)); setCursor(page.nextCursor);
+    } catch { setItems((prev) => prev ?? []); }
+  }, [groupId]);
+  useEffect(() => { void load(null); }, [load]);
+  if (!items) return <p className="feed-foot" role="status">Loading…</p>;
+  return (
+    <ul className="list">
+      {items.map((m) => (
+        <li key={m.id} className="list-row">
+          <Avatar name={m.name} photoUrl={m.photoUrl} size={40} />
+          <span className="list-main"><strong>{m.name}</strong>
+            <span className="post-meta">{m.role === 'admin' ? 'Admin' : 'Member'}</span></span>
+        </li>
+      ))}
+      {cursor && <li><button type="button" className="linkish comments-more" onClick={() => load(cursor)}>Show more</button></li>}
+    </ul>
+  );
+}
+
+function Requests({ groupId, onApproved }: { groupId: string; onApproved: () => void }) {
+  const [items, setItems] = useState<JoinRequest[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { getRequests(groupId).then((r) => setItems(r.items)).catch(() => setItems([])); }, [groupId]);
+
+  async function decide(userId: string, approve: boolean) {
+    setError(null);
+    try {
+      await answerRequest(groupId, userId, approve);
+      setItems((l) => (l ?? []).filter((r) => r.id !== userId));
+      if (approve) onApproved();
+    } catch (err) { setError(err instanceof ApiError ? err.message : 'That didn’t work. Try again.'); }
+  }
+
+  if (!items) return <p className="feed-foot" role="status">Loading…</p>;
+  if (items.length === 0) return <p className="feed-foot">No one is waiting to join.</p>;
+  return (
+    <>
+      {error && <p className="error" role="alert" style={{ padding: '8px 16px' }}>{error}</p>}
+      <ul className="list">
+        {items.map((r) => (
+          <li key={r.id} className="list-row">
+            <Avatar name={r.name} photoUrl={r.photoUrl} size={40} />
+            <span className="list-main"><strong>{r.name}</strong><span className="post-meta">{r.memberType}</span></span>
+            <button type="button" className="btn small-btn" onClick={() => decide(r.id, true)}>Accept</button>
+            <button type="button" className="btn secondary small-btn" onClick={() => decide(r.id, false)}>Decline</button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}

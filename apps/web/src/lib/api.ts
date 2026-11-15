@@ -27,12 +27,14 @@ export function onSignedOut(listener: Listener): () => void {
   return () => { signedOutListeners.delete(listener); };
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** One request to the API. JSON bodies by default; a FormData body is sent as multipart (image uploads). */
+export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const form = body instanceof FormData;
   const res = await fetch(path, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: body === undefined || form ? undefined : { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : form ? body : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));

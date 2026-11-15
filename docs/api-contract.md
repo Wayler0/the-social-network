@@ -87,7 +87,7 @@ Code: `apps/api/src/auth/`. Needs `CODE_PEPPER` on the server (`openssl rand -ba
 1. Trim and lower-case the email. Look up the domain **exactly** in `campus_email_domains` (no `endsWith` — look-alikes like `tharaka.ac.ke.evil.com` must fail). Unknown domain → `400 email_not_allowed`.
 2. Rate limits (store in Postgres — there is no Redis):
    - same email: 1 code per 30 s, 5 per hour → `429`
-   - same IP: 20 per hour → `429`
+   - same IP: 300 per hour → `429` (high on purpose: campus Wi-Fi and mobile carriers put hundreds of members behind one address; the per-email limits stop guessing). The client address is read through `TRUST_PROXY_HOPS` proxies only, so a made-up `X-Forwarded-For` does not count
 3. Generate a 6-digit code with `crypto.randomInt(0, 1_000_000)`, zero-padded. **Never** `Math.random`.
 4. Store only its hash: `code_hash = HMAC-SHA256(CODE_PEPPER, email + ':' + code)` (`CODE_PEPPER` is a new env var). Expires in **10 minutes**. A new code invalidates older unused codes for that email.
 5. Send the email with `app.mailer` (Peter's #35 ✅, `docs/email.md`):
@@ -121,7 +121,7 @@ New students start as `memberType: "continuing"` and pick fresher/continuing/alu
 6. Set the cookie:
    `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`
    (`Secure` off only when `NODE_ENV=development`; read the cookie name from config, not the app name in code).
-7. Rate limit: 10 verify attempts per IP per 10 minutes → `429`.
+7. Rate limit: 200 verify attempts per IP per 10 minutes → `429` (see above: shared addresses).
 
 ### `POST /api/auth/logout` ✅
 Revokes the current session (`revoked_at = now()`), clears the cookie. `204`.

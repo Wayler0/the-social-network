@@ -1,12 +1,8 @@
 import { Link } from 'react-router-dom';
+import { initials } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../lib/auth';
 import { memberTypeLabel } from '../lib/profile';
-
-function initials(name: string | null): string {
-  if (!name) return '?';
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
-}
 
 /** Issue #7 — your own profile. Posts, groups and badges fill in as those features land. */
 export function Profile() {
