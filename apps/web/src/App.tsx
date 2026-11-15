@@ -4,6 +4,7 @@ import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
 import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
+import { Admin } from './screens/Admin';
 import { Ask, AskQuestion } from './screens/Ask';
 import { Compose } from './screens/Compose';
 import { Discover } from './screens/Discover';
@@ -57,6 +58,7 @@ export function App() {
           <Route path="/groups/new" element={<GroupNew />} />
           <Route path="/groups/:id" element={<GroupPage />} />
           <Route path="/ask/:id" element={<AskQuestion />} />
+          <Route path="/admin" element={<Admin />} />
         </Route>
         <Route element={<AppShell />}>
           <Route index element={<Home />} />

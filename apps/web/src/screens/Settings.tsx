@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { ApiError, deleteMe } from '../lib/api';
+import { isModerator } from '../lib/admin';
 import { useAuth } from '../lib/auth';
 
 /** Settings and account: log out and delete account (CLAUDE.md sections 4.1 and 10). */
@@ -37,6 +38,7 @@ export function Settings() {
       <div className="screen settings">
         <p className="muted">Signed in as <strong style={{ color: 'var(--ink)' }}>{me?.email}</strong></p>
         <Link to="/profile/edit" className="settings-row">Edit profile</Link>
+        {isModerator(me) && <Link to="/admin" className="settings-row">{me?.isAdmin ? 'Admin' : 'Moderation'}</Link>}
         <a href="/privacy" className="settings-row">Privacy policy</a>
         <a href="/terms" className="settings-row">Terms and community guidelines</a>
         <button className="settings-row" onClick={() => void signOut().then(() => navigate('/welcome', { replace: true }))}>Log out</button>

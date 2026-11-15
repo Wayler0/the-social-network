@@ -286,3 +286,24 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .answer { padding: 10px 0 2px; border-bottom: 1px solid var(--line); }
 .post-body.tappable { cursor: pointer; }
 .text-link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+
+/* ---------- Moderation and admin (issue #13) ---------- */
+.segmented { display: flex; gap: 6px; padding: 12px 16px 4px; }
+.segmented button { flex: 1; min-height: 40px; border-radius: var(--radius-pill); border: 1.5px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; color: var(--text-2); }
+.segmented button.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+.admin-hint { padding: 4px 16px 0; margin: 0; }
+.report { margin: 10px 16px; padding: 12px; border-radius: var(--radius-m); border: 1.5px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.report-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.report-head time { margin-left: auto; }
+.report-target { background: var(--surface-2); border-radius: var(--radius-s); padding: 10px 12px; }
+.report-target p { margin: 0; }
+.report-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; margin-bottom: 4px !important; }
+.report-details { margin: 0; font-size: 14px; font-style: italic; color: var(--text-2); overflow-wrap: anywhere; }
+.report-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.member-card { padding: 12px; border-radius: var(--radius-m); border: 1.5px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.member-card header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.member-card p { margin: 0; overflow-wrap: anywhere; }
+.role-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.role-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.danger-notice { background: var(--coral-soft); color: var(--danger); }
+.log-row { min-height: 0; }

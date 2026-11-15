@@ -35,7 +35,7 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 | Groups: create, join/request, leave, members, requests, group posts, class groups | ✅ | ✅ (no admin tools for roles/removing members yet) |
 | Today board: pins, urgent, pin limit; offices post and delete | ✅ | ✅ |
 | Ask a Senior: ask (name hidden), answer, helpful, search | ✅ | ✅ |
-| Admin API: moderation queue, hide, suspend, offices, roles | ✅ | ❌ **screens not built** (#13) |
+| Admin: moderation queue, hide, suspend, roles, offices, CLUB badge, log | ✅ | ✅ (reg-number disputes screen not built: may be dropped) |
 | Images: upload, resize, strip location, serve to members only | ✅ | ✅ |
 | Email sending (SMTP), backups (restic scripts) | ✅ code | ❌ not tested on the real server |
 
@@ -47,8 +47,8 @@ If the web page is blank after a pull: stop the dev server and start it again (V
    Production needs `CODE_PEPPER` (`openssl rand -base64 48`) or the API refuses to start.
 2. **Sign-in email delivery (#35).** Test that codes reach real `student.tharaka.ac.ke` inboxes, not spam
    (`npm run email:test -w apps/api -- you@…`). If codes don't arrive, nobody can join.
-3. **Admin screens (#13).** The API is done (`docs/api-contract.md` section 11); the moderation queue screen
-   matters most — reports auto-hide content at 3 reports and need a human.
+3. **Moderators.** The queue (Settings → Moderation) only helps if someone checks it daily. Make the first admin
+   on the server (`docs/api-contract.md` section 11), then give the Moderator role in Admin → Members.
 4. **Legal pages (#14):** privacy policy, community guidelines, terms. The sign-up screen already links to them.
 5. **HTTPS, backups restore test, monitoring (#33, #36, #39, #40).**
 6. **User testing (#41–#46)** — see ROADMAP "User involvement".
