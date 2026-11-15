@@ -4,6 +4,7 @@ import { APP_SLUG } from '../config';
 import { getAnnouncements, type Announcement } from '../lib/community';
 import { timeAgo } from '../lib/feed';
 import { Avatar } from './Avatar';
+import { RichText } from './RichText';
 
 const SEEN_KEY = `${APP_SLUG}.todaySeen`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -76,7 +77,7 @@ export function AnnouncementCard({ a, action }: { a: Announcement; action?: Reac
         {action}
       </header>
       <h3 className="announcement-title">{a.title}</h3>
-      <p className="announcement-body">{a.body}</p>
+      <p className="announcement-body"><RichText text={a.body} /></p>
     </article>
   );
 }

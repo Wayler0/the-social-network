@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar';
 import { ContentMenu } from '../components/ContentMenu';
 import { Icon } from '../components/Icon';
 import { PostCard } from '../components/PostCard';
+import { RichText } from '../components/RichText';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { addComment, COMMENT_MAX, deleteComment, getComments, getPost, timeAgo, type Comment, type Post } from '../lib/feed';
@@ -99,7 +100,7 @@ export function PostDetail() {
           <div key={c.id} id={`comment-${c.id}`} className="comment">
             <Avatar name={c.author.name} photoUrl={c.author.photoUrl} size={32} />
             <div className="comment-main">
-              <p className="comment-text"><strong>{c.author.name}</strong> {c.body}</p>
+              <p className="comment-text"><strong>{c.author.name}</strong> <RichText text={c.body} /></p>
               <time className="post-meta" dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
             </div>
             <button type="button" className="icon-btn small" aria-label="Comment options" onClick={() => setMenuFor(c)}>

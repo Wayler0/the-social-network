@@ -162,7 +162,6 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .post-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 15px; }
 .post-name strong { overflow-wrap: anywhere; }
 .post-meta { font-size: 13px; color: var(--text-3); }
-.post-body-link { color: inherit; text-decoration: none; display: block; }
 .post-body { margin: 8px 16px 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; }
 .post-image { display: block; width: 100%; height: auto; max-height: 80dvh; object-fit: cover; background: var(--fill); }
 .post-actions { display: flex; gap: 4px; padding: 2px 8px; }
@@ -285,3 +284,5 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .question-text { font-size: 17px; font-weight: 600; }
 .answers { padding-bottom: 12px; }
 .answer { padding: 10px 0 2px; border-bottom: 1px solid var(--line); }
+.post-body.tappable { cursor: pointer; }
+.text-link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }

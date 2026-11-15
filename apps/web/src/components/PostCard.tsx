@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { deletePost, likePost, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
 import { Icon } from './Icon';
+import { RichText } from './RichText';
 
 /**
  * One post: author (or office), text, photo, like and comment counts, and the "…" menu.
@@ -19,6 +20,7 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
   linkToPost?: boolean;
 }) {
   const { me } = useAuth();
+  const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
   const isOwn = !!me && post.author.id === me.id;
@@ -59,9 +61,12 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
         </button>
       </header>
 
-      {linkToPost
-        ? <Link to={href} className="post-body-link"><p className="post-body">{post.body}</p></Link>
-        : <p className="post-body">{post.body}</p>}
+      {/* Tapping the text opens the post (the comments button is the keyboard and screen-reader way);
+          links inside the text open themselves instead. A link can't sit inside another link. */}
+      <p className={`post-body${linkToPost ? ' tappable' : ''}`}
+        onClick={linkToPost ? () => { if (!window.getSelection()?.toString()) navigate(href); } : undefined}>
+        <RichText text={post.body} />
+      </p>
 
       {post.image && (
         <img className="post-image" src={post.image.url} width={post.image.width} height={post.image.height}

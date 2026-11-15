@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { ContentMenu } from '../components/ContentMenu';
 import { Icon } from '../components/Icon';
+import { RichText } from '../components/RichText';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
@@ -187,7 +188,7 @@ export function AskQuestion() {
           <div className="post-who"><Who author={q.author} nameHidden={q.nameHidden} />
             <div className="post-meta"><time dateTime={q.createdAt}>{timeAgo(q.createdAt)}</time></div></div>
         </header>
-        <p className="post-body question-text">{q.body}</p>
+        <p className="post-body question-text"><RichText text={q.body} /></p>
       </article>
 
       <section className="answers" aria-label="Answers">
@@ -201,7 +202,7 @@ export function AskQuestion() {
               <button type="button" className="icon-btn small" aria-label="Answer options"
                 onClick={() => setMenu({ kind: 'answer', id: a.id, author: a.author, isOwn: a.isMine })}><Icon name="more" size={18} /></button>
             </div>
-            <p className="post-body">{a.body}</p>
+            <p className="post-body"><RichText text={a.body} /></p>
             <div className="post-actions">
               {a.isMine
                 ? <span className="action static">{plural(a.helpfulCount, 'person', 'people')} found this helpful</span>
