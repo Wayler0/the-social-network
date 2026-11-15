@@ -5,7 +5,9 @@ import { ContentMenu } from '../components/ContentMenu';
 import { Icon } from '../components/Icon';
 import { PostCard } from '../components/PostCard';
 import { Sheet } from '../components/Sheet';
+import { setClubVerified } from '../lib/admin';
 import { ApiError } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import {
   answerRequest, getGroup, getGroupPosts, getMembers, getRequests, joinGroup, leaveGroup,
   type Group, type JoinRequest, type Member,
@@ -115,7 +117,7 @@ export function GroupPage() {
       )}
 
       {menu && (
-        <GroupMenu group={group} onClose={() => setMenu(false)}
+        <GroupMenu group={group} onClose={() => setMenu(false)} onChange={setGroup}
           onLeave={() => { setMenu(false); setConfirmLeave(true); }} />
       )}
       {confirmLeave && (
@@ -132,8 +134,10 @@ export function GroupPage() {
 }
 
 /** Report the group, or leave it. Reporting uses the shared menu with the group as the target. */
-function GroupMenu({ group, onClose, onLeave }: { group: Group; onClose: () => void; onLeave: () => void }) {
+function GroupMenu({ group, onClose, onLeave, onChange }: { group: Group; onClose: () => void; onLeave: () => void; onChange: (g: Group) => void }) {
+  const { me } = useAuth();
   const [reporting, setReporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   if (reporting) {
     return (
       <ContentMenu kind="group" targetId={group.id} author={{ id: null, name: group.name, photoUrl: null, badges: [] }}
@@ -145,9 +149,20 @@ function GroupMenu({ group, onClose, onLeave }: { group: Group; onClose: () => v
     <Sheet title="Group options" onClose={onClose}>
       <div className="sheet-actions">
         <button type="button" className="sheet-row" onClick={() => setReporting(true)}>Report group</button>
+        {me?.isAdmin && !group.isClassGroup && (
+          // Admins give the CLUB badge after checking the Dean of Students' list of registered societies.
+          <button type="button" className="sheet-row" onClick={async () => {
+            setError(null);
+            try {
+              const r = await setClubVerified(group.id, !group.clubVerified);
+              onChange({ ...group, clubVerified: r.clubVerified, kind: r.clubVerified ? 'club' : group.kind }); onClose();
+            } catch (err) { setError(err instanceof ApiError ? err.message : 'That didn’t work.'); }
+          }}>{group.clubVerified ? 'Remove CLUB badge' : 'Give CLUB badge (registered society)'}</button>
+        )}
         {canLeave && <button type="button" className="sheet-row danger" onClick={onLeave}>{group.myStatus === 'pending' ? 'Cancel request' : 'Leave group'}</button>}
         <button type="button" className="sheet-row muted" onClick={onClose}>Cancel</button>
       </div>
+      {error && <p className="error" role="alert">{error}</p>}
     </Sheet>
   );
 }

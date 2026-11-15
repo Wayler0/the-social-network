@@ -26,6 +26,7 @@ Use any `…@student.tharaka.ac.ke` or `…@tharaka.ac.ke` address; any 6-digit 
 | `/discover` | Ways into Groups, Ask a Senior and the Today board (Events and Market: later) | |
 | `/today` | Today board: all announcements, pinned first; offices you belong to can post and delete | #11, #26 |
 | `/groups`, `/groups/new`, `/groups/:id` | Your groups and Discover; create; a group's posts, members, join/leave, join requests for admins | #6, #25 |
+| `/admin` | Moderators: report queue (hide, keep, unhide). Admins also: find members (suspend, roles), official accounts and who can post for them, the admin log. From Settings | #13 |
 | `/ask`, `/ask/:id` | Ask a Senior: search, ask (name can be hidden from students), answers, "helpful" | #12, #27 |
 | `/reels` | Reels — Coming soon | #8 |
 | `/onboarding` | First-time profile after the code (name, member type, course, year, reg number, under-18) | #7 |
