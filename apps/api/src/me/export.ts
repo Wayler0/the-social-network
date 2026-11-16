@@ -73,6 +73,21 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
   const followers = await q<{ id: string; name: string | null; created_at: Date }>(
     `select u.id, u.name, f.created_at from follows f join users u on u.id = f.follower_id
       where f.target_type = 'user' and f.target_id = $1 and u.deleted_at is null order by f.created_at`);
+  const stories = await q<{ id: string; body: string | null; image_path: string | null; audience: string; office_name: string | null;
+    group_name: string | null; created_at: Date; expires_at: Date; hidden_at: Date | null; deleted_at: Date | null; view_count: number }>(
+    `select s.id, s.body, i.path as image_path, s.audience, o.name as office_name, g.name as group_name,
+            s.created_at, s.expires_at, s.hidden_at, s.deleted_at,
+            (select count(*) from story_views v where v.story_id = s.id)::int as view_count
+       from stories s left join images i on i.id = s.image_id
+                      left join office_accounts o on o.id = s.author_office_id
+                      left join groups g on g.id = s.author_group_id
+      where s.author_user_id = $1 order by s.created_at`);
+  const storiesViewed = await q<{ story_id: string; viewed_at: Date }>(
+    'select story_id, viewed_at from story_views where viewer_id = $1 order by viewed_at');
+  const closeFriends = await q<{ id: string; name: string | null }>(
+    `select u.id, u.name from close_friends c join users u on u.id = c.friend_id where c.user_id = $1 order by c.created_at`);
+  const storyHidden = await q<{ id: string; name: string | null }>(
+    `select u.id, u.name from story_hidden_from h join users u on u.id = h.hidden_user_id where h.user_id = $1 order by h.created_at`);
   const reports = await q<{ target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: Date }>(
     'select target_type, target_id, reason, details, status, created_at from reports where reporter_id = $1 order by created_at');
   const disputes = await q<{ member_number_normalised: string; details: string | null; status: string; created_at: Date }>(
@@ -110,6 +125,12 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     helpfulVotes: helpful.map((h) => ({ answerId: h.answer_id, createdAt: iso(h.created_at) })),
     announcements: announcements.map((a) => ({ id: a.id, office: a.office_name, title: a.title, body: a.body, urgency: a.urgency,
       pinnedUntil: iso(a.pinned_until), createdAt: iso(a.created_at) })),
+    stories: stories.map((s) => ({ id: s.id, body: s.body, imageUrl: s.image_path ? imageUrls(s.image_path).url : null, audience: s.audience,
+      asOffice: s.office_name, asClub: s.group_name, createdAt: iso(s.created_at), expiresAt: iso(s.expires_at),
+      hiddenAt: iso(s.hidden_at), deletedAt: iso(s.deleted_at), viewCount: s.view_count })),
+    storiesViewed: storiesViewed.map((v) => ({ storyId: v.story_id, viewedAt: iso(v.viewed_at) })),
+    closeFriends: closeFriends.map((c) => ({ id: c.id, name: c.name ?? 'Deleted member' })),
+    storiesHiddenFrom: storyHidden.map((h) => ({ id: h.id, name: h.name ?? 'Deleted member' })),
     following: following.map((f) => ({ type: f.target_type, id: f.target_id, name: f.name, since: iso(f.created_at) })),
     followers: followers.map((f) => ({ id: f.id, name: f.name, since: iso(f.created_at) })),
     blocked: blocks.map((b) => ({ id: b.id, name: b.name ?? 'Deleted member', since: iso(b.created_at) })),

@@ -57,6 +57,7 @@ export const CONTENT = {
   comment:  { table: 'comments',  campus: '(select p.campus_id from posts p where p.id = t.post_id)' },
   question: { table: 'questions', campus: 't.campus_id' },
   answer:   { table: 'answers',   campus: '(select q.campus_id from questions q where q.id = t.question_id)' },
+  story:    { table: 'stories',   campus: 't.campus_id' },
 } as const;
 export type ContentType = keyof typeof CONTENT;
-export const contentType = z.enum(['post', 'comment', 'question', 'answer']);
+export const contentType = z.enum(['post', 'comment', 'question', 'answer', 'story']);

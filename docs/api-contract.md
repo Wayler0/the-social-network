@@ -432,5 +432,31 @@ Rules (code: `apps/api/src/follows/routes.ts`, table `follows`, migration 011):
 
 ---
 
+## 13. Stories (v0.2) ✅
+
+Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").
+
+| Endpoint | Answer |
+|---|---|
+| `GET /api/stories` | The stories row: `{ items: [{ author: { type: "user"\|"office"\|"group", id, name, photoUrl, badges }, isMine, allSeen, stories: [Story] }] }` — your own first, then official accounts, then clubs, then people; within each, unseen before seen, then newest. Stories oldest first |
+| `POST /api/stories` | `{ body?, imageId?, audience?: "followers"\|"close_friends", officeId? \| groupId? }` → `201` Story. Photo or text needed (body up to 500). Finished profile; 30 a day |
+| `POST /api/stories/:id/view` | Mark seen → `204` (idempotent; your own views are not counted) |
+| `GET /api/stories/:id/viewers` | `{ count, items: [{ id, name, photoUrl, viewedAt }] }` — only whoever manages the story (author, office members, club admins); `403` otherwise |
+| `DELETE /api/stories/:id` | Author, the office or club managing it, or an admin → `204` |
+| `GET /api/me/close-friends` · `PUT\|DELETE …/:userId` | Close friends list (up to 200; `409 list_full`) |
+| `GET /api/me/story-hidden` · `PUT\|DELETE …/:userId` | "Hide my stories from" list (up to 200) |
+
+**Story** `{ id, body, image: { url, thumbUrl, width, height } | null, audience, createdAt, expiresAt, seen, viewCount? }` — `viewCount` only on stories you posted.
+
+Who sees a story (`visibleStory` in `apps/api/src/visibility.ts`; anything else is `404`):
+- **Personal:** your followers (section 12), except people you hide your stories from; close-friends stories only to your close friends. An **under-18** author's stories only reach people they follow back. **Staff** see a student's (fresher/continuing) story only if the student follows them.
+- **Office** (posted by a current member of a **verified** office with `officeId`): everyone on the campus.
+- **Club** (posted by a club admin with `groupId`; `kind = club`): the club's active members and followers.
+- Never across a block, never once hidden, deleted or expired.
+
+Reports: `POST /api/reports` takes `targetType: "story"`; three open reports hide it; moderators hide/unhide it like other content (`/api/admin/content/story/:id/hide`). Hourly housekeeping deletes expired or deleted stories with their views and photos, **except** stories with an open report, which stay for moderators until the report is closed. Replies to stories come with chat. Migration 012.
+
+---
+
 ## Not built yet
-Chat, push notifications, stories, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories → club announcements in followers' feeds → reactions → events → push → chat (end-to-end encrypted, after the library choice and an external review).
+Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements in followers' feeds → reactions → events → push → chat (end-to-end encrypted, after the library choice and an external review).
