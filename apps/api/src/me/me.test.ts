@@ -379,7 +379,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     expect(data.profile).toMatchObject({ id: m.id, email: m.email, memberNumber: 'ABT5/09919/23', interests: ['Chess'] });
     expect(data.posts.map((p: { body: string; deletedAt: string | null }) => [p.body, p.deletedAt !== null]).sort())
       .toEqual([['deleted post', true], ['kept post', false]]);   // same created_at in one transaction: order not fixed
-    expect(data.likes).toEqual([{ postId: theirs, createdAt: expect.any(String) }]);
+    expect(data.likes).toEqual([{ postId: theirs, reaction: 'like', createdAt: expect.any(String) }]);
     expect(data.blocked).toEqual([{ id: other.id, name: 'Wanjiru M.', since: expect.any(String) }]);
     expect(data.reportsMade).toEqual([expect.objectContaining({ targetId: theirs, reason: 'spam' })]);   // not the report about me
     expect(data.groups).toHaveLength(1);                                                                  // the class group

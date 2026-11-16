@@ -326,4 +326,38 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
       expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/like`)).statusCode).toBe(404);
     });
   });
+
+  describe('reactions (v0.2)', () => {
+    const url = `/api/posts/${P('feed:3')}`;
+    const counts = async () => { await client.query('delete from likes where post_id = $1', [P('feed:3')]); };
+
+    it('one reaction per member: PUT sets or changes it, DELETE removes it; counts per reaction', async () => {
+      await counts();
+      expect((await as('felix', 'PUT', `${url}/reaction`, { reaction: 'love' })).json())
+        .toEqual({ myReaction: 'love', likeCount: 1, reactions: { love: 1 } });
+      expect((await as('brian', 'PUT', `${url}/reaction`, { reaction: 'support' })).json())
+        .toEqual({ myReaction: 'support', likeCount: 2, reactions: { love: 1, support: 1 } });
+      expect((await as('felix', 'PUT', `${url}/reaction`, { reaction: 'haha' })).json())
+        .toEqual({ myReaction: 'haha', likeCount: 2, reactions: { haha: 1, support: 1 } });
+      expect((await as('felix', 'GET', url)).json()).toMatchObject({ likedByMe: true, myReaction: 'haha', likeCount: 2, reactions: { haha: 1, support: 1 } });
+      expect((await as('felix', 'DELETE', `${url}/reaction`)).json()).toEqual({ myReaction: null, likeCount: 1, reactions: { support: 1 } });
+      expect((await as('felix', 'GET', url)).json()).toMatchObject({ likedByMe: false, myReaction: null });
+    });
+
+    it('a v0.1 like is the reaction "like" and never overwrites another reaction', async () => {
+      await counts();
+      await as('felix', 'PUT', `${url}/like`);
+      expect((await as('felix', 'GET', url)).json()).toMatchObject({ myReaction: 'like', reactions: { like: 1 } });
+      await as('felix', 'PUT', `${url}/reaction`, { reaction: 'wow' });
+      expect((await as('felix', 'PUT', `${url}/like`)).json()).toEqual({ liked: true, likeCount: 1 });
+      expect((await as('felix', 'GET', url)).json().myReaction).toBe('wow');
+    });
+
+    it('rejects unknown reactions and posts you cannot see', async () => {
+      for (const body of [{}, { reaction: 'angry' }, { reaction: 'love', extra: 1 }]) {
+        expect((await as('felix', 'PUT', `${url}/reaction`, body)).json().error, JSON.stringify(body)).toBe('invalid_input');
+      }
+      expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/reaction`, { reaction: 'love' })).statusCode).toBe(404);
+    });
+  });
 });

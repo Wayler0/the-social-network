@@ -8,7 +8,7 @@ import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
 import { followsOrMemberOf, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
-import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, type CommentRow, type PostRow } from './shape.js';
+import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, REACTIONS, type CommentRow, type PostRow, type Reaction } from './shape.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
 const V: ViewerSql = { id: '$1', campusId: '$2' };
@@ -236,25 +236,47 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     return reply.code(204).send();
   });
 
-  // ---- PUT / DELETE /api/posts/:id/like   idempotent
-  for (const liked of [true, false]) {
-    app.route({
-      method: liked ? 'PUT' : 'DELETE',
-      url: '/api/posts/:id/like',
-      handler: async (req, reply) => {
-        const params = idParam.safeParse(req.params);
-        if (!params.success || !(await loadPost(db, req.auth!, params.data.id))) return fail(reply, 404, 'not_found', 'Post not found.');
-        const userId = req.auth!.userId;
-        await db.query(
-          liked
-            ? 'insert into likes (user_id, post_id) values ($1, $2) on conflict do nothing'
-            : 'delete from likes where user_id = $1 and post_id = $2',
-          [userId, params.data.id],
-        );
-        const { rows } = await db.query<{ n: number }>('select count(*)::int as n from likes where post_id = $1', [params.data.id]);
-        return { liked, likeCount: rows[0]!.n };
-      },
-    });
+  /** Total reactions and the count of each, after a change. */
+  async function reactionSummary(postId: string) {
+    const { rows } = await db.query<{ reaction: Reaction; n: number }>(
+      'select reaction, count(*)::int as n from likes where post_id = $1 group by reaction', [postId]);
+    return { likeCount: rows.reduce((sum, r) => sum + r.n, 0), reactions: Object.fromEntries(rows.map((r) => [r.reaction, r.n])) };
+  }
+
+  // ---- PUT / DELETE /api/posts/:id/reaction   { reaction } — one per member per post; PUT replaces it
+  // ---- PUT / DELETE /api/posts/:id/like        v0.1: the same with reaction 'like'
+  for (const path of ['reaction', 'like'] as const) {
+    for (const on of [true, false]) {
+      app.route({
+        method: on ? 'PUT' : 'DELETE',
+        url: `/api/posts/:id/${path}`,
+        handler: async (req, reply) => {
+          let reaction: Reaction = 'like';
+          if (path === 'reaction' && on) {
+            const body = parse(z.object({ reaction: z.enum(REACTIONS) }).strict(), req.body, reply);
+            if (!body) return;
+            reaction = body.reaction;
+          }
+          const params = idParam.safeParse(req.params);
+          if (!params.success || !(await loadPost(db, req.auth!, params.data.id))) return fail(reply, 404, 'not_found', 'Post not found.');
+          const userId = req.auth!.userId;
+          if (!on) {
+            await db.query('delete from likes where user_id = $1 and post_id = $2', [userId, params.data.id]);
+          } else if (path === 'like') {
+            // A v0.1 like never overwrites a reaction already given.
+            await db.query('insert into likes (user_id, post_id) values ($1, $2) on conflict do nothing', [userId, params.data.id]);
+          } else {
+            await db.query(
+              `insert into likes (user_id, post_id, reaction) values ($1, $2, $3)
+               on conflict (user_id, post_id) do update set reaction = excluded.reaction, created_at = now()`,
+              [userId, params.data.id, reaction]);
+          }
+          const summary = await reactionSummary(params.data.id);
+          if (path === 'like') return { liked: on, likeCount: summary.likeCount };
+          return { myReaction: on ? reaction : null, ...summary };
+        },
+      });
+    }
   }
 }
 

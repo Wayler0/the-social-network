@@ -207,15 +207,18 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
 | `POST /api/posts/:id/comments` | `{ body }` (1–1000 chars) | `201` Comment |
 | `DELETE /api/comments/:id` | author, post author, or admin | `204` |
-| `PUT /api/posts/:id/like` | | `200 { liked: true, likeCount }` (idempotent) |
+| `PUT /api/posts/:id/like` | | `200 { liked: true, likeCount }` (idempotent; v0.1 — the reaction "like", never replaces another reaction) |
 | `DELETE /api/posts/:id/like` | | `200 { liked: false, likeCount }` |
+| `PUT /api/posts/:id/reaction` | `{ reaction: "like"\|"love"\|"haha"\|"wow"\|"sad"\|"support" }` (v0.2) | `200 { myReaction, likeCount, reactions: { love: 3, … } }` — one per member per post; PUT changes it |
+| `DELETE /api/posts/:id/reaction` | | `200 { myReaction: null, likeCount, reactions }` |
 
 **Post**
 ```json
 { "id": "…", "author": { "id": "…", "name": "…", "photoUrl": null, "badges": ["Staff"] },
   "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
-  "likeCount": 12, "commentCount": 3, "likedByMe": false, "createdAt": "…" }
+  "likeCount": 12, "commentCount": 3, "likedByMe": false, "myReaction": null, "reactions": { "like": 9, "love": 3 },
+  "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 
@@ -459,4 +462,4 @@ Reports: `POST /api/reports` takes `targetType: "story"`; three open reports hid
 ---
 
 ## Not built yet
-Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions → events → push → chat (end-to-end encrypted, after the library choice and an external review).
+Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events → push → chat (end-to-end encrypted, after the library choice and an external review).
