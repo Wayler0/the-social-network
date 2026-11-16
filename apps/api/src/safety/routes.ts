@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
 import { inTransaction, type Db } from '../db.js';
+import { unfollowBothWays } from '../follows/routes.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
 import type { Queryable } from '../images/store.js';
 import { visibleAnswer, visibleComment, visibleGroup, visiblePost, visibleQuestion, type ViewerSql } from '../visibility.js';
@@ -95,7 +96,10 @@ export async function safetyRoutes(app: FastifyInstance, { db }: { db: Db }) {
         if (blocking) {
           const exists = await db.query('select 1 from users where id = $1 and campus_id = $2 and deleted_at is null', [params.data.id, campusId]);
           if (exists.rows.length === 0) return fail(reply, 404, 'not_found', 'Member not found.');
-          await db.query('insert into blocks (blocker_id, blocked_id) values ($1, $2) on conflict do nothing', [userId, params.data.id]);
+          await inTransaction(db, async (tx) => {
+            await tx.query('insert into blocks (blocker_id, blocked_id) values ($1, $2) on conflict do nothing', [userId, params.data.id]);
+            await unfollowBothWays(tx, userId, params.data.id);   // a block ends following both ways
+          });
         } else {
           await db.query('delete from blocks where blocker_id = $1 and blocked_id = $2', [userId, params.data.id]);
         }

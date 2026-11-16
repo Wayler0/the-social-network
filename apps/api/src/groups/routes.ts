@@ -19,7 +19,10 @@ const GROUP_SELECT = `
   select g.id, g.name, g.description, g.visibility, g.student_only, g.kind, g.posting, g.auto_type,
          g.club_verified_at is not null as club_verified, g.created_at, g.created_at::text as cursor_at,
          (select count(*) from group_members c where c.group_id = g.id and c.status = 'active')::int as member_count,
-         m.status as my_status, m.role as my_role
+         m.status as my_status, m.role as my_role,
+         exists (select 1 from follows f where f.follower_id = $1 and f.target_type = 'group' and f.target_id = g.id) as following,
+         (select count(*) from follows f join users fu on fu.id = f.follower_id
+           where f.target_type = 'group' and f.target_id = g.id and fu.deleted_at is null)::int as follower_count
     from groups g
     left join group_members m on m.group_id = g.id and m.user_id = $1`;
 
@@ -27,6 +30,7 @@ type GroupRow = {
   id: string; name: string; description: string | null; visibility: 'public' | 'private'; student_only: boolean;
   kind: 'group' | 'club'; posting: 'everyone' | 'admins_only'; auto_type: string; club_verified: boolean;
   created_at: Date; cursor_at: string; member_count: number; my_status: 'pending' | 'active' | null; my_role: 'admin' | 'member' | null;
+  following: boolean; follower_count: number;
 };
 
 function groupBody(g: GroupRow) {
@@ -37,6 +41,9 @@ function groupBody(g: GroupRow) {
     // Private groups show name and description only to non-members.
     memberCount: g.visibility === 'public' || insider ? g.member_count : null,
     myStatus: g.my_status ?? 'none', myRole: insider ? g.my_role : null,
+    // Public clubs can be followed without joining (v0.2): their announcements reach followers' feeds.
+    canFollow: g.kind === 'club' && g.visibility === 'public',
+    following: g.following, followerCount: g.kind === 'club' && g.visibility === 'public' ? g.follower_count : null,
   };
 }
 

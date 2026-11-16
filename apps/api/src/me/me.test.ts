@@ -283,7 +283,8 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     const res = await me.as('GET', `/api/users/${them.id}`);
     expect(res.json()).toEqual({
       id: them.id, name: 'Wanjiru M.', photoUrl: null, memberType: 'fresher', course: 'BSc Computer Science',
-      yearOfStudy: 1, graduationYear: null, interests: [], badges: ['Student Leader'], isFollowing: false,
+      yearOfStudy: 1, graduationYear: null, interests: [], badges: ['Student Leader'],
+      isFollowing: false, followsYou: false, followerCount: 0, followingCount: 0,
     });
     expect(res.body).not.toContain('@');
     expect(res.body).not.toContain('09919');

@@ -4,6 +4,7 @@ import { cleanupAuth } from './auth/routes.js';
 import { cleanupGroups } from './groups/routes.js';
 import { cleanupPosts } from './posts/routes.js';
 import { cleanupQuestions } from './questions/routes.js';
+import { cleanupFollows } from './follows/routes.js';
 import { cleanupSafety } from './safety/routes.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
@@ -28,6 +29,9 @@ const housekeeping = setInterval(() => {
   cleanupGroups(db).catch((err) => app.log.error(err, 'group rate-limit cleanup failed'));
   cleanupAnnouncements(db).catch((err) => app.log.error(err, 'announcement rate-limit cleanup failed'));
   cleanupQuestions(db).catch((err) => app.log.error(err, 'question rate-limit cleanup failed'));
+  cleanupFollows(db)
+    .then((removed) => removed && app.log.info({ removed }, 'follows of removed members, offices or clubs removed'))
+    .catch((err) => app.log.error(err, 'follow cleanup failed'));
 }, HOUR);
 housekeeping.unref();
 

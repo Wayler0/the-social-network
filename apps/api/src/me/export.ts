@@ -8,8 +8,8 @@ import { loadMe, meBody } from './profile.js';
  *
  * Included: profile (with email and member number), account dates and any suspension, roles and
  * office memberships (history too), groups, everything they wrote (also what they deleted or what
- * moderators hid, which we still keep), likes, helpful votes, announcements they posted, people
- * they blocked, reports and disputes they made, sign-in sessions, and their uploaded images.
+ * moderators hid, which we still keep), likes, helpful votes, announcements they posted, whom they
+ * follow and who follows them, people they blocked, reports and disputes they made, sign-in sessions, and their uploaded images.
  *
  * Not included, on purpose: reports other members made about them (protects reporters), who
  * blocked them, and other members' content. Sign-in codes are stored only as hashes and deleted
@@ -63,6 +63,16 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
   const blocks = await q<{ id: string; name: string | null; created_at: Date }>(
     `select u.id, u.name, b.created_at from blocks b join users u on u.id = b.blocked_id
       where b.blocker_id = $1 order by b.created_at`);
+  const following = await q<{ target_type: string; target_id: string; name: string | null; created_at: Date }>(
+    `select f.target_type, f.target_id, coalesce(u.name, o.name, g.name) as name, f.created_at
+       from follows f
+       left join users u on f.target_type = 'user' and u.id = f.target_id
+       left join office_accounts o on f.target_type = 'office' and o.id = f.target_id
+       left join groups g on f.target_type = 'group' and g.id = f.target_id
+      where f.follower_id = $1 order by f.created_at`);
+  const followers = await q<{ id: string; name: string | null; created_at: Date }>(
+    `select u.id, u.name, f.created_at from follows f join users u on u.id = f.follower_id
+      where f.target_type = 'user' and f.target_id = $1 and u.deleted_at is null order by f.created_at`);
   const reports = await q<{ target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: Date }>(
     'select target_type, target_id, reason, details, status, created_at from reports where reporter_id = $1 order by created_at');
   const disputes = await q<{ member_number_normalised: string; details: string | null; status: string; created_at: Date }>(
@@ -100,6 +110,8 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     helpfulVotes: helpful.map((h) => ({ answerId: h.answer_id, createdAt: iso(h.created_at) })),
     announcements: announcements.map((a) => ({ id: a.id, office: a.office_name, title: a.title, body: a.body, urgency: a.urgency,
       pinnedUntil: iso(a.pinned_until), createdAt: iso(a.created_at) })),
+    following: following.map((f) => ({ type: f.target_type, id: f.target_id, name: f.name, since: iso(f.created_at) })),
+    followers: followers.map((f) => ({ id: f.id, name: f.name, since: iso(f.created_at) })),
     blocked: blocks.map((b) => ({ id: b.id, name: b.name ?? 'Deleted member', since: iso(b.created_at) })),
     reportsMade: reports.map((r) => ({ targetType: r.target_type, targetId: r.target_id, reason: r.reason, details: r.details,
       status: r.status, createdAt: iso(r.created_at) })),

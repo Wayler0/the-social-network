@@ -73,6 +73,7 @@ describe.skipIf(!url)('groups (real database, seed data)', () => {
       expect((await as('amina', 'GET', `/api/groups/${G('chess')}`)).json()).toEqual({
         id: G('chess'), name: expect.any(String), description: expect.any(String), visibility: 'public', studentOnly: false,
         kind: 'club', clubVerified: true, posting: 'admins_only', isClassGroup: false, memberCount: 3, myStatus: 'active', myRole: 'member',
+        canFollow: true, following: false, followerCount: 0,
       });
       expect((await as('cynthia', 'GET', `/api/groups/${G('roommates')}`)).json()).toMatchObject({ memberCount: null, myStatus: 'none' });
       expect((await as('david', 'GET', `/api/groups/${G('roommates')}`)).json()).toMatchObject({ memberCount: 1, myRole: 'admin' });

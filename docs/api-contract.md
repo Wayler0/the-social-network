@@ -183,7 +183,7 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 `{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
 ### `GET /api/users/:id` ✅ — someone's public profile
-`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. `isFollowing` is always `false` until follows (v0.2).
+`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing, followsYou, followerCount, followingCount }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. Follows: section 12 (v0.2).
 
 ### `GET /api/me/export` ✅ — download my data (Data Protection Act)
 A JSON file (`Content-Disposition: attachment`) of everything held about the member: profile (with email and member number), account dates and suspension, roles and offices (history too), groups, posts, comments, questions and answers (also deleted or hidden ones, which we still keep), likes, helpful votes, announcements they posted, people they blocked, reports and disputes they made, sessions, and uploaded images. **Not** included: reports about them (protects reporters) and who blocked them. Works while suspended; 5 a day (`429`). Code: `apps/api/src/me/export.ts` — add any new table that holds personal data there.
@@ -311,7 +311,7 @@ Rules (code: `apps/api/src/safety/`):
 
 Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
-**Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, isClassGroup, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null }`
+**Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, isClassGroup, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null, canFollow, following, followerCount }` — `canFollow` only for public clubs (v0.2, section 12); `followerCount` is `null` otherwise
 
 Rules (code: `apps/api/src/groups/routes.ts`):
 - `memberCount` is `null` for a private group you are not in. `isClassGroup` is true for the automatic course/year groups.
@@ -414,5 +414,23 @@ Every action is written to `admin_log` (who, what, on what, when, and the reason
 
 ---
 
-## Not in v0.1
-Chat, push notifications, reels, map, ads, emergency button, follows (v0.2 with stories). Don't build endpoints for them yet.
+## 12. Follows (v0.2) ✅
+
+Follow people, verified office accounts and public clubs. No approval step: privacy rules live on what followers get (stories, v0.2).
+
+| Endpoint | Answer |
+|---|---|
+| `PUT /api/follows/:type/:id` | `type`: `user\|office\|group`. → `{ following: true, followerCount }`; idempotent; 200 an hour |
+| `DELETE /api/follows/:type/:id` | → `{ following: false, followerCount }`; idempotent |
+| `GET /api/me/following?type&limit&cursor` | `{ items: [{ type, id, name, photoUrl, since }] }`, newest first |
+| `GET /api/me/followers?limit&cursor` | Members who follow me: `{ items: [{ id, name, photoUrl, followsBack, since }] }`, newest first |
+
+Rules (code: `apps/api/src/follows/routes.ts`, table `follows`, migration 011):
+- `404` unless the target is: another live member of your campus with no block either way; a **verified** office of your campus; a **public club** you may see (staff never see student-only groups). Ordinary and private groups are joined, not followed.
+- Blocking ends follows both ways; deleting an account removes its follows (both ways). The hourly housekeeping removes follows whose target is gone or no longer followable (`target_id` is polymorphic: no foreign key).
+- Counts leave out deleted accounts. Profiles (section 4) show `isFollowing`, `followsYou`, `followerCount`, `followingCount`; groups (section 8) show `canFollow`, `following`, `followerCount`.
+
+---
+
+## Not built yet
+Chat, push notifications, stories, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories → club announcements in followers' feeds → reactions → events → push → chat (end-to-end encrypted, after the library choice and an external review).
