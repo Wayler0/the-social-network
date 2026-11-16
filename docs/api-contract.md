@@ -200,8 +200,8 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 
 | Method & path | Body / query | Response |
 |---|---|---|
-| `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide, newest first |
-| `POST /api/posts` | `{ body, imageId?, groupId?, officeId? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to) | `201` Post |
+| `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide posts plus announcements of clubs you follow or belong to (v0.2), newest first |
+| `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
 | `GET /api/posts/:id` | | Post |
 | `DELETE /api/posts/:id` | author or admin | `204` |
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
@@ -213,7 +213,7 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 **Post**
 ```json
 { "id": "…", "author": { "id": "…", "name": "…", "photoUrl": null, "badges": ["Staff"] },
-  "office": null, "group": null,
+  "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
   "likeCount": 12, "commentCount": 3, "likedByMe": false, "createdAt": "…" }
 ```
@@ -304,7 +304,7 @@ Rules (code: `apps/api/src/safety/`):
 | `DELETE /api/groups/:id/membership` | Leave |
 | `GET /api/groups/:id/requests` | Admins: pending requests |
 | `POST /api/groups/:id/requests/:userId` | Admins: `{ approve: true\|false }` |
-| `GET /api/groups/:id/posts?limit&cursor` | Members only |
+| `GET /api/groups/:id/posts?channel=all\|announcements\|discussion&limit&cursor` | Members see every post (`channel` picks the tab). Anyone who may see a **public club** reads its announcements (`channel=all` gives them announcements only; `discussion` is `403`). Other groups: members only |
 | `GET /api/groups/:id/members?limit&cursor` | Active members only: `{ items: [{ id, name, photoUrl, memberType, role, joinedAt }] }`, longest-standing first |
 | `PUT /api/groups/:id/members/:userId/role` | Admins: `{ role: "admin"\|"member" }` → `{ role }`. `409 last_admin` if it would leave no admin |
 | `DELETE /api/groups/:id/members/:userId` | Admins remove a member → `204`. Not other admins (demote first), not in class groups |
@@ -459,4 +459,4 @@ Reports: `POST /api/reports` takes `targetType: "story"`; three open reports hid
 ---
 
 ## Not built yet
-Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements in followers' feeds → reactions → events → push → chat (end-to-end encrypted, after the library choice and an external review).
+Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions → events → push → chat (end-to-end encrypted, after the library choice and an external review).

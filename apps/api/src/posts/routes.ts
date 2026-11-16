@@ -7,7 +7,7 @@ import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
-import { visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
+import { followsOrMemberOf, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
 import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, type CommentRow, type PostRow } from './shape.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
@@ -47,7 +47,7 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     return rows[0] ?? null;
   }
 
-  // ---- GET /api/feed   campus-wide posts, newest first
+  // ---- GET /api/feed   campus-wide posts plus announcements of clubs I follow or belong to, newest first
   app.get('/api/feed', async (req, reply) => {
     const q = parse(pageSchema, req.query, reply);
     if (!q) return;
@@ -55,7 +55,8 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.'); throw e; }
     const { rows } = await db.query<PostRow>(
       `${POST_SELECT}
-        where p.group_id is null and ${visiblePost('p', V)}
+        where (p.group_id is null or (p.announcement and ${followsOrMemberOf('p.group_id', V)}))
+          and ${visiblePost('p', V)}
           and ($3::timestamptz is null or (p.created_at, p.id) < ($3::timestamptz, $4::uuid))
         order by p.created_at desc, p.id desc
         limit $5`,
@@ -73,7 +74,9 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
       groupId: z.string().uuid().optional(),
       /** Post as an office the member currently belongs to (owner or editor). */
       officeId: z.string().uuid().optional(),
-    }).strict(), req.body, reply);
+      /** Club pages: an announcement (club admins only) instead of a discussion post. */
+      announcement: z.boolean().default(false),
+    }).strict().refine((b) => !b.announcement || b.groupId, { message: 'announcement: only in a club (send groupId)' }), req.body, reply);
     if (!body) return;
     if (!(await requireCompleteProfile(db, req, reply))) return;
     const viewer = req.auth!;
@@ -81,8 +84,8 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     type Outcome = { ok: true; id: string } | { ok: false; status: number; error: string; message: string } | { ok: false; wait: number };
     const outcome = await inTransaction(db, async (tx): Promise<Outcome> => {
       if (body.groupId) {
-        const { rows } = await tx.query<{ posting: string; role: string | null; status: string | null }>(
-          `select g.posting, m.role, m.status
+        const { rows } = await tx.query<{ posting: string; kind: string; role: string | null; status: string | null }>(
+          `select g.posting, g.kind, m.role, m.status
              from groups g left join group_members m on m.group_id = g.id and m.user_id = $1
             where g.id = $3 and ${visibleGroup('g', V)}`,
           [viewer.userId, viewer.campusId, body.groupId],
@@ -92,6 +95,12 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         if (g.status !== 'active') return { ok: false, status: 403, error: 'forbidden', message: 'Join the group to post in it.' };
         if (g.posting === 'admins_only' && g.role !== 'admin') {
           return { ok: false, status: 403, error: 'forbidden', message: 'Only the group’s admins post here.' };
+        }
+        if (body.announcement && g.kind !== 'club') {
+          return { ok: false, status: 400, error: 'invalid_input', message: 'announcement: only clubs have announcements.' };
+        }
+        if (body.announcement && g.role !== 'admin') {
+          return { ok: false, status: 403, error: 'forbidden', message: 'Only the club’s admins post announcements.' };
         }
       }
       if (body.officeId) {
@@ -113,9 +122,9 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         imageId = image.id;
       }
       const { rows } = await tx.query<{ id: string }>(
-        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id)
-         values ($1, $2, $3, $4, $5, $6) returning id`,
-        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId],
+        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id, announcement)
+         values ($1, $2, $3, $4, $5, $6, $7) returning id`,
+        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId, body.announcement],
       );
       return { ok: true, id: rows[0]!.id };
     });

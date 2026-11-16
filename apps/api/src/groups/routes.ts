@@ -265,19 +265,25 @@ export async function groupRoutes(app: FastifyInstance, { db }: { db: Db }) {
     return reply.code(204).send();
   });
 
-  // ---- GET /api/groups/:id/posts   members only, newest first
+  // ---- GET /api/groups/:id/posts?channel=all|announcements|discussion   newest first
+  // Members see everything. Anyone who may see a public club reads its announcements (club pages, v0.2).
   app.get('/api/groups/:id/posts', async (req, reply) => {
     const params = idParam.safeParse(req.params);
-    const q = parse(z.object(pageQuery).strict(), req.query, reply);
+    const q = parse(z.object({ ...pageQuery, channel: z.enum(['all', 'announcements', 'discussion']).default('all') }).strict(), req.query, reply);
     if (!q) return;
     const g = params.success ? await loadGroup(db, req.auth!, params.data.id) : null;
     if (!g) return notFound(reply);
-    if (g.my_status !== 'active') return fail(reply, 403, 'forbidden', 'Join the group to see its posts.');
+    const publicClub = g.kind === 'club' && g.visibility === 'public';
+    if (g.my_status !== 'active' && !(publicClub && q.channel !== 'discussion')) {
+      return fail(reply, 403, 'forbidden', 'Join the group to see its posts.');
+    }
     let cursor;
     try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return badCursor(reply); throw e; }
+    const channel = q.channel === 'all' ? '' : q.channel === 'announcements' ? 'and p.announcement' : 'and not p.announcement';
+    // visiblePost leaves non-members only the announcements.
     const { rows } = await db.query<PostRow>(
       `${POST_SELECT}
-        where p.group_id = $3 and ${visiblePost('p', V)}
+        where p.group_id = $3 ${channel} and ${visiblePost('p', V)}
           and ($4::timestamptz is null or (p.created_at, p.id) < ($4::timestamptz, $5::uuid))
         order by p.created_at desc, p.id desc
         limit $6`,

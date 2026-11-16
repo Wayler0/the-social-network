@@ -47,6 +47,9 @@ type Row = Record<string, unknown>;
 async function insert(db: pg.Client, table: string, rows: Row[], refresh: string[] = []): Promise<number> {
   if (rows.length === 0) return 0;
   const columns = Object.keys(rows[0]!);
+  // Columns come from the first row: a key only some rows have would be dropped without a word.
+  const odd = rows.find((r) => Object.keys(r).length !== columns.length || Object.keys(r).some((k) => !columns.includes(k)));
+  if (odd) throw new Error(`seed: every ${table} row needs the same columns (${columns.join(', ')}); got ${Object.keys(odd).join(', ')}`);
   const values: unknown[] = [];
   const tuples = rows.map((row) => `(${columns.map((c) => { values.push(row[c] ?? null); return `$${values.length}`; }).join(', ')})`);
   const onConflict = refresh.length
@@ -249,10 +252,10 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
   const authors = ['cynthia', 'brian', 'david', 'esther', 'grace', 'hassan', 'amina', 'felix'];
   const postRows: Row[] = feedLines.map((body, i) => ({
     id: P(`feed:${i}`), campus_id: campus.id, author_user_id: U(authors[i % authors.length]!), author_office_id: null,
-    group_id: null, body, image_id: null, hidden_at: null, hidden_by: null, created_at: ago((i + 2) * 3 * HOUR), deleted_at: null,
+    group_id: null, announcement: false, body, image_id: null, hidden_at: null, hidden_by: null, created_at: ago((i + 2) * 3 * HOUR), deleted_at: null,
   }));
   const post = (key: string, author: string, body: string, hoursAgo: number, extra: Row = {}): Row => ({
-    id: P(key), campus_id: campus.id, author_user_id: U(author), author_office_id: null, group_id: null, body, image_id: null,
+    id: P(key), campus_id: campus.id, author_user_id: U(author), author_office_id: null, group_id: null, announcement: false, body, image_id: null,
     hidden_at: null, hidden_by: null, created_at: ago(hoursAgo * HOUR), deleted_at: null, ...extra,
   });
   postRows.push(
@@ -263,12 +266,12 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
     post('modhide',  'ivy',     'This post was hidden by a moderator (seed).', 50, { hidden_at: ago(49 * HOUR), hidden_by: U('grace') }),
     post('deleted',  'david',   'This post was deleted by its author (seed).', 30, { deleted_at: ago(29 * HOUR) }),
     post('gone',     'gone',    'Posted by a member who later deleted their account.', 80),
-    post('chess1',   'cynthia', 'Tournament draw is out. First round is on Friday at 5 pm.', 6, { group_id: G('chess') }),
+    post('chess1',   'cynthia', 'Tournament draw is out. First round is on Friday at 5 pm.', 6, { group_id: G('chess'), announcement: true }),   // club announcement: public
     post('chess2',   'cynthia', 'Welcome to all new members. Boards are in the common room.', 100, { group_id: G('chess') }),
     post('study1',   'grace',   'Who is revising in the library tonight?', 3, { group_id: G('study') }),
     post('class1',   'cynthia', 'Lab moved to room 12 tomorrow.', 5, { group_id: G('class:BSc Computer Science|3') }),
   );
-  counts.posts = await insert(db, 'posts', postRows);
+  counts.posts = await insert(db, 'posts', postRows, ['announcement']);   // databases seeded before migration 013 get it right too
 
   counts.comments = await insert(db, 'comments', [
     { id: seedId('comment:1'), post_id: P('photo'),  user_id: U('brian'),  body: 'Beautiful!',                           created_at: ago(50 * 60_000), hidden_at: null, deleted_at: null },

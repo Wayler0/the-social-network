@@ -155,7 +155,7 @@ describe.skipIf(!url)('groups (real database, seed data)', () => {
       const res = await as('david', 'GET', `/api/groups/${G('football')}/posts`);
       expect(res.statusCode).toBe(200);
       expect(res.json().items.map((p: { id: string }) => p.id)).toContain(P('photo2'));
-      expect(res.json().items[0].group).toEqual({ id: G('football'), name: expect.any(String) });
+      expect(res.json().items[0].group).toEqual({ id: G('football'), name: expect.any(String), kind: 'group' });
       expect((await as('cynthia', 'GET', `/api/groups/${G('football')}/posts`)).json().error).toBe('forbidden');
       expect((await as('brian', 'GET', `/api/groups/${G('roommates')}/posts`)).json().error).toBe('forbidden');   // still pending
       expect((await as('felix', 'GET', `/api/groups/${G('study')}/posts`)).statusCode).toBe(404);

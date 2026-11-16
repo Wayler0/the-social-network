@@ -22,9 +22,9 @@ export const authorColumns = (alias: string) => `
 
 /** Select list and joins for posts aliased `p`; add WHERE, ORDER BY and LIMIT. */
 export const POST_SELECT = `
-  select p.id, p.body, p.created_at, p.created_at::text as cursor_at, ${authorColumns('au')},
+  select p.id, p.body, p.announcement, p.created_at, p.created_at::text as cursor_at, ${authorColumns('au')},
          o.id as office_id, o.name as office_name, o.photo_url as office_photo, o.verified as office_verified,
-         g.id as group_id, g.name as group_name,
+         g.id as group_id, g.name as group_name, g.kind as group_kind,
          i.path as image_path, i.width as image_width, i.height as image_height,
          (select count(*) from likes l where l.post_id = p.id)::int as like_count,
          (select count(*) from comments c where c.post_id = p.id and c.hidden_at is null and c.deleted_at is null)::int as comment_count,
@@ -38,9 +38,9 @@ export const POST_SELECT = `
 export type AuthorRow = { author_id: string | null; author_name: string | null; author_photo: string | null; author_roles: string[] };
 
 export type PostRow = AuthorRow & {
-  id: string; body: string; created_at: Date; cursor_at: string;
+  id: string; body: string; announcement: boolean; created_at: Date; cursor_at: string;
   office_id: string | null; office_name: string | null; office_photo: string | null; office_verified: boolean | null;
-  group_id: string | null; group_name: string | null;
+  group_id: string | null; group_name: string | null; group_kind: string | null;
   image_path: string | null; image_width: number | null; image_height: number | null;
   like_count: number; comment_count: number; liked_by_me: boolean;
 };
@@ -56,7 +56,8 @@ export function postBody(r: PostRow) {
     id: r.id,
     author: author(r),
     office: r.office_id ? { id: r.office_id, name: r.office_name, photoUrl: r.office_photo, verified: r.office_verified } : null,
-    group: r.group_id ? { id: r.group_id, name: r.group_name } : null,
+    group: r.group_id ? { id: r.group_id, name: r.group_name, kind: r.group_kind } : null,
+    announcement: r.announcement,
     body: r.body,
     image: r.image_path ? { url: imageUrls(r.image_path).url, width: r.image_width, height: r.image_height } : null,
     likeCount: r.like_count,

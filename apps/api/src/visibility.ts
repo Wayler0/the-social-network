@@ -59,8 +59,9 @@ export function visibleGroup(alias: string, v: ViewerSql): string {
 }
 
 /**
- * A post the viewer may read: own campus, not hidden or deleted, no block with the author,
- * and for a group post, the viewer is an active member of a group they may see.
+ * A post the viewer may read: own campus, not hidden or deleted, no block with the author, and
+ * for a group post, a group the viewer may see where they are an active member — or, for an
+ * announcement of a public club, anyone who may see the club (club pages, v0.2).
  */
 export function visiblePost(alias: string, v: ViewerSql): string {
   check(v, alias);
@@ -68,8 +69,16 @@ export function visiblePost(alias: string, v: ViewerSql): string {
            and ${alias}.hidden_at is null and ${alias}.deleted_at is null
            and ${notBlocked(`${alias}.author_user_id`, v)}
            and (${alias}.group_id is null
-                or (${isActiveMember(`${alias}.group_id`, v)}
-                    and exists (select 1 from groups vg where vg.id = ${alias}.group_id and ${visibleGroup('vg', v)}))))`;
+                or exists (select 1 from groups vg where vg.id = ${alias}.group_id and ${visibleGroup('vg', v)}
+                             and (${isActiveMember(`${alias}.group_id`, v)}
+                                  or (${alias}.announcement and vg.kind = 'club' and vg.visibility = 'public')))))`;
+}
+
+/** The viewer follows, or is an active member of, the club in `groupCol` (club announcements in the feed). */
+export function followsOrMemberOf(groupCol: string, v: ViewerSql): string {
+  check(v, groupCol);
+  return `(${isActiveMember(groupCol, v)}
+           or exists (select 1 from follows ff where ff.follower_id = ${v.id} and ff.target_type = 'group' and ff.target_id = ${groupCol}))`;
 }
 
 /** A comment the viewer may read. Its post must be checked with visiblePost as well. */

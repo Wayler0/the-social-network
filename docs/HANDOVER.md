@@ -31,7 +31,7 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 | Sign-in with campus email code, sessions, rate limits | ✅ | ✅ |
 | Onboarding, profile, edit profile, settings, delete account | ✅ | ✅ (no profile photo upload screen yet) |
 | Interests on profiles; download my data (`GET /api/me/export`, Data Protection Act) | ✅ | ❌ no screens yet |
-| v0.2: follows (people, offices, public clubs), stories (personal, office, club; close friends, hide from, viewers) | ✅ (branch `kim-v0.2`) | ❌ no screens yet |
+| v0.2: follows (people, offices, public clubs), stories (personal, office, club; close friends, hide from, viewers), club announcements (feed + Announcements/Discussion tabs) | ✅ (branch `kim-v0.2`) | ❌ no screens yet |
 | Feed, posts with one photo, likes, comments | ✅ | ✅ |
 | Report (8 reasons) and block on posts, comments, groups, questions, answers | ✅ | ✅ |
 | Groups: create, join/request, leave, members, requests, group posts, class groups | ✅ | ✅ (no admin tools for roles/removing members yet) |
