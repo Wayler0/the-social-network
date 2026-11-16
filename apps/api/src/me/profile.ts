@@ -15,12 +15,12 @@ export type MeRow = {
   name: string | null; photo_url: string | null; photo_image_id: string | null; course: string | null;
   year_of_study: number | null; graduation_year: number | null;
   member_number: string | null; member_number_status: string; is_under_18: boolean | null;
-  roles: string[]; is_admin: boolean;
+  interests: string[]; roles: string[]; is_admin: boolean;
 };
 
 const ME_SQL = `
   select u.id, c.slug as campus_slug, c.name as campus_name, u.email, u.member_type, u.name, u.photo_url, u.photo_image_id,
-         u.course, u.year_of_study, u.graduation_year, u.member_number, u.member_number_status, u.is_under_18,
+         u.course, u.year_of_study, u.graduation_year, u.member_number, u.member_number_status, u.is_under_18, u.interests,
          coalesce(array(select distinct r.role from roles r
                          where r.user_id = u.id and r.starts_at <= clock_timestamp()
                            and (r.ends_at is null or r.ends_at > clock_timestamp())
@@ -65,10 +65,28 @@ export function meBody(u: MeRow) {
     memberNumber: u.member_number,
     memberNumberStatus: u.member_number_status,
     isUnder18: u.is_under_18,
+    interests: u.interests,
     badges: badgesFor(u.roles),
     isAdmin: u.is_admin,
     profileComplete: profileComplete(u),
   };
+}
+
+/**
+ * Interests as members type them: spaces tidied, empty ones dropped, duplicates removed ignoring
+ * case (the first spelling wins). Null when one is longer than 40 characters or there are more than 10.
+ */
+export function normaliseInterests(input: string[]): string[] | null {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of input) {
+    const interest = raw.trim().replace(/\s+/g, ' ');
+    if (!interest) continue;
+    if (interest.length > 40) return null;
+    const key = interest.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); out.push(interest); }
+  }
+  return out.length <= 10 ? out : null;
 }
 
 /**
