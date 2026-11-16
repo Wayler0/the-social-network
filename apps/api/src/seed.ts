@@ -38,17 +38,25 @@ export function refusal(nodeEnv: string, membersNotFromSeed: number, force: bool
 
 type Row = Record<string, unknown>;
 
-/** Inserts rows, skipping any that already exist. Table and column names are constants in this file. */
-async function insert(db: pg.Client, table: string, rows: Row[]): Promise<number> {
+/**
+ * Inserts rows, skipping any that already exist. Table and column names are constants in this file.
+ * `refresh` lists time columns to reset on rows that already exist (same id), so dates relative to
+ * "now" (a pin that ends in 2 days) stay true when the seed runs again days later. Returns how many
+ * rows were new.
+ */
+async function insert(db: pg.Client, table: string, rows: Row[], refresh: string[] = []): Promise<number> {
   if (rows.length === 0) return 0;
   const columns = Object.keys(rows[0]!);
   const values: unknown[] = [];
   const tuples = rows.map((row) => `(${columns.map((c) => { values.push(row[c] ?? null); return `$${values.length}`; }).join(', ')})`);
-  const result = await db.query(
-    `insert into ${table} (${columns.join(', ')}) values ${tuples.join(', ')} on conflict do nothing`,
+  const onConflict = refresh.length
+    ? `on conflict (id) do update set ${refresh.map((c) => `${c} = excluded.${c}`).join(', ')}`
+    : 'on conflict do nothing';
+  const result = await db.query<{ inserted: boolean }>(
+    `insert into ${table} (${columns.join(', ')}) values ${tuples.join(', ')} ${onConflict} returning (xmax = 0) as inserted`,
     values,
   );
-  return result.rowCount ?? 0;
+  return result.rows.filter((r) => r.inserted).length;
 }
 
 /** Every member the seed creates. The safety check counts members that are not in this list. */
@@ -289,7 +297,7 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
       body: 'We are in the student centre every weekday from 2 pm to 4 pm.', urgency: 'normal', pinned_until: null, created_at: ago(3 * DAY) },
     { id: seedId('ann:old'),     campus_id: campus.id, office_id: O('council'), created_by: U('david'),  title: 'Clean-up day (finished)',
       body: 'Thank you to everyone who came. This pin has expired.', urgency: 'normal', pinned_until: ago(3 * DAY), created_at: ago(10 * DAY) },
-  ]);
+  ], ['created_at', 'pinned_until']);   // pins end relative to today, so refresh them on every run
 
   // ---- Ask a Senior
   const Q = (key: string) => seedId(`question:${key}`);
