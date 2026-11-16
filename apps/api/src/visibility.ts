@@ -139,3 +139,20 @@ export function visibleStory(alias: string, v: ViewerSql): string {
                       or ${authorFollowsViewer}))
            ))`;
 }
+
+/**
+ * An event the viewer may see: own campus, not hidden or deleted, no block with whoever created
+ * it, and for a group's event, an active member of a group they may see — or anyone who may see
+ * the group when it is a public club (like club announcements). Cancelled events stay visible
+ * (marked cancelled) so people who planned to go find out.
+ */
+export function visibleEvent(alias: string, v: ViewerSql): string {
+  check(v, alias);
+  return `(${alias}.campus_id = ${v.campusId}
+           and ${alias}.hidden_at is null and ${alias}.deleted_at is null
+           and ${notBlocked(`${alias}.created_by`, v)}
+           and (${alias}.group_id is null
+                or exists (select 1 from groups eg where eg.id = ${alias}.group_id and ${visibleGroup('eg', v)}
+                             and (${isActiveMember(`${alias}.group_id`, v)}
+                                  or (eg.kind = 'club' and eg.visibility = 'public')))))`;
+}

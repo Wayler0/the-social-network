@@ -82,6 +82,13 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
                       left join office_accounts o on o.id = s.author_office_id
                       left join groups g on g.id = s.author_group_id
       where s.author_user_id = $1 order by s.created_at`);
+  const events = await q<{ id: string; title: string; description: string | null; location: string | null; starts_at: Date;
+    ends_at: Date | null; cancelled_at: Date | null; created_at: Date; hidden_at: Date | null; deleted_at: Date | null }>(
+    `select id, title, description, location, starts_at, ends_at, cancelled_at, created_at, hidden_at, deleted_at
+       from events where created_by = $1 order by created_at`);
+  const rsvps = await q<{ event_id: string; title: string; status: string; created_at: Date }>(
+    `select r.event_id, e.title, r.status, r.created_at from event_rsvps r join events e on e.id = r.event_id
+      where r.user_id = $1 order by r.created_at`);
   const storiesViewed = await q<{ story_id: string; viewed_at: Date }>(
     'select story_id, viewed_at from story_views where viewer_id = $1 order by viewed_at');
   const closeFriends = await q<{ id: string; name: string | null }>(
@@ -128,6 +135,10 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     stories: stories.map((s) => ({ id: s.id, body: s.body, imageUrl: s.image_path ? imageUrls(s.image_path).url : null, audience: s.audience,
       asOffice: s.office_name, asClub: s.group_name, createdAt: iso(s.created_at), expiresAt: iso(s.expires_at),
       hiddenAt: iso(s.hidden_at), deletedAt: iso(s.deleted_at), viewCount: s.view_count })),
+    events: events.map((e) => ({ id: e.id, title: e.title, description: e.description, location: e.location,
+      startsAt: iso(e.starts_at), endsAt: iso(e.ends_at), cancelledAt: iso(e.cancelled_at), createdAt: iso(e.created_at),
+      hiddenAt: iso(e.hidden_at), deletedAt: iso(e.deleted_at) })),
+    eventRsvps: rsvps.map((r) => ({ eventId: r.event_id, title: r.title, status: r.status, since: iso(r.created_at) })),
     storiesViewed: storiesViewed.map((v) => ({ storyId: v.story_id, viewedAt: iso(v.viewed_at) })),
     closeFriends: closeFriends.map((c) => ({ id: c.id, name: c.name ?? 'Deleted member' })),
     storiesHiddenFrom: storyHidden.map((h) => ({ id: h.id, name: h.name ?? 'Deleted member' })),

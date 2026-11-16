@@ -16,6 +16,7 @@ import type { RequireUser } from './guard.js';
 import { imageRoutes } from './images/routes.js';
 import { followRoutes } from './follows/routes.js';
 import { storyRoutes } from './stories/routes.js';
+import { eventRoutes } from './events/routes.js';
 
 /**
  * Pieces tests can swap: `requireUser` replaces the session check (no cookie needed),
@@ -90,6 +91,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   app.register(questionRoutes, { db });                  // Kim — issue #27
   app.register(followRoutes, { db });                    // Kim — v0.2 follows
   app.register(storyRoutes, { config, db });             // Kim — v0.2 stories
+  app.register(eventRoutes, { config, db });             // Kim — v0.2 events
   app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
   app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 

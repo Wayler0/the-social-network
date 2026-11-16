@@ -5,7 +5,7 @@ import { inTransaction, type Db } from '../db.js';
 import { unfollowBothWays } from '../follows/routes.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
 import type { Queryable } from '../images/store.js';
-import { visibleAnswer, visibleComment, visibleGroup, visiblePost, visibleQuestion, visibleStory, type ViewerSql } from '../visibility.js';
+import { visibleAnswer, visibleComment, visibleGroup, visiblePost, visibleEvent, visibleQuestion, visibleStory, type ViewerSql } from '../visibility.js';
 
 /** In every query here, $1 is the viewer's id, $2 their campus and $3 the target. */
 const V: ViewerSql = { id: '$1', campusId: '$2' };
@@ -25,6 +25,7 @@ const TARGETS = {
   question: { table: 'questions', visible: `select 1 from questions t where t.id = $3 and ${visibleQuestion('t', V)}` },
   answer:   { table: 'answers',   visible: `select 1 from answers t join questions q on q.id = t.question_id where t.id = $3 and ${visibleAnswer('t', V)} and ${visibleQuestion('q', V)}` },
   story:    { table: 'stories',   visible: `select 1 from stories t where t.id = $3 and ${visibleStory('t', V)}` },
+  event:    { table: 'events',    visible: `select 1 from events t where t.id = $3 and ${visibleEvent('t', V)}` },
   group:    { table: null,        visible: `select 1 from groups t where t.id = $3 and ${visibleGroup('t', V)}` },
   user:     { table: null,        visible: `select 1 from users t where t.id = $3 and t.campus_id = $2 and t.deleted_at is null and t.id <> $1` },
 } as const;
@@ -32,7 +33,7 @@ type TargetType = keyof typeof TARGETS;
 
 /**
  * Report and block (docs/api-contract.md section 7, issue #23).
- *   POST   /api/reports            report a post, comment, person, group, question, answer or story
+ *   POST   /api/reports            report a post, comment, person, group, question, answer, story or event
  *   PUT    /api/users/:id/block    block (idempotent);  DELETE unblocks
  *   GET    /api/me/blocks          the members I have blocked
  */
@@ -41,7 +42,7 @@ export async function safetyRoutes(app: FastifyInstance, { db }: { db: Db }) {
 
   app.post('/api/reports', async (req, reply) => {
     const body = parse(z.object({
-      targetType: z.enum(['post', 'comment', 'user', 'group', 'question', 'answer', 'story']),
+      targetType: z.enum(['post', 'comment', 'user', 'group', 'question', 'answer', 'story', 'event']),
       targetId: z.string().uuid(),
       reason: z.enum(['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'false_info', 'other']),
       details: z.string().trim().max(2000).optional(),

@@ -53,17 +53,19 @@ async function loadTargets(db: Db, campusId: string, wanted: Array<{ type: strin
   const author = (r: { author_id: string; author_name: string | null; author_deleted: boolean }) =>
     ({ id: r.author_id, name: r.author_deleted ? null : r.author_name, deleted: r.author_deleted });
 
-  for (const type of ['post', 'comment', 'question', 'answer', 'story'] as const) {
+  for (const type of ['post', 'comment', 'question', 'answer', 'story', 'event'] as const) {
     const list = ids(type);
     if (list.length === 0) continue;
     const { table, campus } = CONTENT[type];
-    const authorColumn = type === 'post' || type === 'story' ? 'author_user_id' : 'user_id';
+    const authorColumn = type === 'post' || type === 'story' ? 'author_user_id' : type === 'event' ? 'created_by' : 'user_id';
+    // Events have a title and description instead of a body: moderators see both.
+    const bodyColumn = type === 'event' ? "t.title || coalesce(E'\\n' || t.description, '')" : "coalesce(t.body, '')";
     const deletedColumn = type === 'question' || type === 'answer' ? 'null::timestamptz' : 't.deleted_at';
     const { rows } = await db.query<{
       id: string; body: string; hidden_at: Date | null; hidden_by: string | null; deleted_at: Date | null; created_at: Date;
       author_id: string; author_name: string | null; author_deleted: boolean;
     }>(
-      `select t.id, coalesce(t.body, '') as body, t.hidden_at, t.hidden_by, ${deletedColumn} as deleted_at, t.created_at,
+      `select t.id, ${bodyColumn} as body, t.hidden_at, t.hidden_by, ${deletedColumn} as deleted_at, t.created_at,
               u.id as author_id, u.name as author_name, (u.deleted_at is not null) as author_deleted
          from ${table} t join users u on u.id = t.${authorColumn}
         where t.id = any($1::uuid[]) and ${campus} = $2`,
@@ -157,7 +159,7 @@ export async function moderationRoutes(app: FastifyInstance, { db, requireUser }
 
   // ---- POST /api/admin/reports/:id/resolve   { action: "hide" | "dismiss" }
   // Decides every open report on the same item at once, so the queue never asks twice.
-  //   hide    — hides the item (posts, comments, questions, answers, stories).
+  //   hide    — hides the item (posts, comments, questions, answers, stories, events).
   //   dismiss — the item is fine; if three reports had auto-hidden it, it becomes visible again.
   app.post('/api/admin/reports/:id/resolve', async (req, reply) => {
     const actor = await requireStaff(db, requireUser, req, reply, 'moderator');

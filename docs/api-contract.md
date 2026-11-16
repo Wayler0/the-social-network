@@ -461,5 +461,31 @@ Reports: `POST /api/reports` takes `targetType: "story"`; three open reports hid
 
 ---
 
+## 14. Events (v0.2) ✅
+
+Events with Going / Interested. Places on the map come with v0.3; until then `location` is text.
+
+| Endpoint | Answer |
+|---|---|
+| `GET /api/events?when=upcoming\|past&groupId&limit&cursor` | Upcoming (not yet ended) soonest first; past latest first |
+| `GET /api/me/events?limit&cursor` | Upcoming events I am going to or interested in |
+| `POST /api/events` | `{ title, description?, location?, startsAt, endsAt?, imageId?, officeId? \| groupId? }` → `201` Event. Not in the past, at most a year ahead. Finished profile; 10 a day |
+| `GET /api/events/:id` | Event |
+| `PATCH /api/events/:id` | Host only: `{ title?, description?, location?, startsAt?, endsAt?, cancelled? }` → Event |
+| `DELETE /api/events/:id` | Host or admin → `204` |
+| `PUT /api/events/:id/rsvp` | `{ status: "going"\|"interested" }` → `{ myRsvp, goingCount, interestedCount }`; `409 event_cancelled` / `event_over` |
+| `DELETE /api/events/:id/rsvp` | → the same with `myRsvp: null` |
+| `GET /api/events/:id/attendees?status=going\|interested&limit&cursor` | `{ items: [{ id, name, photoUrl, since }] }`, first to answer first |
+
+**Event** `{ id, title, description, location, startsAt, endsAt, cancelled, createdBy, office, group: { id, name, kind } | null, image, goingCount, interestedCount, myRsvp, canManage, createdAt }`
+
+Rules (code: `apps/api/src/events/routes.ts`, `visibleEvent` in `visibility.ts`, migration 015):
+- **Hosts:** the creator, current members of the hosting office, or the group's admins (`canManage`). Anyone with a finished profile creates campus events; `officeId` needs current office membership; `groupId` needs active membership, and admin for clubs and "only admins post" groups.
+- **Who sees:** campus events everyone on the campus; group events members only, except a **public club's** events, which anyone who may see the club sees. Never across a block with the creator; staff never see student-only groups.
+- Cancelled events stay listed (`cancelled: true`) so people who planned to go find out.
+- Reports take `targetType: "event"` (3 hide it; moderators see title and description). Deleting an account removes its RSVPs; events it created stay, like posts.
+
+---
+
 ## Not built yet
-Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events → push → chat (end-to-end encrypted, after the library choice and an external review).
+Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events ✅ → push → chat (end-to-end encrypted, after the library choice and an external review).
