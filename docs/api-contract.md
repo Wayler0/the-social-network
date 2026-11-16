@@ -141,7 +141,7 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
   "memberType": "continuing",
   "name": null, "photoUrl": null, "course": null, "yearOfStudy": null, "graduationYear": null,
   "memberNumber": null, "memberNumberStatus": "unverified",
-  "isUnder18": null, "badges": [], "isAdmin": false,
+  "isUnder18": null, "interests": [], "badges": [], "isAdmin": false,
   "profileComplete": false
 }
 ```
@@ -159,12 +159,13 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
 ### `GET /api/me` ✅ · `PATCH /api/me` ✅ — onboarding and edit profile
 ```json
 { "name": "Wanjiru M.", "memberType": "fresher", "course": "BSc Computer Science",
-  "yearOfStudy": 1, "memberNumber": "ABT5/09919/23", "isUnder18": false }
+  "yearOfStudy": 1, "memberNumber": "ABT5/09919/23", "isUnder18": false, "interests": ["Football", "Web development"] }
 ```
 All fields optional; send only what changes. `200` with the same body as `GET /api/me`.
 - `memberType`: students choose `fresher | continuing | alumni`; staff are always `staff`.
 - `memberNumber`: normalise (upper-case, remove spaces and `-`, keep `/`), check format, unique per campus → `409 member_number_taken` (the screen offers the "someone has my reg number" dispute).
 - `isUnder18` sets safer defaults (CLAUDE.md section 6).
+- `interests`: replaces the whole list; up to 10, each up to 40 characters; spaces tidied, duplicates (ignoring case) dropped. Shown on the public profile. Migration 010.
 - `photoImageId`: the `imageId` from `POST /api/images` sets the profile photo (`photoUrl` is its 320 px thumbnail); `null` removes it. A replaced photo's files are deleted. Migration 008 adds `users.photo_image_id`.
 - `yearOfStudy` is kept only for freshers and continuing students, `graduationYear` only for alumni; the other is cleared.
 - A changed `memberNumber` goes back to `memberNumberStatus: "unverified"`.
@@ -182,11 +183,14 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 `{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
 ### `GET /api/users/:id` ✅ — someone's public profile
-`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, badges, isFollowing }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. `isFollowing` is always `false` until follows (v0.2).
+`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. `isFollowing` is always `false` until follows (v0.2).
+
+### `GET /api/me/export` ✅ — download my data (Data Protection Act)
+A JSON file (`Content-Disposition: attachment`) of everything held about the member: profile (with email and member number), account dates and suspension, roles and offices (history too), groups, posts, comments, questions and answers (also deleted or hidden ones, which we still keep), likes, helpful votes, announcements they posted, people they blocked, reports and disputes they made, sessions, and uploaded images. **Not** included: reports about them (protects reporters) and who blocked them. Works while suspended; 5 a day (`429`). Code: `apps/api/src/me/export.ts` — add any new table that holds personal data there.
 
 ### `DELETE /api/me` ✅ — delete account
 `{ "confirm": "DELETE" }` → `204`, cookie cleared. Works for suspended members too.
-- **Removed:** email, name, photo, course, years, member number, under-18 answer; every image they uploaded (profile and post photos, files included); sessions (signed out everywhere), sign-in codes, likes, helpful votes, blocks, group memberships. Roles and office memberships are ended (rows kept as history).
+- **Removed:** email, name, photo, course, years, member number, under-18 answer, interests; every image they uploaded (profile and post photos, files included); sessions (signed out everywhere), sign-in codes, likes, helpful votes, blocks, group memberships. Roles and office memberships are ended (rows kept as history).
 - **Kept, shown as "Deleted member":** posts, comments, questions, answers; reports and the admin log (moderation needs them).
 - The email and member number are free again; signing up with that email makes a new account.
 

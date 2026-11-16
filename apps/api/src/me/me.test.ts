@@ -107,8 +107,19 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     expect(res.json()).toEqual({
       id: m.id, campus: { slug: expect.any(String), name: expect.any(String) }, email: m.email, memberType: 'continuing',
       name: null, photoUrl: null, course: null, yearOfStudy: null, graduationYear: null,
-      memberNumber: null, memberNumberStatus: 'unverified', isUnder18: null, badges: [], isAdmin: false, profileComplete: false,
+      memberNumber: null, memberNumberStatus: 'unverified', isUnder18: null, interests: [], badges: [], isAdmin: false, profileComplete: false,
     });
+  });
+
+  it('interests: tidied, duplicates dropped ignoring case, the whole list replaced; limits enforced', async () => {
+    const m = await member('curious');
+    const res = await m.as('PATCH', '/api/me', { interests: ['  Web   development ', 'Football', 'football', ''] });
+    expect(res.json().interests).toEqual(['Web development', 'Football']);
+    expect((await m.as('PATCH', '/api/me', { interests: ['Chess'] })).json().interests).toEqual(['Chess']);
+    expect((await m.as('PATCH', '/api/me', { interests: [] })).json().interests).toEqual([]);
+    for (const interests of [['x'.repeat(41)], Array.from({ length: 11 }, (_, i) => `Topic ${i}`), 'Chess']) {
+      expect((await m.as('PATCH', '/api/me', { interests })).json().error, String(interests)).toBe('invalid_input');
+    }
   });
 
   it('GET without a session is 401', async () => {
@@ -272,7 +283,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     const res = await me.as('GET', `/api/users/${them.id}`);
     expect(res.json()).toEqual({
       id: them.id, name: 'Wanjiru M.', photoUrl: null, memberType: 'fresher', course: 'BSc Computer Science',
-      yearOfStudy: 1, graduationYear: null, badges: ['Student Leader'], isFollowing: false,
+      yearOfStudy: 1, graduationYear: null, interests: [], badges: ['Student Leader'], isFollowing: false,
     });
     expect(res.body).not.toContain('@');
     expect(res.body).not.toContain('09919');
@@ -304,7 +315,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
 
   it('deletes personal data and files, signs out everywhere, keeps posts as "Deleted member"', async () => {
     const m = await member('leaving');
-    await m.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/4242/23' });
+    await m.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/4242/23', interests: ['Chess'] });
     const photo = await uploadedImage(m.id);
     await m.as('PATCH', '/api/me', { photoImageId: photo });
     const postImage = await uploadedImage(m.id);
@@ -326,6 +337,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     for (const col of ['email', 'name', 'photo_url', 'photo_image_id', 'course', 'year_of_study', 'graduation_year', 'member_number', 'member_number_normalised', 'is_under_18']) {
       expect(u[col], col).toBeNull();
     }
+    expect(u.interests).toEqual([]);
     expect((await client.query('select 1 from images where user_id = $1', [m.id])).rows).toHaveLength(0);
     expect((await client.query('select body, image_id from posts where id = $1', [post])).rows[0]).toEqual({ body: 'my last post', image_id: null });
     expect((await client.query('select 1 from likes where user_id = $1', [m.id])).rows).toHaveLength(0);
@@ -341,6 +353,48 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     // The email and the reg number are free again.
     const again = await member('leaving');
     expect((await again.as('PATCH', '/api/me', { memberNumber: 'ABT5/4242/23' })).statusCode).toBe(200);
+  });
+
+  // ---------------------------------------------------------------- data export (DPA)
+  it('export: a JSON download of my data, including what I deleted, never other members\' private data', async () => {
+    const m = await member('exporter');
+    await m.as('PATCH', '/api/me', { ...onboarding, interests: ['Chess'] });
+    const other = await member('other.person');
+    await other.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/777/23' });
+    const mine = (await client.query<{ id: string }>(
+      `insert into posts (campus_id, author_user_id, body) values ($1, $2, 'kept post') returning id`, [campusId, m.id])).rows[0]!.id;
+    await client.query(`insert into posts (campus_id, author_user_id, body, deleted_at) values ($1, $2, 'deleted post', now())`, [campusId, m.id]);
+    const theirs = (await client.query<{ id: string }>(
+      `insert into posts (campus_id, author_user_id, body) values ($1, $2, 'their post') returning id`, [campusId, other.id])).rows[0]!.id;
+    await client.query('insert into likes (user_id, post_id) values ($1, $2)', [m.id, theirs]);
+    await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2)', [m.id, other.id]);
+    await client.query(`insert into reports (campus_id, reporter_id, target_type, target_id, reason) values ($1, $2, 'post', $3, 'spam')`, [campusId, m.id, theirs]);
+    await client.query(`insert into reports (campus_id, reporter_id, target_type, target_id, reason) values ($1, $2, 'post', $3, 'harassment')`, [campusId, other.id, mine]);
+
+    const res = await m.as('GET', '/api/me/export');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-disposition']).toMatch(/^attachment; filename="[a-z0-9-]+-my-data-\d{4}-\d{2}-\d{2}\.json"$/);
+    const data = res.json();
+    expect(data.profile).toMatchObject({ id: m.id, email: m.email, memberNumber: 'ABT5/09919/23', interests: ['Chess'] });
+    expect(data.posts.map((p: { body: string; deletedAt: string | null }) => [p.body, p.deletedAt !== null]).sort())
+      .toEqual([['deleted post', true], ['kept post', false]]);   // same created_at in one transaction: order not fixed
+    expect(data.likes).toEqual([{ postId: theirs, createdAt: expect.any(String) }]);
+    expect(data.blocked).toEqual([{ id: other.id, name: 'Wanjiru M.', since: expect.any(String) }]);
+    expect(data.reportsMade).toEqual([expect.objectContaining({ targetId: theirs, reason: 'spam' })]);   // not the report about me
+    expect(data.groups).toHaveLength(1);                                                                  // the class group
+    expect(data.sessions).toEqual([expect.objectContaining({ device: 'test', ip: '10.7.0.1' })]);
+    expect(res.body).not.toContain(other.email);
+    expect(res.body).not.toContain('777');
+    expect(res.body).not.toContain('harassment');
+  });
+
+  it('export works while suspended, and 5 a day', async () => {
+    const m = await member('busy.exporter');
+    await client.query(`update users set suspended_at = now() where id = $1`, [m.id]);
+    for (let i = 0; i < 5; i++) expect((await m.as('GET', '/api/me/export')).statusCode).toBe(200);
+    const sixth = await m.as('GET', '/api/me/export');
+    expect([sixth.statusCode, sixth.json().error]).toEqual([429, 'rate_limited']);
+    expect((await app.inject({ method: 'GET', url: '/api/me/export' })).statusCode).toBe(401);
   });
 
   it('a suspended member can still delete their account', async () => {
