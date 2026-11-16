@@ -351,6 +351,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create
 ## 16. Open questions for the team
 
 - Final name ("Hatua" is a placeholder) and our own domain. ~~tharaka.ac.ke subdomain~~ ruled out 12 Nov: the app is independent of the university.
+- Final logo and app icon, designed by the team with the final name. Until then the placeholder is a white "h" with a sunshine dot on violet. To swap it in: replace the icon files in `apps/web/public/` (same names and sizes), or edit `MARK` in `apps/web/scripts/make-icons.mjs` and re-run it.
 - Alumni verification: do students keep their student.tharaka.ac.ke email after graduation? (See section 5.)
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
 - Tech stack (section 12): challenge each row, then mark DECIDED. Build vs adopt (HumHub).
