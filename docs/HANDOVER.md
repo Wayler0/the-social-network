@@ -30,6 +30,7 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 |---|---|---|
 | Sign-in with campus email code, sessions, rate limits | ✅ | ✅ |
 | Onboarding, profile, edit profile, settings, delete account | ✅ | ✅ (no profile photo upload screen yet) |
+| Interests on profiles; download my data (`GET /api/me/export`, Data Protection Act) | ✅ | ❌ no screens yet |
 | Feed, posts with one photo, likes, comments | ✅ | ✅ |
 | Report (8 reasons) and block on posts, comments, groups, questions, answers | ✅ | ✅ |
 | Groups: create, join/request, leave, members, requests, group posts, class groups | ✅ | ✅ (no admin tools for roles/removing members yet) |
@@ -46,6 +47,7 @@ If the web page is blank after a pull: stop the dev server and start it again (V
    already has a web server).
    The web server must forward `/api` and `/media` to the API, allow 10 MB bodies on `/api/images`
    (nginx: `client_max_body_size 10m;`), and set `TRUST_PROXY_HOPS` to the number of proxies (normally 1).
+   Serve `/sw.js` and `/index.html` with `Cache-Control: no-cache` (the installable app checks them for updates).
    Production needs `CODE_PEPPER` (`openssl rand -base64 48`) or the API refuses to start.
 2. **Sign-in email delivery (#35).** Test that codes reach real `student.tharaka.ac.ke` inboxes, not spam
    (`npm run email:test -w apps/api -- you@…`). If codes don't arrive, nobody can join.
@@ -55,7 +57,7 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 5. **HTTPS, backups restore test, monitoring (#33, #36, #39, #40).**
 6. **User testing (#41–#46)** — see ROADMAP "User involvement".
 
-Smaller gaps in the web app: profile photo upload, group admin tools (make admin, remove member), unblock list
+Smaller gaps in the web app: profile photo upload, interests on edit profile, a "Download my data" button in Settings, group admin tools (make admin, remove member), unblock list
 in Settings, posting as an office in the feed, a shared "loading/error" component (#3 is done screen by screen).
 
 ## Decisions waiting for the team

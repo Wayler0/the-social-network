@@ -9,7 +9,8 @@ import { takeRateLimits, waitText } from '../auth/rate-limit.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { notBlocked, type ViewerSql } from '../visibility.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
-import { badgesFor, isStudent, loadMe, meBody, normaliseMemberNumber, profileComplete } from './profile.js';
+import { exportMemberData } from './export.js';
+import { badgesFor, isStudent, loadMe, meBody, normaliseInterests, normaliseMemberNumber, profileComplete } from './profile.js';
 
 const year = (min: number, max: number) => z.number().int().min(min).max(max);
 
@@ -21,6 +22,8 @@ const patchSchema = z.object({
   graduationYear: year(1990, 2100).nullable(),
   memberNumber: z.string().max(60),
   isUnder18: z.boolean(),
+  /** Up to 10, each up to 40 characters; replaces the whole list. */
+  interests: z.array(z.string().max(200)).max(30),
   /** From POST /api/images; null removes the photo. */
   photoImageId: z.string().uuid().nullable(),
 }).partial().strict();
@@ -31,6 +34,7 @@ const patchSchema = z.object({
  *   PATCH  /api/me                          onboarding and edit profile; send only what changes
  *   POST   /api/me/member-number-dispute    "someone has claimed my number"
  *   GET    /api/users/:id                   someone's public profile
+ *   GET    /api/me/export                   download my data (JSON)
  *   DELETE /api/me                          delete the account
  */
 export async function meRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
@@ -80,6 +84,11 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
           set('course', course || null);
         }
         if (body.isUnder18 !== undefined) set('is_under_18', body.isUnder18);
+        if (body.interests !== undefined) {
+          const interests = normaliseInterests(body.interests);
+          if (!interests) return bad('interests: up to 10, each at most 40 characters.');
+          set('interests', interests);
+        }
 
         // Year of study is for current students, graduation year for alumni; the other is cleared.
         let yearOfStudy = body.yearOfStudy !== undefined ? body.yearOfStudy : cur.year_of_study;
@@ -177,9 +186,9 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
     const viewer: ViewerSql = { id: '$1', campusId: '$2' };
     const { rows } = await db.query<{
       id: string; name: string | null; photo_url: string | null; member_type: string; course: string | null;
-      year_of_study: number | null; graduation_year: number | null; roles: string[];
+      year_of_study: number | null; graduation_year: number | null; interests: string[]; roles: string[];
     }>(
-      `select u.id, u.name, u.photo_url, u.member_type, u.course, u.year_of_study, u.graduation_year,
+      `select u.id, u.name, u.photo_url, u.member_type, u.course, u.year_of_study, u.graduation_year, u.interests,
               coalesce(array(select distinct r.role from roles r
                               where r.user_id = u.id and r.starts_at <= clock_timestamp()
                                 and (r.ends_at is null or r.ends_at > clock_timestamp())
@@ -193,9 +202,30 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
     if (!u) return notFound();
     return {
       id: u.id, name: u.name, photoUrl: u.photo_url, memberType: u.member_type, course: u.course,
-      yearOfStudy: u.year_of_study, graduationYear: u.graduation_year, badges: badgesFor(u.roles),
+      yearOfStudy: u.year_of_study, graduationYear: u.graduation_year, interests: u.interests, badges: badgesFor(u.roles),
       isFollowing: false,   // follows arrive in v0.2
     };
+  });
+
+  /**
+   * GET /api/me/export   (Data Protection Act: right of access and portability)
+   * A JSON file of everything held about the member. Works while suspended. 5 a day.
+   */
+  app.get('/api/me/export', { config: { allowSuspended: true } }, async (req, reply) => {
+    const userId = req.auth!.userId;
+    const wait = await inTransaction(db, (tx) =>
+      takeRateLimits(tx, [{ bucket: 'export_user', key: userId, max: 5, windowSeconds: 86_400 }]));
+    if (wait) {
+      reply.header('Retry-After', String(wait));
+      return fail(reply, 429, 'rate_limited', `You have downloaded your data enough times today. Try again in ${waitText(wait)}.`,
+        { retryAfterSeconds: wait });
+    }
+    const data = await exportMemberData(db, userId, config.APP_NAME);
+    if (!data) return fail(reply, 401, 'not_signed_in', 'Please sign in.');
+    const slug = config.APP_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'app';
+    reply.header('Content-Disposition', `attachment; filename="${slug}-my-data-${data.exportedAt.slice(0, 10)}.json"`);
+    reply.header('Cache-Control', 'no-store');
+    return data;
   });
 
   /**
@@ -220,7 +250,7 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
       await tx.query(
         `update users set email = null, name = null, photo_url = null, photo_image_id = null, course = null,
                 year_of_study = null, graduation_year = null, member_number = null, member_number_normalised = null,
-                member_number_status = 'unverified', is_under_18 = null, deleted_at = clock_timestamp()
+                member_number_status = 'unverified', is_under_18 = null, interests = '{}', deleted_at = clock_timestamp()
           where id = $1`,
         [userId],
       );

@@ -4,6 +4,8 @@ import { Icon } from '../components/Icon';
 import { ApiError, deleteMe } from '../lib/api';
 import { isModerator } from '../lib/admin';
 import { useAuth } from '../lib/auth';
+import { promptInstall, useInstallState } from '../lib/install';
+import { APP_NAME } from '../config';
 
 /** Settings and account: log out and delete account (CLAUDE.md sections 4.1 and 10). */
 export function Settings() {
@@ -13,6 +15,8 @@ export function Settings() {
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const install = useInstallState();
+  const [showIosHelp, setShowIosHelp] = useState(false);
 
   async function onDelete() {
     setBusy(true);
@@ -39,6 +43,21 @@ export function Settings() {
         <p className="muted">Signed in as <strong style={{ color: 'var(--ink)' }}>{me?.email}</strong></p>
         <Link to="/profile/edit" className="settings-row">Edit profile</Link>
         {isModerator(me) && <Link to="/admin" className="settings-row">{me?.isAdmin ? 'Admin' : 'Moderation'}</Link>}
+        {install === 'available' && (
+          <button className="settings-row" onClick={() => void promptInstall()}>Install {APP_NAME} on this device</button>
+        )}
+        {install === 'ios' && (
+          <>
+            <button className="settings-row" onClick={() => setShowIosHelp((v) => !v)} aria-expanded={showIosHelp}>
+              Add {APP_NAME} to your Home Screen
+            </button>
+            {showIosHelp && (
+              <p className="muted install-help">
+                In Safari, tap <strong>Share</strong> (the square with an arrow), then <strong>Add to Home Screen</strong>.
+              </p>
+            )}
+          </>
+        )}
         <a href="/privacy" className="settings-row">Privacy policy</a>
         <a href="/terms" className="settings-row">Terms and community guidelines</a>
         <button className="settings-row" onClick={() => void signOut().then(() => navigate('/welcome', { replace: true }))}>Log out</button>
