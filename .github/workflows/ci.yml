@@ -115,3 +115,21 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build (not pushed)
         run: docker build -f deploy/api.Dockerfile -t hatua-api:ci .
+
+  web-image:
+    name: Web image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build (not pushed)
+        run: docker build -f deploy/web.Dockerfile -t hatua-web:ci .
+      - name: Caddyfile is valid (own HTTPS, and behind another web server)
+        run: |
+          docker run --rm -e SITE_ADDRESS=pilot.example.org hatua-web:ci caddy validate --config /etc/caddy/Caddyfile
+          docker run --rm -e SITE_ADDRESS=:80 -e TRUSTED_PROXIES=private_ranges hatua-web:ci caddy validate --config /etc/caddy/Caddyfile
+      - name: The installable app is in the image
+        run: |
+          for f in index.html sw.js manifest.webmanifest icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png; do
+            docker run --rm hatua-web:ci test -f /srv/$f || { echo "::error::/srv/$f missing from the web image"; exit 1; }
+          done
