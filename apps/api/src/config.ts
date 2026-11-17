@@ -24,7 +24,7 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   /** Placeholder name: shown in emails and API info. Change here, not in code. */
   APP_NAME: z.string().min(1).default('Hatua'),
-  /** Public address of the web app, e.g. https://hatua.nextup.co.ke */
+  /** Public address of the web app, e.g. https://pilot.example.org */
   APP_URL: z.string().url().default('http://localhost:5180'),
   // ---- Sign-in (docs/api-contract.md section 3)
   /**

@@ -1,0 +1,55 @@
+# The front door. Settings come from .env (deploy/env.production.example):
+#   SITE_ADDRESS     the public domain, e.g. pilot.example.org: Caddy gets HTTPS certificates automatically.
+#                    ":80" when another web server in front of us already does HTTPS (deploy/behind-proxy.yml).
+#   TRUSTED_PROXIES  only behind another web server: the addresses it connects from. Its X-Forwarded-For is
+#                    then kept, so sign-in rate limits see the member's real address (TRUST_PROXY_HOPS=2).
+{
+	servers {
+		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
+	}
+}
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	header {
+		# No includeSubDomains: the pilot domain may be a subdomain of a domain other sites share.
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		# Everything comes from our own server: no third-party scripts, fonts or trackers.
+		# 'unsafe-inline' for styles only: React sets style="" attributes.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	# Photo uploads are up to 8 MB (docs/api-contract.md section 6); the API checks the exact limit.
+	request_body /api/images* {
+		max_size 10MB
+	}
+	@notImages not path /api/images*
+	request_body @notImages {
+		max_size 1MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle /media/* {
+		reverse_proxy api:3000
+	}
+
+	# The app itself. Files in /assets/ have a hash in their name, so they can be cached forever.
+	# Everything else (index.html, sw.js, the manifest, icons) must be re-checked, or installed apps
+	# stay on an old version.
+	handle {
+		root * /srv
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@other not path /assets/*
+		header @other Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
