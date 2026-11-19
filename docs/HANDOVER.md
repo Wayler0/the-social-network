@@ -42,7 +42,9 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 
 ## Left before launch (in order of risk)
 
-1. **Server (#10, #38).** Nothing runs on a server yet. ICT access by **Sun 29 Nov**; if late, a temporary VPS.
+1. **Server (#10, #38).** Nothing runs on a server yet. Target: the campus **KENET** server (ICT access by **Sun 29 Nov**).
+   Production setup and runbook: `deploy/README.md` (Caddy does HTTPS, or `deploy/behind-proxy.yml` if the server
+   already has a web server).
    The web server must forward `/api` and `/media` to the API, allow 10 MB bodies on `/api/images`
    (nginx: `client_max_body_size 10m;`), and set `TRUST_PROXY_HOPS` to the number of proxies (normally 1).
    Serve `/sw.js` and `/index.html` with `Cache-Control: no-cache` (the installable app checks them for updates).

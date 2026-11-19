@@ -1,0 +1,15 @@
+# For a server that already runs nginx (or another web server) on ports 80 and 443 for other sites.
+# That web server keeps HTTPS for our domain and forwards everything to Caddy on 127.0.0.1:8080
+# (nginx example: deploy/README.md). Use it with:
+#
+#   docker compose -f docker-compose.yml -f deploy/behind-proxy.yml --profile server up -d --build
+services:
+  web:
+    environment:
+      SITE_ADDRESS: ":80"                 # plain HTTP inside the server; the outer web server does HTTPS
+      TRUSTED_PROXIES: "private_ranges"   # the outer web server reaches Caddy through Docker's private network
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+  api:
+    environment:
+      TRUST_PROXY_HOPS: "2"               # outer web server + Caddy
