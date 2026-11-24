@@ -3,7 +3,7 @@
  *
  *   npm run email:test -w apps/api -- you@your-campus-domain
  *
- * Use it after setting EMAIL_MODE=smtp, and for the deliverability test in docs/email.md
+ * Use it after setting EMAIL_MODE=smtp or resend, and for the deliverability test in docs/email.md
  * (does the email arrive, how fast, inbox or spam?). The code it sends is not a real sign-in code.
  */
 import { loadConfig } from '../config.js';
@@ -29,10 +29,10 @@ const started = Date.now();
 try {
   const health = await mailer.check();
   console.log(`Mail server: ${health.ok ? 'OK' : 'PROBLEM'} — ${health.detail}`);
-  if (!health.ok && config.EMAIL_MODE === 'smtp') process.exitCode = 1;
+  if (!health.ok && config.EMAIL_MODE !== 'log') process.exitCode = 1;
   else {
     await mailer.sendSignInCode(to.trim().toLowerCase(), '000000');
-    console.log(`Done in ${Date.now() - started} ms. ${config.EMAIL_MODE === 'smtp' ? `Now check the inbox (and spam folder) of ${maskEmail(to)}.` : 'EMAIL_MODE=log, so nothing was really sent.'}`);
+    console.log(`Done in ${Date.now() - started} ms. ${config.EMAIL_MODE !== 'log' ? `Now check the inbox (and spam folder) of ${maskEmail(to)}.` : 'EMAIL_MODE=log, so nothing was really sent.'}`);
   }
 } catch (err) {
   console.error(`Failed: ${(err as Error).message}`);

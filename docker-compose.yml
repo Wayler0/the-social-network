@@ -50,6 +50,7 @@ services:
       SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}   # EMAIL_MODE=resend (HTTPS, for networks that block mail ports)
     volumes:
       - media:/data/media   # uploaded images — include this volume in backups
     command: sh -c "node dist/migrate.js && node dist/server.js"
