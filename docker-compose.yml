@@ -35,6 +35,7 @@ services:
       APP_URL: ${APP_URL:-https://hatua.nextup.co.ke}
       CODE_PEPPER: ${CODE_PEPPER:-}   # required: the API refuses to start in production without it
       SESSION_COOKIE: ${SESSION_COOKIE:-}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}   # nginx in front = 1
       NODE_OPTIONS: --max-old-space-size=128
       MEDIA_DIR: /data/media
       # Email (sign-in codes): set these in .env on the server — docs/email.md
@@ -46,6 +47,11 @@ services:
       SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}   # EMAIL_MODE=resend (HTTPS, for networks that block mail ports)
+      # Web Push (v0.2): all three or none — .env.example
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     volumes:
       - media:/data/media   # uploaded images — include this volume in backups
     command: sh -c "node dist/migrate.js && node dist/server.js"

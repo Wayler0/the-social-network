@@ -1,3 +1,4 @@
+import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SMTPServer } from 'smtp-server';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -193,6 +194,103 @@ describe('smtp mode', () => {
   });
 });
 
+/** A stand-in for Resend's HTTPS API on a free local port. `answers` are replied in order (the last repeats). */
+type ResendCall = { method: string; path: string; headers: Record<string, string | string[] | undefined>; body: Record<string, unknown> };
+let resendServer: Server | undefined;
+afterEach(async () => { await new Promise<void>((done) => (resendServer ? resendServer.close(() => done()) : done())); resendServer = undefined; });
+
+async function fakeResend(answers: Array<{ status: number; body: object }>) {
+  const calls: ResendCall[] = [];
+  resendServer = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk: Buffer) => { raw += chunk.toString('utf8'); });
+    req.on('end', () => {
+      calls.push({ method: req.method!, path: req.url!, headers: req.headers, body: raw ? JSON.parse(raw) : {} });
+      const answer = answers[Math.min(calls.length - 1, answers.length - 1)]!;
+      res.writeHead(answer.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(answer.body));
+    });
+  });
+  await new Promise<void>((ready) => resendServer!.listen(0, '127.0.0.1', ready));
+  const url = `http://127.0.0.1:${(resendServer.address() as AddressInfo).port}`;
+  const env = { NODE_ENV: 'test', DATABASE_URL: DB, EMAIL_MODE: 'resend', RESEND_API_KEY: 're_test_0123456789', EMAIL_FROM: 'Hatua <no-reply@example.org>' };
+  return { calls, url, env };
+}
+
+describe('resend mode (HTTPS API)', () => {
+  it('sends a correct message with the key, and logs neither the code nor the address', async () => {
+    const { calls, url, env } = await fakeResend([{ status: 200, body: { id: 'msg_1' } }]);
+    const { log, text } = recordingLog();
+    const mailer = createMailer(loadConfig(env), log, { resendApiUrl: url });
+    await mailer.sendSignInCode('amina@student.example.ac.ke', '482913');
+
+    expect(calls).toHaveLength(1);
+    const call = calls[0]!;
+    expect(call).toMatchObject({ method: 'POST', path: '/emails' });
+    expect(call.headers.authorization).toBe('Bearer re_test_0123456789');
+    expect(call.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(call.body).toMatchObject({
+      from: 'Hatua <no-reply@example.org>',
+      to: ['amina@student.example.ac.ke'],
+      subject: '482913 is your Hatua sign-in code',
+      headers: { 'Auto-Submitted': 'auto-generated' },
+    });
+    expect(call.body.text).toContain('    482913');
+    expect(call.body.html).toContain('482 913');
+    expect(text()).not.toContain('482913');
+    expect(text()).not.toContain('amina@');
+    expect(text()).toContain('msg_1');
+  });
+
+  it('retries once after 429 or 5xx with the same idempotency key', async () => {
+    const { calls, url, env } = await fakeResend([{ status: 503, body: { name: 'internal_server_error' } }, { status: 200, body: { id: 'msg_2' } }]);
+    const { log, lines } = recordingLog();
+    const mailer = createMailer(loadConfig(env), log, { resendApiUrl: url, retryDelayMs: 1 });
+    await mailer.sendSignInCode('amina@student.example.ac.ke', '222222');
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.headers['idempotency-key']).toBe(calls[0]!.headers['idempotency-key']);
+    expect(lines.map((l) => l.level)).toEqual(['warn', 'info']);
+  });
+
+  it('does not retry a refusal (bad key, unverified domain), and says it is not temporary', async () => {
+    const { calls, url, env } = await fakeResend([{ status: 403, body: { name: 'validation_error', message: 'The example.org domain is not verified' } }]);
+    const { log, text } = recordingLog();
+    const mailer = createMailer(loadConfig(env), log, { resendApiUrl: url, retryDelayMs: 1 });
+    await expect(mailer.sendSignInCode('amina@student.example.ac.ke', '333333')).rejects.toMatchObject({ temporary: false });
+    expect(calls).toHaveLength(1);
+    expect(text()).toContain('domain is not verified');
+  });
+
+  it('reports an unreachable API as temporary, after two attempts', async () => {
+    const { url, env } = await fakeResend([{ status: 200, body: {} }]);
+    await new Promise<void>((done) => resendServer!.close(() => done())); resendServer = undefined;
+    const { log, lines } = recordingLog();
+    const mailer = createMailer(loadConfig(env), log, { resendApiUrl: url, retryDelayMs: 1 });
+    await expect(mailer.sendSignInCode('amina@student.example.ac.ke', '444444')).rejects.toMatchObject({ temporary: true });
+    expect(await mailer.check()).toMatchObject({ ok: false });
+    expect(lines.map((l) => l.level)).toEqual(['warn', 'error']);
+  });
+
+  it('check(): a sending-only key counts as working; an invalid key does not', async () => {
+    const restricted = await fakeResend([{ status: 401, body: { name: 'restricted_api_key', message: 'This API key is restricted to only send emails' } }]);
+    expect(await createMailer(loadConfig(restricted.env), recordingLog().log, { resendApiUrl: restricted.url }).check()).toMatchObject({ ok: true });
+    expect(restricted.calls[0]).toMatchObject({ method: 'GET', path: '/domains' });
+    await new Promise<void>((done) => resendServer!.close(() => done())); resendServer = undefined;
+
+    const invalid = await fakeResend([{ status: 400, body: { name: 'validation_error', message: 'API key is invalid' } }]);
+    const result = await createMailer(loadConfig(invalid.env), recordingLog().log, { resendApiUrl: invalid.url }).check();
+    expect(result).toMatchObject({ ok: false });
+    expect(result.detail).toContain('API key is invalid');
+  });
+
+  it('rejects bad input before touching the network', async () => {
+    const { calls, url, env } = await fakeResend([{ status: 200, body: {} }]);
+    const mailer = createMailer(loadConfig(env), recordingLog().log, { resendApiUrl: url });
+    await expect(mailer.sendSignInCode('a@x.org\r\nBcc: spy@evil.org', '123456')).rejects.toMatchObject({ temporary: false });
+    await expect(mailer.sendSignInCode('a@x.org', '12345')).rejects.toMatchObject({ temporary: false });
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('email settings', () => {
   const base = { NODE_ENV: 'production', DATABASE_URL: DB, CODE_PEPPER: PEPPER };
   it('defaults to log mode, and treats empty values (as Docker Compose passes them) as not set', () => {
@@ -209,5 +307,10 @@ describe('email settings', () => {
   it('accepts a complete smtp setup', () => {
     const c = loadConfig({ ...base, EMAIL_MODE: 'smtp', SMTP_HOST: 'mail.example.org', SMTP_PORT: '465', SMTP_SECURE: 'true', EMAIL_FROM: 'Hatua <no-reply@example.org>', SMTP_USER: 'u', SMTP_PASS: 'p' });
     expect(c).toMatchObject({ EMAIL_MODE: 'smtp', SMTP_PORT: 465, SMTP_SECURE: true });
+  });
+  it('needs a Resend key and a sender for resend mode', () => {
+    expect(() => loadConfig({ ...base, EMAIL_MODE: 'resend' })).toThrow(/RESEND_API_KEY.*EMAIL_FROM/);
+    expect(() => loadConfig({ ...base, EMAIL_MODE: 'resend', EMAIL_FROM: 'a@x.org', RESEND_API_KEY: 'not-a-key' })).toThrow(/RESEND_API_KEY/);
+    expect(loadConfig({ ...base, EMAIL_MODE: 'resend', EMAIL_FROM: 'a@x.org', RESEND_API_KEY: 're_abc123def456' })).toMatchObject({ EMAIL_MODE: 'resend' });
   });
 });

@@ -51,9 +51,13 @@ const schema = z.object({
   IMAGE_UPLOADS_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(30),
 
   // ---- Email (sign-in codes). See docs/email.md.
-  /** 'log' prints emails to the console (development only). 'smtp' sends them through SMTP_HOST. */
-  EMAIL_MODE: blankIsUnset(z.enum(['log', 'smtp']).default('log')),
-  /** Sender shown to members, e.g. "Hatua <no-reply@example.org>". Required for smtp. */
+  /**
+   * 'log' prints emails to the console (development only). 'smtp' sends them through SMTP_HOST.
+   * 'resend' sends them through Resend's HTTPS API (port 443), for servers whose network blocks
+   * outgoing mail ports, as KENET's does.
+   */
+  EMAIL_MODE: blankIsUnset(z.enum(['log', 'smtp', 'resend']).default('log')),
+  /** Sender shown to members, e.g. "Hatua <no-reply@example.org>". Required for smtp and resend. */
   EMAIL_FROM: blankIsUnset(z.string().trim().max(200).regex(/^[^\r\n]*$/, 'must be one line').optional()),
   SMTP_HOST: blankIsUnset(z.string().trim().min(1).optional()),
   SMTP_PORT: blankIsUnset(z.coerce.number().int().min(1).max(65535).default(587)),
@@ -64,6 +68,15 @@ const schema = z.object({
   /** Leave both empty for a relay that trusts our server's address. */
   SMTP_USER: blankIsUnset(z.string().min(1).optional()),
   SMTP_PASS: blankIsUnset(z.string().min(1).optional()),
+  /** Resend API key for EMAIL_MODE=resend: a Hatua-only key with "Sending access" (docs/email.md). */
+  RESEND_API_KEY: blankIsUnset(z.string().regex(/^re_[A-Za-z0-9_-]{8,200}$/, 'must be a Resend API key (starts with re_)').optional()),
+
+  // ---- Web Push (v0.2). Generate a pair once: `npm run push:keys -w apps/api`. Leave empty to turn
+  // push off (the in-app notifications still work). The subject is how push services reach the team:
+  // mailto:team@your-domain or an https:// page — never a personal address.
+  VAPID_PUBLIC_KEY: blankIsUnset(z.string().regex(/^[A-Za-z0-9_-]{80,100}$/, 'must be a base64url VAPID public key').optional()),
+  VAPID_PRIVATE_KEY: blankIsUnset(z.string().regex(/^[A-Za-z0-9_-]{40,50}$/, 'must be a base64url VAPID private key').optional()),
+  VAPID_SUBJECT: blankIsUnset(z.string().regex(/^(mailto:\S+@\S+|https:\/\/\S+)$/, 'must be mailto:address or an https:// URL').optional()),
 }).superRefine((c, ctx) => {
   const problem = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
   if (c.NODE_ENV === 'production' && c.CODE_PEPPER === DEV_CODE_PEPPER) {
@@ -73,8 +86,14 @@ const schema = z.object({
     if (!c.SMTP_HOST) problem('SMTP_HOST', 'is required when EMAIL_MODE=smtp');
     if (!c.EMAIL_FROM) problem('EMAIL_FROM', 'is required when EMAIL_MODE=smtp');
   }
+  if (c.EMAIL_MODE === 'resend') {
+    if (!c.RESEND_API_KEY) problem('RESEND_API_KEY', 'is required when EMAIL_MODE=resend');
+    if (!c.EMAIL_FROM) problem('EMAIL_FROM', 'is required when EMAIL_MODE=resend');
+  }
   if (c.EMAIL_FROM && !senderAddress(c.EMAIL_FROM)) problem('EMAIL_FROM', 'must look like "Name <address@domain>" or address@domain');
   if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASS)) problem('SMTP_USER', 'set SMTP_USER and SMTP_PASS together, or neither');
+  const vapid = [c.VAPID_PUBLIC_KEY, c.VAPID_PRIVATE_KEY, c.VAPID_SUBJECT].filter(Boolean).length;
+  if (vapid !== 0 && vapid !== 3) problem('VAPID_PUBLIC_KEY', 'set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT together, or none');
 });
 
 export type Config = z.infer<typeof schema>;
