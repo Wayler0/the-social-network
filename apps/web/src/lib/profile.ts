@@ -73,7 +73,8 @@ export function validateProfile(p: ProfileInput, now = new Date(), reg: RegForma
 
   const n = normaliseMemberNumber(p.memberNumber);
   const label = p.memberType === 'staff' ? 'staff number' : 'registration number';
-  if (!n) e.memberNumber = `Enter your ${label}.`;
+  // Optional for students and alumni (team decision 25 Nov 2026); staff must give a staff number.
+  if (!n) { if (p.memberType === 'staff') e.memberNumber = `Enter your ${label}.`; }
   else if (!/^[A-Z0-9/]+$/.test(n)) e.memberNumber = `Use only letters, numbers and "/" in your ${label}.`;
   else if (n.length < 3 || n.length > 40) e.memberNumber = `That doesn't look like a ${label}.`;
   else if (p.memberType !== 'staff' && !matchesRegFormat(n, reg?.pattern)) {
@@ -103,7 +104,8 @@ export function toPatch(p: ProfileInput) {
 
 /** Same rule as profileComplete in the contract. */
 export function isComplete(me: Pick<Me, 'name' | 'memberType' | 'memberNumber' | 'yearOfStudy' | 'graduationYear' | 'isUnder18'>): boolean {
-  if (!me.name || !me.memberType || !me.memberNumber || me.isUnder18 == null) return false;
+  if (!me.name || !me.memberType || me.isUnder18 == null) return false;
+  if (me.memberType === 'staff' && !me.memberNumber) return false;
   if (me.memberType === 'fresher' || me.memberType === 'continuing') return me.yearOfStudy != null;
   if (me.memberType === 'alumni') return me.graduationYear != null;
   return true;

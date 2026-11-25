@@ -19,7 +19,7 @@ export function Onboarding() {
       <div className="auth-hero" style={{ paddingTop: 8 }}>
         {me.memberNumberNeedsFix ? <>
           <h1 className="screen-title">Update your registration number</h1>
-          <p>The registration number on your account isn’t in the right format. Enter it exactly as it appears on your student ID, then tap Save.</p>
+          <p>The registration number on your account isn’t in the right format. Enter it exactly as it appears on your student ID, or clear the box (it’s optional), then tap Save.</p>
         </> : <>
           <h1 className="screen-title">Set up your profile</h1>
           <p>A few details so classmates can find you on {APP_NAME} and we can add you to your class group.</p>

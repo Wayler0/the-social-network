@@ -117,7 +117,7 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
   // ---- members
   const U = (key: string) => seedId(`user:${key}`);
   const userRows = members.map((m, i) => {
-    const number = m.deleted ? null : m.name === null ? null : m.staff ? `SEEDSTAFF/${String(i + 1).padStart(4, '0')}` : `SEED1/${String(i + 1).padStart(5, '0')}/26`;
+    const number = m.deleted ? null : m.name === null ? null : m.staff ? `SEEDSTAFF/${String(i + 1).padStart(4, '0')}` : `SEED1/${String(i + 1).padStart(5, '0')}/26`  /* matches the campus reg number format (migration 017) */;
     return {
       id: U(m.key), campus_id: campus.id,
       email: m.deleted ? null : `seed.${m.key}@${m.staff ? staffDomain : studentDomain}`,
@@ -130,9 +130,7 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
     };
   });
   const counts: Record<string, number> = {};
-  // Suspensions end relative to today, so refresh them on every run (or Ivy's quietly expires).
-  // Member numbers are refreshed too: student numbers must match the campus format (migration 017).
-  counts.users = await insert(db, 'users', userRows, ['suspended_at', 'suspended_until', 'member_number', 'member_number_normalised']);
+  counts.users = await insert(db, 'users', userRows);
 
   counts.roles = await insert(db, 'roles', [
     { id: seedId('role:felix'),   user_id: U('felix'),   role: 'staff',          title: 'Lecturer, Computer Science', granted_by: U('hassan') },
