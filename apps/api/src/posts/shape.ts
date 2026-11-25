@@ -30,7 +30,8 @@ export const POST_SELECT = `
          (select count(*) from comments c where c.post_id = p.id and c.hidden_at is null and c.deleted_at is null)::int as comment_count,
          (select l.reaction from likes l where l.post_id = p.id and l.user_id = $1) as my_reaction,
          (select coalesce(jsonb_object_agg(r.reaction, r.n), '{}') from (select l.reaction, count(*)::int as n from likes l where l.post_id = p.id group by l.reaction) r) as reaction_counts,
-         exists (select 1 from saved_posts s where s.post_id = p.id and s.user_id = $1) as saved_by_me
+         exists (select 1 from saved_posts s where s.post_id = p.id and s.user_id = $1) as saved_by_me,
+         exists (select 1 from follows fa where fa.follower_id = $1 and fa.target_type = 'user' and fa.target_id = p.author_user_id) as following_author
     from posts p
     join users au on au.id = p.author_user_id
     left join office_accounts o on o.id = p.author_office_id
@@ -45,7 +46,7 @@ export type PostRow = AuthorRow & {
   group_id: string | null; group_name: string | null; group_kind: string | null;
   image_path: string | null; image_width: number | null; image_height: number | null;
   like_count: number; comment_count: number; my_reaction: Reaction | null; reaction_counts: Partial<Record<Reaction, number>>;
-  saved_by_me: boolean;
+  saved_by_me: boolean; following_author: boolean;
 };
 
 export function author(r: AuthorRow) {
@@ -69,6 +70,8 @@ export function postBody(r: PostRow) {
     myReaction: r.my_reaction,
     reactions: r.reaction_counts,
     savedByMe: r.saved_by_me,
+    /** Whether the viewer follows the author (for the Follow button next to the name). */
+    followingAuthor: r.following_author,
     createdAt: r.created_at.toISOString(),
   };
 }

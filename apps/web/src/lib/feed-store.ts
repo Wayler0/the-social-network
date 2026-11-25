@@ -59,6 +59,11 @@ export function addPostToTop(post: Post) {
   set({ ...state, posts: [post, ...state.posts.filter((p) => p.id !== post.id)] });
 }
 
+/** You followed (or unfollowed) someone: every post of theirs in the feed loses (or gets) its Follow button. */
+export function setFollowingAuthor(authorId: string, following: boolean) {
+  set({ ...state, posts: state.posts.map((p) => (p.author.id === authorId ? { ...p, followingAuthor: following } : p)) });
+}
+
 export function removePost(id: string) {
   set({ ...state, posts: state.posts.filter((p) => p.id !== id) });
 }
