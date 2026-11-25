@@ -88,15 +88,10 @@ export function Settings() {
         </button>
         {exporting === 'done' && <p className="muted install-help" role="status">Downloaded: a file with everything {APP_NAME} holds about you.</p>}
         {exporting !== 'idle' && exporting !== 'busy' && exporting !== 'done' && <p className="error install-help" role="alert">{exporting}</p>}
-<<<<<<< HEAD
-        <Link to="/privacy" className="settings-row">Privacy policy</Link>
-        <Link to="/terms" className="settings-row">Terms and community guidelines</Link>
-=======
         <button className="settings-row" onClick={() => setFeedbackOpen(true)}>Send feedback</button>
         {feedbackOpen && <FeedbackSheet onDone={() => setFeedbackOpen(false)} onLater={() => setFeedbackOpen(false)} />}
-        <a href="/privacy" className="settings-row">Privacy policy</a>
-        <a href="/terms" className="settings-row">Terms and community guidelines</a>
->>>>>>> origin/feat/feedback-prompt
+        <Link to="/privacy" className="settings-row">Privacy policy</Link>
+        <Link to="/terms" className="settings-row">Terms and community guidelines</Link>
         <button className="settings-row" onClick={() => void signOut().then(() => navigate('/welcome', { replace: true }))}>Log out</button>
 
         <div className="danger-zone">
