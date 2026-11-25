@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { APP_SLUG, CAMPUSES } from '../config';
+import { APP_SLUG } from '../config';
+import { useCampuses } from '../lib/campuses';
 import { allowedDomains, checkCampusEmail, emailErrorText } from '../lib/email';
 import { requestCode, ApiError } from '../lib/api';
 import { getLastEmail } from '../lib/last-email';
@@ -8,23 +9,28 @@ import { getLastEmail } from '../lib/last-email';
 /** Issue #1 — sign-up / sign-in: campus email only. Design: canvas screen 1. */
 export function SignUp() {
   const navigate = useNavigate();
+  const campuses = useCampuses();
   const [email, setEmail] = useState(getLastEmail);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const check = checkCampusEmail(email);
-    if (!check.ok) {
-      setError(emailErrorText(check.reason));
-      return;
+    // Instant feedback once the campus list has loaded; the server checks either way.
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) { setError('Enter your campus email.'); return; }
+    let toSend = trimmed;
+    if (campuses) {
+      const check = checkCampusEmail(email, campuses);
+      if (!check.ok) { setError(emailErrorText(check.reason, campuses)); return; }
+      toSend = check.email;
     }
     setError(null);
     setSending(true);
     try {
-      const { resendAfterSeconds } = await requestCode(check.email);
+      const { resendAfterSeconds } = await requestCode(toSend);
       // Email goes in router state, never in the URL.
-      navigate('/verify', { state: { email: check.email, resendAfterSeconds } });
+      navigate('/verify', { state: { email: toSend, resendAfterSeconds } });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t send the code. Check your connection and try again.');
     } finally {
@@ -37,7 +43,7 @@ export function SignUp() {
       <div className="auth-hero">
         <span className="wordmark">{APP_SLUG}<span>.</span></span>
         <h1 className="screen-title">Your campus, in one place.</h1>
-        <p>For the {CAMPUSES.map((c) => c.name).join(', ')} community: students, staff and alumni. Sign in or join with your campus email.</p>
+        <p>For the {campuses?.length ? campuses.map((c) => c.name).join(', ') : 'campus'} community: students, staff and alumni. Sign in or join with your campus email.</p>
       </div>
 
       <form className="auth-form" onSubmit={onSubmit} noValidate>
@@ -45,7 +51,7 @@ export function SignUp() {
           <label htmlFor="email">Campus email</label>
           <input
             id="email" className="input" type="email" inputMode="email" autoComplete="email"
-            autoCapitalize="none" spellCheck={false} placeholder={`you@${allowedDomains()[0]}`}
+            autoCapitalize="none" spellCheck={false} placeholder={campuses ? `you@${allowedDomains(campuses)[0]}` : 'you@your-campus-email'}
             value={email} onChange={(e) => { setEmail(e.target.value); if (error) setError(null); }}
             aria-invalid={error ? 'true' : 'false'} aria-describedby="email-help"
           />

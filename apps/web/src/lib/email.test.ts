@@ -2,32 +2,37 @@ import { describe, expect, it } from 'vitest';
 import type { Campus } from '../config';
 import { checkCampusEmail, emailErrorText } from './email';
 
-describe('checkCampusEmail (default campus list)', () => {
+/** What GET /api/campuses returns for the first campus (test data, not app code). */
+const T: Campus[] = [
+  { slug: 'tharaka', name: 'Tharaka University', emailDomains: { 'student.tharaka.ac.ke': 'student', 'tharaka.ac.ke': 'staff' } },
+];
+
+describe('checkCampusEmail (campus list from the server)', () => {
   it('accepts student addresses', () => {
-    expect(checkCampusEmail('abc.123@student.tharaka.ac.ke')).toEqual({
+    expect(checkCampusEmail('abc.123@student.tharaka.ac.ke', T)).toEqual({
       ok: true, email: 'abc.123@student.tharaka.ac.ke', memberType: 'student', campus: 'tharaka',
     });
   });
   it('accepts staff addresses', () => {
-    expect(checkCampusEmail('jdoe@tharaka.ac.ke')).toMatchObject({ ok: true, memberType: 'staff' });
+    expect(checkCampusEmail('jdoe@tharaka.ac.ke', T)).toMatchObject({ ok: true, memberType: 'staff' });
   });
   it('trims and lower-cases', () => {
-    expect(checkCampusEmail('  ABC@Student.Tharaka.AC.KE ')).toMatchObject({ ok: true, email: 'abc@student.tharaka.ac.ke' });
+    expect(checkCampusEmail('  ABC@Student.Tharaka.AC.KE ', T)).toMatchObject({ ok: true, email: 'abc@student.tharaka.ac.ke' });
   });
   it('rejects other domains, including look-alikes', () => {
     for (const e of ['me@gmail.com', 'me@tharaka.ac.ke.evil.com', 'me@faketharaka.ac.ke', 'me@xstudent.tharaka.ac.ke']) {
-      expect(checkCampusEmail(e)).toEqual({ ok: false, reason: 'domain' });
+      expect(checkCampusEmail(e, T)).toEqual({ ok: false, reason: 'domain' });
     }
   });
   it('rejects malformed input', () => {
-    expect(checkCampusEmail('')).toEqual({ ok: false, reason: 'empty' });
-    expect(checkCampusEmail('@tharaka.ac.ke')).toEqual({ ok: false, reason: 'format' });
-    expect(checkCampusEmail('a@b@tharaka.ac.ke')).toEqual({ ok: false, reason: 'format' });
-    expect(checkCampusEmail('a b@tharaka.ac.ke')).toEqual({ ok: false, reason: 'format' });
+    expect(checkCampusEmail('', T)).toEqual({ ok: false, reason: 'empty' });
+    expect(checkCampusEmail('@tharaka.ac.ke', T)).toEqual({ ok: false, reason: 'format' });
+    expect(checkCampusEmail('a@b@tharaka.ac.ke', T)).toEqual({ ok: false, reason: 'format' });
+    expect(checkCampusEmail('a b@tharaka.ac.ke', T)).toEqual({ ok: false, reason: 'format' });
   });
   it('is not fooled by object property names', () => {
-    expect(checkCampusEmail('me@constructor')).toEqual({ ok: false, reason: 'domain' });
-    expect(checkCampusEmail('me@__proto__')).toEqual({ ok: false, reason: 'domain' });
+    expect(checkCampusEmail('me@constructor', T)).toEqual({ ok: false, reason: 'domain' });
+    expect(checkCampusEmail('me@__proto__', T)).toEqual({ ok: false, reason: 'domain' });
   });
 });
 

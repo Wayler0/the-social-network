@@ -3,7 +3,8 @@
  * Until the API exists, VITE_API_MOCK=true (in .env.development) fakes it in the browser:
  * any 6-digit code works except 000000, and the profile is kept in localStorage.
  */
-import { APP_SLUG, CAMPUSES } from '../config';
+import { APP_SLUG } from '../config';
+import { mockCampuses } from './campuses';
 import { checkCampusEmail } from './email';
 import { isComplete, normaliseMemberNumber, type Me, type toPatch } from './profile';
 
@@ -54,8 +55,9 @@ function mockWrite(me: Me | null) {
   try { if (me) localStorage.setItem(MOCK_KEY, JSON.stringify(me)); else localStorage.removeItem(MOCK_KEY); } catch { /* storage blocked */ }
 }
 function mockNewMe(email: string): Me {
-  const check = checkCampusEmail(email);
-  const campus = CAMPUSES.find((c) => check.ok && c.slug === check.campus) ?? CAMPUSES[0];
+  const campuses = mockCampuses();
+  const check = checkCampusEmail(email, campuses);
+  const campus = campuses.find((c) => check.ok && c.slug === check.campus) ?? campuses[0]!;
   return {
     id: crypto.randomUUID(), campus: { slug: campus.slug, name: campus.name }, email,
     memberType: check.ok && check.memberType === 'staff' ? 'staff' : null,

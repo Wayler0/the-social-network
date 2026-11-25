@@ -19,6 +19,29 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null);
   const install = useInstallState();
   const [showIosHelp, setShowIosHelp] = useState(false);
+  const [exporting, setExporting] = useState<'idle' | 'busy' | 'done' | string>('idle');
+
+  /** Data Protection Act: a copy of everything we hold about the member, as a JSON file. */
+  async function downloadMyData() {
+    setExporting('busy');
+    try {
+      const res = await fetch('/api/me/export', { credentials: 'same-origin' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { message?: string } | null;
+        setExporting(body?.message ?? 'Couldn’t download your data. Try again.');
+        return;
+      }
+      const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'my-data.json';
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setExporting('done');
+    } catch {
+      setExporting('Couldn’t download your data. Check your connection.');
+    }
+  }
 
   async function onDelete() {
     setBusy(true);
@@ -57,6 +80,11 @@ export function Settings() {
             {showIosHelp && <p className="muted install-help"><InstallHelp state={install} /></p>}
           </>
         )}
+        <button className="settings-row" onClick={() => void downloadMyData()} disabled={exporting === 'busy'}>
+          {exporting === 'busy' ? 'Preparing your data…' : 'Download my data'}
+        </button>
+        {exporting === 'done' && <p className="muted install-help" role="status">Downloaded: a file with everything {APP_NAME} holds about you.</p>}
+        {exporting !== 'idle' && exporting !== 'busy' && exporting !== 'done' && <p className="error install-help" role="alert">{exporting}</p>}
         <a href="/privacy" className="settings-row">Privacy policy</a>
         <a href="/terms" className="settings-row">Terms and community guidelines</a>
         <button className="settings-row" onClick={() => void signOut().then(() => navigate('/welcome', { replace: true }))}>Log out</button>

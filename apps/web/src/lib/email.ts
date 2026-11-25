@@ -1,9 +1,9 @@
 /**
  * Campus email rules (CLAUDE.md §5). Which domains are allowed comes from the campus list
- * (src/config.ts now, the API later) — nothing here names a campus.
+ * (GET /api/campuses, lib/campuses.ts) — nothing here names a campus.
  * The server checks this again; this is only for instant feedback in the form.
  */
-import { CAMPUSES, type Campus } from '../config';
+import type { Campus } from '../config';
 
 export type MemberType = 'student' | 'staff';
 
@@ -13,7 +13,7 @@ export type EmailCheck =
 
 const LOCAL_PART = /^[a-z0-9._%+-]+$/;
 
-export function checkCampusEmail(input: string, campuses: Campus[] = CAMPUSES): EmailCheck {
+export function checkCampusEmail(input: string, campuses: Campus[]): EmailCheck {
   const email = input.trim().toLowerCase();
   if (!email) return { ok: false, reason: 'empty' };
 
@@ -32,11 +32,11 @@ export function checkCampusEmail(input: string, campuses: Campus[] = CAMPUSES): 
 }
 
 /** Every allowed domain, for hints and error messages. */
-export function allowedDomains(campuses: Campus[] = CAMPUSES): string[] {
+export function allowedDomains(campuses: Campus[]): string[] {
   return campuses.flatMap((c) => Object.keys(c.emailDomains));
 }
 
-export function emailErrorText(reason: 'empty' | 'format' | 'domain', campuses: Campus[] = CAMPUSES): string {
+export function emailErrorText(reason: 'empty' | 'format' | 'domain', campuses: Campus[]): string {
   if (reason === 'empty') return 'Enter your campus email.';
   if (reason === 'format') return 'That doesn’t look like an email address.';
   return `Use your campus email. It must end in ${allowedDomains(campuses).map((d) => `@${d}`).join(' or ')}.`;

@@ -24,13 +24,4 @@ export type Campus = {
   emailDomains: Record<string, MemberType>;
 };
 
-export const CAMPUSES: Campus[] = [
-  {
-    slug: 'tharaka',
-    name: 'Tharaka University',
-    emailDomains: {
-      'student.tharaka.ac.ke': 'student',
-      'tharaka.ac.ke': 'staff',
-    },
-  },
-];
+/* The campus list is loaded from the server (lib/campuses.ts); nothing here names a campus. */
