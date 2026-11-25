@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ProfileForm } from '../components/ProfileForm';
 import { APP_NAME } from '../config';
@@ -8,8 +9,10 @@ import { takeReturnTo } from '../lib/return-to';
 export function Onboarding() {
   const { me, setMe } = useAuth();
   const navigate = useNavigate();
+  // Set when saving: we navigate on ourselves, so the 'already complete' redirect must not race it.
+  const leaving = useRef(false);
   if (!me) return <Navigate to="/welcome" replace />;
-  if (me.profileComplete) return <Navigate to="/" replace />;
+  if (me.profileComplete) return leaving.current ? null : <Navigate to="/" replace />;
 
   return (
     <main className="auth">
@@ -22,7 +25,13 @@ export function Onboarding() {
           <p>A few details so classmates can find you on {APP_NAME} and we can add you to your class group.</p>
         </>}
       </div>
-      <ProfileForm me={me} submitLabel={me.memberNumberNeedsFix ? 'Save' : 'Finish'} onSaved={(m) => { setMe(m); navigate(takeReturnTo() ?? '/', { replace: true }); }} />
+      <ProfileForm me={me} submitLabel={me.memberNumberNeedsFix ? 'Save' : 'Finish'} onSaved={(m) => {
+        const fixingNumber = me.memberNumberNeedsFix;
+        leaving.current = true;
+        setMe(m);
+        // New members finish by following classmates and clubs; fixing a reg number just carries on.
+        navigate(fixingNumber ? (takeReturnTo() ?? '/') : '/onboarding/follow', { replace: true });
+      }} />
     </main>
   );
 }
