@@ -147,7 +147,7 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
   "profileComplete": false
 }
 ```
-`profileComplete` is true once `name`, `memberType`, `memberNumber` and (students) `yearOfStudy` or (alumni) `graduationYear` are set and `isUnder18` is answered. It is also false while `memberNumberNeedsFix` is true: a student's or alumnus's saved reg number doesn't match the campus format (`regNumberPattern`, migration 017), e.g. one saved before the check existed. The web app then shows "Update your registration number". The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
+`profileComplete` is true once `name` and `memberType` are set, `isUnder18` is answered, staff have a `memberNumber` (staff number), and (students) `yearOfStudy` or (alumni) `graduationYear` is set. The registration number is **optional** for students and alumni (decided 25 Nov 2026): `PATCH /api/me` with `memberNumber: ""` or `null` removes it (staff get `400`). It is also false while `memberNumberNeedsFix` is true: a student's or alumnus's saved reg number doesn't match the campus format (`regNumberPattern`, migration 017), e.g. one saved before the check existed. The web app then shows "Update your registration number". The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
 
 ### Done when (#17–#19)
 - [ ] Tests (vitest + `app.inject`) for: allowed and look-alike domains, rate limits, wrong/expired/reused code, 5-attempt lockout, cookie flags, logout, logout-all, suspended user.
@@ -441,6 +441,14 @@ Rules (code: `apps/api/src/follows/routes.ts`, table `follows`, migration 011):
 
 ---
 
+### 12a. Who to follow ✅
+
+`GET /api/suggestions` → `{ people: [{ id, name, photoUrl, memberType, course, yearOfStudy, badges, reason, mutualCount }], clubs: [{ id, name, description, clubVerified, followerCount }] }` — up to 20 people and 6 clubs, for the onboarding "follow classmates" step and "People in your course" on Discover. Code: `apps/api/src/suggestions/routes.ts`.
+
+- People: live, verified, finished profiles on your campus that you don't follow, no block either way, not suspended. Ranked same class (students, same course and year) → same course → mutual follows → followers. Only people in your course, with mutual follows, or staff are suggested.
+- **Privacy:** staff are never shown students (student-first rule). An **under-18** member is suggested only to their own classmates. `reason` is only "Same class", "Same course", "Staff" and/or "N mutual" — never where someone lives or anything else personal. No email or member number.
+- Clubs: public clubs you may see and are neither in nor following; CLUB-badged first, then most followed.
+
 ## 13. Stories (v0.2) ✅
 
 Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").
@@ -491,7 +499,41 @@ Rules (code: `apps/api/src/events/routes.ts`, `visibleEvent` in `visibility.ts`,
 - Cancelled events stay listed (`cancelled: true`) so people who planned to go find out.
 - Reports take `targetType: "event"` (3 hide it; moderators see title and description). Deleting an account removes its RSVPs; events it created stay, like posts.
 
+## 15. Notifications and push (v0.2) ✅
+
+An in-app inbox plus Web Push (VAPID). The inbox always records; push follows each member's settings.
+
+| Endpoint | Answer |
+|---|---|
+| `GET /api/notifications?limit&cursor` | `{ items: [Notification], unreadCount, nextCursor }`, newest first |
+| `POST /api/notifications/read` | `{ ids: [...] }` (1–100) or `{ all: true }` → `{ unreadCount }` |
+| `GET /api/push/key` | `{ publicKey }`, or `null` when push is off on this server |
+| `PUT /api/push/subscriptions` | The browser's `PushSubscription.toJSON()` (`https://` endpoint only) → `204`; `503 push_unavailable` when push is off |
+| `DELETE /api/push/subscriptions` | `{ endpoint }` → `204` (idempotent) |
+| `GET /api/me/notification-settings` | `{ comments, answers, follows, groups, events, urgent }` (all `true` by default) |
+| `PATCH /api/me/notification-settings` | Any of those booleans → the full settings |
+
+**Notification** `{ id, type, text, count, actor: { id, name, photoUrl } | null, target: { type, id }, url, read, createdAt }`
+
+| `type` | Sent to | When | `url` |
+|---|---|---|---|
+| `comment` | post author | someone comments | `/post/:id` |
+| `answer` | asker (even with a hidden name) | someone answers | `/ask/:id` |
+| `follow` | the member followed | someone follows them (not offices or clubs) | `/notifications` |
+| `group_request` | the group's admins | someone asks to join a private group | `/groups/:id` |
+| `group_approved` | the member | their request is approved (a refusal sends nothing) | `/groups/:id` |
+| `event_cancelled` | everyone Going or Interested | the host cancels | `/events/:id` |
+
+Rules (code: `apps/api/src/notifications/`, migration 018):
+- **Never** about your own action, to deleted members, or across a block. An actor who is deleted or blocked later shows as `actor: null`.
+- **Collapsing:** one unread notification per member, type and thing; more of the same raise `count` and set the latest actor. After it is read, the next one starts fresh. Admins' `group_request` is marked read once nobody is waiting.
+- **Push:** one per *new* unread notification (a burst of comments is one push), only to members with a subscription who did not turn that kind off. Text is generic ("New comment on your post"): no names or content, because it shows on lock screens.
+- **Urgent announcements** push to everyone on the campus who is not suspended and did not turn `urgent` off, with the announcement title (official public information). Normal ones never push.
+- **Worker:** the API sends due pushes every 5 s (`push_outbox`, `SKIP LOCKED`). It retries with back-off (1, 2, 4, 8 min, at most 5 tries) only when no device got the push. Subscriptions the browser dropped (`404`/`410`) are deleted; one that fails 10 times is dropped. Each member keeps at most their 10 newest subscriptions.
+- **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
+- **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
+
 ---
 
 ## Not built yet
-Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events ✅ → push → chat (end-to-end encrypted, after the library choice and an external review).
+Chat, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events ✅ → push ✅ → chat (end-to-end encrypted, after the library choice and an external review).

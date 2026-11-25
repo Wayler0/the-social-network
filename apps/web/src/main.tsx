@@ -6,6 +6,7 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { AuthProvider } from './lib/auth';
 import { startInstallListener } from './lib/install';
 import { startNoZoom } from './lib/no-zoom';
+import { UnreadProvider } from './lib/unread';
 import './styles/global.css';
 
 startInstallListener();
@@ -15,7 +16,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <UnreadProvider>
+          <App />
+        </UnreadProvider>
         <UpdateBanner />
       </AuthProvider>
     </BrowserRouter>

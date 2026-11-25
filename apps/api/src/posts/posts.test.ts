@@ -360,6 +360,8 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
     it('lists the member’s own posts newest first, not office posts, hidden ones or groups the viewer can’t see', async () => {
       const first = (await post('cynthia', { body: 'First' })).json().id;
       const second = (await post('cynthia', { body: 'Second' })).json().id;
+      // One test transaction = one now(): without this both posts share created_at and the order is by id.
+      await client.query("update posts set created_at = created_at - interval '1 minute' where id = $1", [first]);
       const ids = (await as('brian', 'GET', `/api/users/${U('cynthia')}/posts?limit=50`)).json().items.map((p: { id: string }) => p.id);
       expect(ids.indexOf(second)).toBeLessThan(ids.indexOf(first));
       expect(ids).toContain(P('photo'));

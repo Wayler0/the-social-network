@@ -20,7 +20,8 @@ const patchSchema = z.object({
   course: z.string().max(200).nullable(),
   yearOfStudy: year(1, 8).nullable(),
   graduationYear: year(1990, 2100).nullable(),
-  memberNumber: z.string().max(60),
+  /** Optional for students and alumni: an empty string or null removes it. Staff must keep one. */
+  memberNumber: z.string().max(60).nullable(),
   isUnder18: z.boolean(),
   /** Up to 10, each up to 40 characters; replaces the whole list. */
   interests: z.array(z.string().max(200)).max(30),
@@ -102,7 +103,14 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         if (yearOfStudy !== cur.year_of_study) set('year_of_study', yearOfStudy);
         if (graduationYear !== cur.graduation_year) set('graduation_year', graduationYear);
 
-        if (body.memberNumber !== undefined) {
+        const clearing = body.memberNumber === null || (typeof body.memberNumber === 'string' && body.memberNumber.trim() === '');
+        if (clearing && memberType === 'staff') return bad('memberNumber: staff need a staff number.');
+        if (clearing && cur.member_number_normalised !== null) {
+          set('member_number', null);
+          set('member_number_normalised', null);
+          set('member_number_status', 'unverified');
+        }
+        if (typeof body.memberNumber === 'string' && !clearing) {
           const normalised = normaliseMemberNumber(body.memberNumber);
           if (!normalised || (memberType !== 'staff' && !matchesRegFormat(normalised, cur.reg_number_pattern))) {
             return bad(memberType === 'staff'
@@ -279,6 +287,9 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
       await tx.query(`update stories set image_id = null, deleted_at = coalesce(deleted_at, clock_timestamp()) where author_user_id = $1`, [userId]);
       await tx.query('delete from story_views where viewer_id = $1', [userId]);
       await tx.query('delete from event_rsvps where user_id = $1', [userId]);   // events they created stay, like posts
+      for (const table of ['notifications', 'push_subscriptions', 'push_outbox']) await tx.query(`delete from ${table} where user_id = $1`, [userId]);
+      await tx.query('update notifications set actor_user_id = null where actor_user_id = $1', [userId]);
+      await tx.query(`update users set notification_prefs = '{}' where id = $1`, [userId]);
       await tx.query('delete from close_friends where user_id = $1 or friend_id = $1', [userId]);
       await tx.query('delete from story_hidden_from where user_id = $1 or hidden_user_id = $1', [userId]);
       const adminOf = (await tx.query<{ group_id: string; role: string }>(

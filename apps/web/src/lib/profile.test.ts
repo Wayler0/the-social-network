@@ -33,7 +33,8 @@ describe('validateProfile', () => {
   });
   it('rejects bad member numbers and short names', () => {
     expect(validateProfile({ ...base, memberNumber: 'AB#1' }, now)).toHaveProperty('memberNumber');
-    expect(validateProfile({ ...base, memberNumber: '  ' }, now)).toHaveProperty('memberNumber');
+    expect(validateProfile({ ...base, memberNumber: '  ' }, now)).not.toHaveProperty('memberNumber');   // optional for students
+    expect(validateProfile({ ...base, memberType: 'staff', course: '', memberNumber: '  ' }, now)).toHaveProperty('memberNumber');
     expect(validateProfile({ ...base, name: ' W ' }, now)).toHaveProperty('name');
   });
 });
@@ -74,5 +75,19 @@ describe('registration number format (from the campus row)', () => {
     expect(validateProfile({ ...student, memberType: 'staff', course: '', memberNumber: 'TS-1042' }, now, reg)).toEqual({});
     expect(validateProfile({ ...student, memberNumber: 'EBT1' }, now, null)).toEqual({});
     expect(matchesRegFormat('X', '([')).toBe(true);   // a broken pattern doesn't lock people out
+  });
+});
+
+describe('registration number is optional (team decision 25 Nov 2026)', () => {
+  const now = new Date('2026-11-25');
+  const student: ProfileInput = { name: 'Amina W.', memberType: 'continuing', course: 'BSc CS', yearOfStudy: 2, graduationYear: null, memberNumber: '', isUnder18: false };
+  it('students and alumni can leave it empty; staff cannot', () => {
+    expect(validateProfile(student, now)).toEqual({});
+    expect(validateProfile({ ...student, memberType: 'alumni', yearOfStudy: null, graduationYear: 2024 }, now)).toEqual({});
+    expect(validateProfile({ ...student, memberType: 'staff', course: '' }, now)).toHaveProperty('memberNumber');
+  });
+  it('a profile without a reg number is complete', () => {
+    expect(isComplete({ name: 'A', memberType: 'continuing', memberNumber: null, yearOfStudy: 2, graduationYear: null, isUnder18: false })).toBe(true);
+    expect(isComplete({ name: 'A', memberType: 'staff', memberNumber: null, yearOfStudy: null, graduationYear: null, isUnder18: false })).toBe(false);
   });
 });

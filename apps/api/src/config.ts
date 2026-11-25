@@ -71,6 +71,12 @@ const schema = z.object({
   /** Resend API key for EMAIL_MODE=resend: a Hatua-only key with "Sending access" (docs/email.md). */
   RESEND_API_KEY: blankIsUnset(z.string().regex(/^re_[A-Za-z0-9_-]{8,200}$/, 'must be a Resend API key (starts with re_)').optional()),
 
+  // ---- Web Push (v0.2). Generate a pair once: `npm run push:keys -w apps/api`. Leave empty to turn
+  // push off (the in-app notifications still work). The subject is how push services reach the team:
+  // mailto:team@your-domain or an https:// page — never a personal address.
+  VAPID_PUBLIC_KEY: blankIsUnset(z.string().regex(/^[A-Za-z0-9_-]{80,100}$/, 'must be a base64url VAPID public key').optional()),
+  VAPID_PRIVATE_KEY: blankIsUnset(z.string().regex(/^[A-Za-z0-9_-]{40,50}$/, 'must be a base64url VAPID private key').optional()),
+  VAPID_SUBJECT: blankIsUnset(z.string().regex(/^(mailto:\S+@\S+|https:\/\/\S+)$/, 'must be mailto:address or an https:// URL').optional()),
 }).superRefine((c, ctx) => {
   const problem = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
   if (c.NODE_ENV === 'production' && c.CODE_PEPPER === DEV_CODE_PEPPER) {
@@ -86,6 +92,8 @@ const schema = z.object({
   }
   if (c.EMAIL_FROM && !senderAddress(c.EMAIL_FROM)) problem('EMAIL_FROM', 'must look like "Name <address@domain>" or address@domain');
   if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASS)) problem('SMTP_USER', 'set SMTP_USER and SMTP_PASS together, or neither');
+  const vapid = [c.VAPID_PUBLIC_KEY, c.VAPID_PRIVATE_KEY, c.VAPID_SUBJECT].filter(Boolean).length;
+  if (vapid !== 0 && vapid !== 3) problem('VAPID_PUBLIC_KEY', 'set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT together, or none');
 });
 
 export type Config = z.infer<typeof schema>;

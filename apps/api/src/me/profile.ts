@@ -42,14 +42,17 @@ export const badgesFor = (roles: string[]) => roles.map((r) => BADGES[r]).filter
 export const isStudent = (memberType: string) => memberType === 'fresher' || memberType === 'continuing';
 
 /**
- * Complete once name, member type and member number are set, the under-18 question is answered,
- * and students have a year of study or alumni a graduation year. Until then the web app shows
- * onboarding, and posting or joining groups answers 403 profile_incomplete.
+ * Complete once name and member type are set, the under-18 question is answered, and students have
+ * a year of study or alumni a graduation year. The registration number is OPTIONAL for students and
+ * alumni (team decision 25 Nov 2026: the university email already proves membership); staff still
+ * give a staff number. A reg number that is given must match the campus format. Until complete the
+ * web app shows onboarding, and posting or joining groups answers 403 profile_incomplete.
  */
 export function profileComplete(u: Pick<MeRow, 'name' | 'member_type' | 'member_number' | 'is_under_18' | 'year_of_study' | 'graduation_year'
   | 'member_number_normalised' | 'reg_number_pattern'>): boolean {
-  if (!u.name || !u.member_type || !u.member_number || u.is_under_18 === null) return false;
-  // A reg number saved before the campus format existed (e.g. "EBT1") must be fixed first.
+  if (!u.name || !u.member_type || u.is_under_18 === null) return false;
+  if (u.member_type === 'staff' && !u.member_number) return false;
+  // A reg number saved before the campus format existed (e.g. "EBT1") must be fixed or removed first.
   if (memberNumberNeedsFix(u)) return false;
   if (isStudent(u.member_type)) return u.year_of_study !== null;
   if (u.member_type === 'alumni') return u.graduation_year !== null;

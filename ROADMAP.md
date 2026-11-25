@@ -92,7 +92,7 @@ Hours are per person.
 
 - **Solomon:** groups screens, Today board screen, Ask a Senior screens, admin panel screens; privacy policy, guidelines and terms.
 - **Kim:** groups API finished (private approval, group posts, auto course/year groups); Today board / announcements API; Ask a Senior API.
-- **Peter:** admin API (moderation queue, hide, suspend, office accounts); **deploy to the campus server** (or temporary VPS if ICT is late); monitoring (Uptime Kuma).
+- **Peter:** admin API (moderation queue, hide, suspend, office accounts); **deploy to the campus KENET server** (runbook: `deploy/README.md`); monitoring (Uptime Kuma).
 - **Sun 6 Dec:** **feature freeze** and **Briefing #4**. Everything is on the server. **M3.**
 
 ### Week 4 — Mon 7 to Thu 17 Dec (EXAMS: ~2–3 h for the whole week, max)
@@ -131,7 +131,7 @@ Hours are per person.
 
 | Risk | Impact | Plan |
 |---|---|---|
-| University ICT doesn't give server access by 29 Nov | No deploy before exams | Ask this week; fallback: temporary VPS, move to campus later |
+| University ICT doesn't give server access to the KENET server by 29 Nov | No deploy before exams | Ask this week and follow up every few days. **DECIDED 16 Nov:** no personal droplet or VPS as a fallback; if access is late, the pilot moves and the dates are re-planned at the next briefing |
 | Verification emails land in spam or are blocked | Nobody can sign up | University SMTP relay if ICT allows, else a sending service with SPF/DKIM; test in week 2 |
 | Week 3 is overloaded (last week before exams) | Features unfinished at freeze | Start groups API in week 2; if needed, launch Ask a Senior as a special group; never cut report/block |
 | Exams (7–17 Dec) | No time for fixes | Feature freeze 6 Dec; only 18–19 Dec for final fixes |

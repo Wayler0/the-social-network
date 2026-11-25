@@ -11,6 +11,7 @@ import { cleanupSafety } from './safety/routes.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
 import { cleanupImages } from './images/store.js';
+import { cleanupNotifications, createPushSender, runPushWorker } from './notifications/push.js';
 
 const config = loadConfig();
 const db = createDb(config);
@@ -38,11 +39,25 @@ const housekeeping = setInterval(() => {
     .then((removed) => removed && app.log.info({ removed }, 'expired stories removed'))
     .catch((err) => app.log.error(err, 'story cleanup failed'));
   cleanupEvents(db).catch((err) => app.log.error(err, 'event rate-limit cleanup failed'));
+  cleanupNotifications(db).catch((err) => app.log.error(err, 'notification cleanup failed'));
 }, HOUR);
 housekeeping.unref();
 
+// Push notifications (docs/api-contract.md section 15): send what is due every few seconds.
+const pushSender = createPushSender(config);
+let pushing = false;
+const pushTimer = setInterval(() => {
+  if (!pushSender || pushing) return;
+  pushing = true;
+  runPushWorker(db, pushSender)
+    .catch((err) => app.log.error(err, 'push worker failed'))
+    .finally(() => { pushing = false; });
+}, 5000);
+pushTimer.unref();
+
 async function shutdown(signal: string) {
   clearInterval(housekeeping);
+  clearInterval(pushTimer);
   app.log.info({ signal }, 'shutting down');
   await app.close();
   await db.end();
@@ -58,6 +73,7 @@ app
     const mail = await app.mailer.check();
     if (mail.ok) app.log.info({ mail: mail.detail }, 'email ready');
     else app.log.error({ mail: mail.detail }, 'EMAIL IS NOT WORKING: nobody can sign in until this is fixed (docs/email.md)');
+    if (!pushSender) app.log.warn('push notifications are off: set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT (npm run push:keys -w apps/api)');
   })
   .catch((err) => {
     app.log.error(err);

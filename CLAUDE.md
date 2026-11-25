@@ -129,7 +129,7 @@ Knowing a reg number exists is not enough. Reg numbers appear on exam lists, not
   - `@student.tharaka.ac.ke` → student (fresher or continuing; the member picks which, and gives their reg number).
   - `@tharaka.ac.ke` (no student subdomain) → staff (gives staff number; Staff badge after admin approval).
 - Match the domain exactly (the part after `@` must be `tharaka.ac.ke` or `student.tharaka.ac.ke`), so look-alikes such as `tharaka.ac.ke.evil.com` or `faketharaka.ac.ke` are rejected.
-- Reg number is still collected, format-checked and unique per account.
+- **DECIDED 25 Nov 2026: the reg number is optional** for students and alumni (the university email code already proves membership). If given, it is format-checked against the campus's pattern (`campuses.reg_number_pattern`, e.g. ABT5/09919/23) and unique per account. Staff still give a staff number. Alumni without a student email will still need it to verify (see below).
 - Re-verify periodically (e.g. yearly) so access ends when someone leaves.
 - **Answered 25 Nov 2026:** the university **closes the student email right after graduation** (the student's Drive files are deleted 3 years later). So alumni **cannot** sign in with their student email. Needed: (1) final-year students link a personal email while their student email still works, so they can keep signing in after graduating; (2) alumni who already graduated verify by reg number + graduation year + vouching/admin review.
 - **Fallback for edge cases** (no university email yet, e.g. a brand-new fresher): class-rep vouching or ID upload checked by a moderator.

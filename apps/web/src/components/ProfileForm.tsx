@@ -37,13 +37,13 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
   useEffect(() => {
     if (!me.memberNumberNeedsFix || !example) return;
     setErrors((e) => (e.memberNumber?.startsWith('This registration number isn’t in the right format')
-      ? { ...e, memberNumber: `This registration number isn’t in the right format. It should look like ${example}.` } : e));
+      ? { ...e, memberNumber: `This registration number isn’t in the right format. It should look like ${example}, or leave it empty.` } : e));
   }, [me.memberNumberNeedsFix, example]);
   const staff = me.memberType === 'staff';
   const [p, setP] = useState<ProfileInput>(() => initial(me));
   // An old reg number in the wrong format: point at the field straight away.
   const [errors, setErrors] = useState<ProfileErrors>(() => (me.memberNumberNeedsFix
-    ? { memberNumber: 'This registration number isn’t in the right format. Please correct it.' } : {}));
+    ? { memberNumber: 'This registration number isn’t in the right format. Correct it, or leave it empty.' } : {}));
   const [formError, setFormError] = useState<string | null>(null);
   const [taken, setTaken] = useState(false);
   const [disputeSent, setDisputeSent] = useState(false);
@@ -150,7 +150,7 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
       )}
 
       <div className="field">
-        <label htmlFor="number">{numberLabel}</label>
+        <label htmlFor="number">{numberLabel}{!staff && <span className="muted"> (optional)</span>}</label>
         <input id="number" className="input" autoCapitalize="characters" spellCheck={false} maxLength={40}
           placeholder={staff ? 'Your staff number' : regFormat?.example ? `e.g. ${regFormat.example}` : 'As on your student ID'}
           value={p.memberNumber} onChange={(e) => set('memberNumber', e.target.value)}

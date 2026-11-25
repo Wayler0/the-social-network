@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
+import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
+import { notify } from '../notifications/notify.js';
 import { fail, idParam, parse, useContractErrors, uuid } from '../http.js';
 import type { Queryable } from '../images/store.js';
 import { isStudent, loadMe } from '../me/profile.js';
@@ -56,7 +58,7 @@ async function loadGroup(q: Queryable, viewer: { userId: string; campusId: strin
  * Groups (docs/api-contract.md section 8, issue #25). Class groups (one per course and year) are
  * managed from profiles by syncClassGroup: nobody joins or leaves them by hand.
  */
-export async function groupRoutes(app: FastifyInstance, { db }: { db: Db }) {
+export async function groupRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
   const notFound = (reply: Parameters<typeof fail>[0]) => fail(reply, 404, 'not_found', 'Group not found.');
   const badCursor = (reply: Parameters<typeof fail>[0]) => fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.');
@@ -137,6 +139,11 @@ export async function groupRoutes(app: FastifyInstance, { db }: { db: Db }) {
        on conflict (group_id, user_id) do update set status = group_members.status returning status`,
       [g.id, req.auth!.userId, status],
     );
+    if (rows[0]!.status === 'pending') {
+      const admins = await db.query<{ user_id: string }>(
+        `select user_id from group_members where group_id = $1 and role = 'admin' and status = 'active'`, [g.id]);
+      await notify(db, config.APP_NAME, { type: 'group_request', userIds: admins.rows.map((a) => a.user_id), actorId: req.auth!.userId, targetId: g.id });
+    }
     return { status: rows[0]!.status };
   });
 
@@ -195,6 +202,12 @@ export async function groupRoutes(app: FastifyInstance, { db }: { db: Db }) {
       [params.data.id, params.data.userId],
     );
     if (!rowCount) return fail(reply, 404, 'not_found', 'No request from that member.');
+    if (body.approve) {
+      await notify(db, config.APP_NAME, { type: 'group_approved', userIds: [params.data.userId], actorId: req.auth!.userId, targetId: params.data.id });
+    }
+    // Once nobody is waiting, the admins' "asked to join" notifications are handled.
+    await db.query(`update notifications set read_at = now() where type = 'group_request' and target_id = $1 and read_at is null
+                      and not exists (select 1 from group_members where group_id = $1 and status = 'pending')`, [params.data.id]);
     return { status: body.approve ? 'active' : 'none' };
   });
 
