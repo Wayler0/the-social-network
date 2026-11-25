@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { senderAddress, type Config } from '../config.js';
 
@@ -107,6 +108,9 @@ function logMailer(config: Config, log: MailLog): Mailer {
   };
 }
 
+/** Headers that stop "out of office" and other automatic replies to the code email. */
+const NO_AUTO_REPLIES = { 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'All' };
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** SMTP reply codes 4xx and network failures are worth one more try; 5xx is a final "no". */
@@ -143,10 +147,7 @@ function smtpMailer(config: Config, log: MailLog, retryDelayMs: number): Mailer 
         from,
         to,
         ...message,
-        headers: {
-          'Auto-Submitted': 'auto-generated', // stops "out of office" replies
-          'X-Auto-Response-Suppress': 'All',
-        },
+        headers: NO_AUTO_REPLIES,
       };
       for (let attempt = 1; ; attempt++) {
         try {
@@ -181,6 +182,81 @@ function smtpMailer(config: Config, log: MailLog, retryDelayMs: number): Mailer 
   };
 }
 
-export function createMailer(config: Config, log: MailLog, opts: { retryDelayMs?: number } = {}): Mailer {
-  return config.EMAIL_MODE === 'smtp' ? smtpMailer(config, log, opts.retryDelayMs ?? 1500) : logMailer(config, log);
+export const RESEND_API_URL = 'https://api.resend.com';
+
+/** Resend's error body: { statusCode, name, message }. */
+type ResendError = { statusCode?: number; name?: string; message?: string };
+
+/**
+ * Sends through Resend's HTTPS API instead of SMTP. KENET blocks every outgoing mail port
+ * (25, 465, 587, 2465, 2587; checked 24 Nov 2026) but not HTTPS, so this is what the server uses.
+ * Same rules as smtpMailer: one retry for temporary failures, codes never logged.
+ */
+function resendMailer(config: Config, log: MailLog, retryDelayMs: number, apiUrl: string): Mailer {
+  const from = config.EMAIL_FROM!;
+  const auth = { Authorization: `Bearer ${config.RESEND_API_KEY!}` };
+  // A member is waiting on the sign-up screen: fail fast rather than hang.
+  const timeout = () => AbortSignal.timeout(15_000);
+
+  return {
+    async sendSignInCode(to, code) {
+      checkInput(to, code);
+      const body = JSON.stringify({ from, to: [to], ...signInCodeMessage(config.APP_NAME, code), headers: NO_AUTO_REPLIES });
+      // Same key on the retry, so Resend sends at most one email even if the first answer was lost.
+      const idempotencyKey = randomUUID();
+      for (let attempt = 1; ; attempt++) {
+        let temporary: boolean;
+        let reason: string;
+        try {
+          const res = await fetch(`${apiUrl}/emails`, {
+            method: 'POST',
+            headers: { ...auth, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+            body,
+            signal: timeout(),
+          });
+          const answer = (await res.json().catch(() => ({}))) as ResendError & { id?: string };
+          if (res.ok) {
+            log.info({ to: maskEmail(to), messageId: answer.id, attempt }, 'sign-in email handed to the mail server');
+            return;
+          }
+          // 429 = too many requests, 5xx = their side: worth another try. Other 4xx (bad key,
+          // unverified sender domain, refused address) will fail the same way again.
+          temporary = res.status === 429 || res.status >= 500;
+          reason = `${res.status} ${answer.name ?? ''} ${answer.message ?? ''}`.trim();
+        } catch (err) {
+          temporary = true; // network failure or timeout
+          reason = (err as Error).message;
+        }
+        if (temporary && attempt === 1) {
+          log.warn({ to: maskEmail(to), reason }, 'sign-in email failed, trying once more');
+          await delay(retryDelayMs);
+          continue;
+        }
+        log.error({ to: maskEmail(to), reason, temporary, attempt }, 'sign-in email was not sent');
+        throw new EmailError(temporary ? 'The mail server is not responding.' : 'The mail server refused this email.', temporary);
+      }
+    },
+    async check() {
+      // Checks the API is reachable and the key is real without sending anything. A "Sending access"
+      // key (the kind we use) may not list domains, and Resend says so with restricted_api_key.
+      try {
+        const res = await fetch(`${apiUrl}/domains`, { headers: auth, signal: timeout() });
+        const answer = (await res.json().catch(() => ({}))) as ResendError;
+        if (res.ok || answer.name === 'restricted_api_key') {
+          return { ok: true, detail: `connected to ${new URL(apiUrl).host} as ${senderAddress(from)}` };
+        }
+        return { ok: false, detail: `${new URL(apiUrl).host} — ${res.status} ${answer.name ?? ''} ${answer.message ?? ''}`.trim() };
+      } catch (err) {
+        return { ok: false, detail: `${new URL(apiUrl).host} — ${(err as Error).message}` };
+      }
+    },
+    async close() {},
+  };
+}
+
+export function createMailer(config: Config, log: MailLog, opts: { retryDelayMs?: number; resendApiUrl?: string } = {}): Mailer {
+  const retryDelayMs = opts.retryDelayMs ?? 1500;
+  if (config.EMAIL_MODE === 'smtp') return smtpMailer(config, log, retryDelayMs);
+  if (config.EMAIL_MODE === 'resend') return resendMailer(config, log, retryDelayMs, opts.resendApiUrl ?? RESEND_API_URL);
+  return logMailer(config, log);
 }
