@@ -25,6 +25,8 @@ export type Me = {
   memberNumberNeedsFix?: boolean;
   /** Third day in the app and no feedback yet: show "Enjoying it?". */
   askFeedback?: boolean;
+  /** Moved up a year when a new academic year started: asks "You're now in Year {to}, right?". */
+  yearCheck?: { from: number; to: number } | null;
 };
 
 export type ProfileInput = {

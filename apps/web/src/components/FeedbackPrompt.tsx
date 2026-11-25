@@ -58,7 +58,7 @@ export function FeedbackSheet({ onDone, onLater }: { onDone: () => void; onLater
 export function FeedbackPrompt() {
   const { me, setMe } = useAuth();
   const [closed, setClosed] = useState(false);
-  if (!me?.askFeedback || closed) return null;
+  if (!me?.askFeedback || me.yearCheck || closed) return null;
   const done = () => { setClosed(true); setMe({ ...me, askFeedback: false }); };
   return (
     <FeedbackSheet onDone={done}

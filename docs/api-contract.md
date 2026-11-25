@@ -190,6 +190,12 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 - `POST /api/feedback` `{ rating: 1–5, body? (≤ 2000) }` → `201`; never asks again. 5 a day (`429`). Also reachable any time from Settings → Send feedback.
 - `POST /api/feedback/later` → `204`: "Not now" asks again three active days later.
 - `GET /api/admin/feedback?limit&cursor` (admins) → `{ count, average, items: [{ id, rating, body, createdAt }], nextCursor }`, newest first — **never who wrote it**, so members can be honest. Deleted with the account; in the data export. Code: `apps/api/src/feedback/routes.ts`.
+### Moving up a year ✅ (migration 019)
+
+Each campus has an academic year start (`campuses.academic_year_start_month/day`; 1 September for the first campus). A student's `yearOfStudy` belongs to one academic year. When `GET /api/me` runs in a later academic year, the API moves freshers and continuing students up by the years that passed (Year 8 at most; a fresher becomes continuing), moves them to the new class group, and returns `yearCheck: { from, to }` until they answer:
+- `POST /api/me/year-check` → Me: "Yes, I'm in Year {to}" (clears `yearCheck`).
+- `PATCH /api/me` with `yearOfStudy` or `memberType` (staying in the old year, another year, or alumni with `graduationYear`) also clears it.
+`yearCheck` is `null` when there is nothing to ask. Alumni and staff are never moved. Code: `apps/api/src/me/year.ts`; SQL function `academic_year(campus, at)`.
 
 ### `GET /api/users/:id` ✅ — someone's public profile
 `{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing, followsYou, followerCount, followingCount }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. Follows: section 12 (v0.2).

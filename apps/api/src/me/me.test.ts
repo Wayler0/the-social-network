@@ -109,7 +109,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
       id: m.id, campus: { slug: expect.any(String), name: expect.any(String) }, email: m.email, memberType: 'continuing',
       name: null, photoUrl: null, course: null, yearOfStudy: null, graduationYear: null,
       memberNumber: null, memberNumberStatus: 'unverified', isUnder18: null, interests: [], badges: [], isAdmin: false, profileComplete: false,
-      memberNumberNeedsFix: false, askFeedback: false,
+      memberNumberNeedsFix: false, askFeedback: false, yearCheck: null,
     });
   });
 
@@ -262,6 +262,43 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     await s.as('PATCH', '/api/me', { name: 'Dr S', memberNumber: 'TS-1042', isUnder18: false });
     await client.query(`update users set member_number = 'S1', member_number_normalised = 'S1' where id = $1`, [s.id]);
     expect((await s.as('GET', '/api/me')).json()).toMatchObject({ memberNumberNeedsFix: false, profileComplete: true });
+  });
+
+  it('academic years start on the campus start date (1 September), Nairobi time', async () => {
+    const ay = async (at: string) => (await client.query<{ y: number }>('select academic_year($1, $2::timestamptz) as y', [campusId, at])).rows[0]!.y;
+    expect(await ay('2026-08-31T23:30:00+03:00')).toBe(2025);
+    expect(await ay('2026-09-01T00:30:00+03:00')).toBe(2026);
+    expect(await ay('2027-01-15T12:00:00+03:00')).toBe(2026);
+  });
+
+  it('moves students up a year when a new academic year starts, and asks them to confirm', async () => {
+    const m = await member('mover');
+    await m.as('PATCH', '/api/me', onboarding);   // fresher, Year 1, BSc Computer Science
+    // As if their year was set last academic year.
+    await client.query('update users set study_year_academic_year = study_year_academic_year - 1 where id = $1', [m.id]);
+    const moved = (await m.as('GET', '/api/me')).json();
+    expect(moved).toMatchObject({ memberType: 'continuing', yearOfStudy: 2, yearCheck: { from: 1, to: 2 }, profileComplete: true });
+    expect(await classGroupsOf(m.id)).toEqual(['BSc Computer Science — Year 2']);
+    expect((await m.as('GET', '/api/me')).json().yearOfStudy).toBe(2);   // only once per academic year
+
+    const ok = await m.as('POST', '/api/me/year-check');
+    expect(ok.json()).toMatchObject({ yearOfStudy: 2, yearCheck: null });
+  });
+
+  it('correcting the year answers the question; two missed years move up two; alumni and staff stay', async () => {
+    const m = await member('repeater');
+    await m.as('PATCH', '/api/me', { ...onboarding, memberNumber: '', memberType: 'continuing', yearOfStudy: 2 });
+    await client.query('update users set study_year_academic_year = study_year_academic_year - 2 where id = $1', [m.id]);
+    expect((await m.as('GET', '/api/me')).json()).toMatchObject({ yearOfStudy: 4, yearCheck: { from: 2, to: 4 } });
+    const fixed = (await m.as('PATCH', '/api/me', { yearOfStudy: 3 })).json();
+    expect(fixed).toMatchObject({ yearOfStudy: 3, yearCheck: null });
+    expect((await m.as('GET', '/api/me')).json().yearOfStudy).toBe(3);   // the correction holds this year
+
+    const alum = await member('alum');
+    const alumSaved = await alum.as('PATCH', '/api/me', { ...onboarding, memberNumber: '', memberType: 'alumni', yearOfStudy: null, graduationYear: 2024 });
+    expect(alumSaved.statusCode, alumSaved.body).toBe(200);
+    await client.query('update users set study_year_academic_year = 2000 where id = $1', [alum.id]);
+    expect((await alum.as('GET', '/api/me')).json()).toMatchObject({ memberType: 'alumni', yearOfStudy: null, yearCheck: null });
   });
 
   it('shows current role badges; admin is a permission, not a badge', async () => {

@@ -5,6 +5,7 @@ import { inTransaction, type Db } from '../db.js';
 import { ensureGroupHasAdmin } from '../groups/admins.js';
 import { normaliseCourse, syncClassGroup } from '../groups/class-groups.js';
 import { countActiveDay } from '../feedback/routes.js';
+import { rollStudyYear } from './year.js';
 import { clearSessionCookie } from '../auth/sessions.js';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
@@ -44,6 +45,8 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
 
   app.get('/api/me', async (req, reply) => {
     await countActiveDay(db, req.auth!.userId);   // for the day-3 feedback prompt
+    // A new academic year since their year was set? Move them up first (src/me/year.ts).
+    await rollStudyYear(db, req.auth!.userId);
     const me = await loadMe(db, req.auth!.userId);
     if (!me) return fail(reply, 401, 'not_signed_in', 'Please sign in.');
     return meBody(me);
@@ -141,6 +144,14 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         }
 
         if (sets.length > 0) await tx.query(`update users set ${sets.join(', ')} where id = $1`, params);
+        // A year (or member type) they set themselves belongs to this academic year, and answers any
+        // "You're now in Year N, right?" question.
+        if (body.yearOfStudy !== undefined || body.memberType !== undefined) {
+          await tx.query(
+            `update users set study_year_academic_year = case when year_of_study is null then null else academic_year(campus_id) end,
+                              year_check_from = null
+              where id = $1`, [userId]);
+        }
         // Same transaction: the member moves to the class group of their new course and year.
         await syncClassGroup(tx, userId);
         return { ok: true, oldPhoto };
@@ -190,6 +201,14 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
     }
     // The same answer whether or not anyone holds the number.
     return reply.code(202).send({ received: true });
+  });
+
+  // ---- POST /api/me/year-check   "Yes, I'm in Year N now": clears the question after moving up a year
+  app.post('/api/me/year-check', async (req, reply) => {
+    await db.query('update users set year_check_from = null where id = $1', [req.auth!.userId]);
+    const me = await loadMe(db, req.auth!.userId);
+    if (!me) return fail(reply, 401, 'not_signed_in', 'Please sign in.');
+    return meBody(me);
   });
 
   // ---- GET /api/users/:id   someone's public profile: never email or member number

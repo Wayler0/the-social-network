@@ -18,12 +18,13 @@ export type MeRow = {
   interests: string[]; roles: string[]; is_admin: boolean;
   member_number_normalised?: string | null; reg_number_pattern?: string | null;
   ask_feedback?: boolean;
+  year_check_from?: number | null;
 };
 
 const ME_SQL = `
   select u.id, c.slug as campus_slug, c.name as campus_name, u.email, u.member_type, u.name, u.photo_url, u.photo_image_id,
          u.course, u.year_of_study, u.graduation_year, u.member_number, u.member_number_status, u.is_under_18, u.interests,
-         u.member_number_normalised, c.reg_number_pattern,
+         u.member_number_normalised, c.reg_number_pattern, u.year_check_from,
          (u.feedback_given_at is null and u.active_days >= u.feedback_ask_at_day) as ask_feedback,
          coalesce(array(select distinct r.role from roles r
                          where r.user_id = u.id and r.starts_at <= clock_timestamp()
@@ -82,6 +83,9 @@ export function meBody(u: MeRow) {
     memberNumberNeedsFix: memberNumberNeedsFix(u),
     /** Third day in the app and no feedback yet: show the "Enjoying it?" prompt. */
     askFeedback: Boolean(u.ask_feedback) && profileComplete(u),
+    /** Moved up a year automatically: the app asks them to confirm. Null when nothing to ask. */
+    yearCheck: u.year_check_from != null && isStudent(u.member_type) && u.year_of_study != null
+      ? { from: u.year_check_from, to: u.year_of_study } : null,
   };
 }
 

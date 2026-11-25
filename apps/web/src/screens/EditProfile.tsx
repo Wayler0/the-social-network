@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { ProfileForm } from '../components/ProfileForm';
+import { ProfilePhoto } from '../components/ProfilePhoto';
 import { useAuth } from '../lib/auth';
 
 /** Issue #7 — edit profile. */
@@ -16,6 +17,7 @@ export function EditProfile() {
         <span style={{ width: 44 }} />
       </header>
       <div className="screen">
+        <ProfilePhoto />
         <ProfileForm me={me} submitLabel="Save" onSaved={(m) => { setMe(m); navigate('/profile'); }} />
       </div>
     </>

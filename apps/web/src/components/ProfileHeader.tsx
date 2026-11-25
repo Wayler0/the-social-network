@@ -20,8 +20,10 @@ export type FollowCounts = { followerCount: number; followingCount: number };
  * Photo, name, member type, badges, course and year, follower counts: the same on your profile
  * and anyone else's. `listLinks` makes the counts open your followers / following lists (yours only).
  */
-export function ProfileHeader({ p, campusName, counts, listLinks = false, extra }: {
+export function ProfileHeader({ p, campusName, counts, listLinks = false, extra, photo }: {
   p: ProfileFacts; campusName?: string; counts?: FollowCounts | null; listLinks?: boolean; extra?: ReactNode;
+  /** Your own profile: the photo button that opens the change-photo menu. */
+  photo?: ReactNode;
 }) {
   const detail = p.memberType === 'staff' ? campusName ?? ''
     : p.memberType === 'alumni' ? [p.course, p.graduationYear && `Class of ${p.graduationYear}`].filter(Boolean).join(' · ')
@@ -32,9 +34,9 @@ export function ProfileHeader({ p, campusName, counts, listLinks = false, extra 
   };
   return (
     <section className="profile-head">
-      {p.photoUrl
+      {photo ?? (p.photoUrl
         ? <img className="avatar-lg" src={p.photoUrl} alt="" />
-        : <div className="avatar-lg" aria-hidden="true">{initials(p.name)}</div>}
+        : <div className="avatar-lg" aria-hidden="true">{initials(p.name)}</div>)}
       <div className="profile-id">
         <h2>{p.name}</h2>
         <div className="badges">
