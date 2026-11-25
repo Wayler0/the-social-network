@@ -537,8 +537,10 @@ An in-app inbox plus Web Push (VAPID). The inbox always records; push follows ea
 | `group_request` | the group's admins | someone asks to join a private group | `/groups/:id` |
 | `group_approved` | the member | their request is approved (a refusal sends nothing) | `/groups/:id` |
 | `event_cancelled` | everyone Going or Interested | the host cancels | `/events/:id` |
+| `story` | followers who may see it (same rules as the stories row: hidden-from, close friends, under-18, staff) | someone you follow posts a story; more stories from them collapse into one | `/` |
+| `office_story` | everyone on the campus | a verified office posts a story; `actor` is always `null` (who typed it isn't shown) | `/` |
 
-Rules (code: `apps/api/src/notifications/`, migration 018):
+Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipients: `storyRecipients` in `apps/api/src/stories/routes.ts`):
 - **Never** about your own action, to deleted members, or across a block. An actor who is deleted or blocked later shows as `actor: null`.
 - **Collapsing:** one unread notification per member, type and thing; more of the same raise `count` and set the latest actor. After it is read, the next one starts fresh. Admins' `group_request` is marked read once nobody is waiting.
 - **Push:** one per *new* unread notification (a burst of comments is one push), only to members with a subscription who did not turn that kind off. Text is generic ("New comment on your post"): no names or content, because it shows on lock screens.

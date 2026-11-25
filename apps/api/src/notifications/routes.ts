@@ -45,7 +45,8 @@ export async function notificationRoutes(app: FastifyInstance, { config, db }: {
     return {
       items: p.rows.map((n) => ({
         id: n.id, type: n.type, text: notificationText(n.type), count: n.count,
-        actor: n.actor_id ? { id: n.actor_id, name: n.actor_name, photoUrl: n.actor_photo } : null,
+        // Official accounts never show which member posted for them (like announcements).
+        actor: n.actor_id && n.type !== 'office_story' ? { id: n.actor_id, name: n.actor_name, photoUrl: n.actor_photo } : null,
         target: { type: n.target_type, id: n.target_id }, url: notificationUrl(n.type, n.target_id),
         read: n.read_at !== null, createdAt: iso(n.created_at),
       })),

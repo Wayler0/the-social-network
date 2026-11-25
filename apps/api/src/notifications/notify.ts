@@ -10,11 +10,11 @@ import type { Queryable } from '../images/store.js';
  * turn that kind off. Push text is generic on purpose: it shows on lock screens.
  */
 
-export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled';
-type TargetType = 'post' | 'question' | 'user' | 'group' | 'event';
+export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled' | 'story' | 'office_story';
+type TargetType = 'post' | 'question' | 'user' | 'group' | 'event' | 'office';
 
 /** Push settings a member can turn off (GET/PATCH /api/me/notification-settings). */
-export const PUSH_KINDS = ['comments', 'answers', 'follows', 'groups', 'events', 'urgent'] as const;
+export const PUSH_KINDS = ['comments', 'answers', 'follows', 'groups', 'events', 'urgent', 'stories'] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];
 
 const KINDS: Record<NotificationType, { kind: PushKind; target: TargetType; text: string; url: (id: string) => string }> = {
@@ -24,6 +24,9 @@ const KINDS: Record<NotificationType, { kind: PushKind; target: TargetType; text
   group_request:   { kind: 'groups',   target: 'group',    text: 'Someone asked to join your group',         url: (id) => `/groups/${id}` },
   group_approved:  { kind: 'groups',   target: 'group',    text: 'Your request to join a group was approved', url: (id) => `/groups/${id}` },
   event_cancelled: { kind: 'events',   target: 'event',    text: 'An event you planned to go to was cancelled', url: (id) => `/events/${id}` },
+  // Stories: generic text (lock screens); the stories row on Home shows whose.
+  story:           { kind: 'stories',  target: 'user',     text: 'New story from someone you follow',       url: () => '/' },
+  office_story:    { kind: 'stories',  target: 'office',   text: 'New story from an official account',      url: () => '/' },
 };
 
 export const notificationText = (type: NotificationType) => KINDS[type].text;
