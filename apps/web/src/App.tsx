@@ -9,10 +9,15 @@ import { Home } from './screens/Home';
 import { Admin } from './screens/Admin';
 import { Ask, AskQuestion } from './screens/Ask';
 import { Compose } from './screens/Compose';
+import { EventDetail } from './screens/EventDetail';
+import { EventForm } from './screens/EventForm';
+import { Events } from './screens/Events';
 import { Discover } from './screens/Discover';
 import { GroupPage } from './screens/GroupPage';
 import { GroupNew, Groups } from './screens/Groups';
 import { Today } from './screens/Today';
+import { Notifications } from './screens/Notifications';
+import { NotificationSettings } from './screens/NotificationSettings';
 import { Onboarding } from './screens/Onboarding';
 import { PostDetail } from './screens/PostDetail';
 import { FollowList } from './screens/FollowList';
@@ -72,6 +77,7 @@ export function App() {
         <Route element={<div className="shell"><Outlet /></div>}>
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/notifications" element={<NotificationSettings />} />
           <Route path="/create" element={<Compose />} />
           <Route path="/story/new" element={<StoryNew />} />
           <Route path="/people" element={<FollowSuggestions />} />
@@ -79,6 +85,9 @@ export function App() {
           <Route path="/groups/new" element={<GroupNew />} />
           <Route path="/groups/:id" element={<GroupPage />} />
           <Route path="/ask/:id" element={<AskQuestion />} />
+          <Route path="/events/new" element={<EventForm />} />
+          <Route path="/events/:id" element={<EventDetail />} />
+          <Route path="/events/:id/edit" element={<EventForm />} />
           <Route path="/admin" element={<Admin />} />
         </Route>
         <Route element={<AppShell />}>
@@ -86,13 +95,14 @@ export function App() {
           <Route path="discover" element={<Discover />} />
           <Route path="groups" element={<Groups />} />
           <Route path="ask" element={<Ask />} />
+          <Route path="events" element={<Events />} />
           <Route path="today" element={<Today />} />
           <Route path="reels" element={<ReelsComingSoon />} />
           <Route path="profile" element={<Profile />} />
           <Route path="profile/followers" element={<FollowList which="followers" />} />
           <Route path="profile/following" element={<FollowList which="following" />} />
           <Route path="u/:id" element={<UserProfile />} />
-          <Route path="notifications" element={<Placeholder title="Notifications" text="Likes, comments and replies will show here." />} />
+          <Route path="notifications" element={<Notifications />} />
           <Route path="messages" element={<Placeholder title="Messages" text="End-to-end encrypted chat arrives in v0.2." />} />
         </Route>
       </Route>

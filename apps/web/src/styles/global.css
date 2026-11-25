@@ -433,3 +433,51 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .person-card-main strong { font-size: 14px; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-card-main .muted { font-size: 12px; min-height: 16px; }
 .person-card .btn { width: 100%; }
+
+/* ---------- Notifications (v0.2) ---------- */
+.small { font-size: 13px; }
+.notif-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.list-row.notif { width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; font: inherit; cursor: pointer; }
+.list-row.notif.unread { background: var(--violet-soft); }
+.notif-text { overflow-wrap: anywhere; }
+.notif.unread .notif-text { font-weight: 600; }
+.notif-icon { width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--fill); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
+.notif-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--accent); }
+.push-prompt { margin: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.push-prompt p { margin: 0; }
+.switch-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.switch { appearance: none; -webkit-appearance: none; flex: none; width: 46px; height: 28px; border-radius: 14px; background: var(--line); position: relative; cursor: pointer; transition: background .15s; margin: 0; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(18px); }
+.switch:disabled { opacity: .5; cursor: default; }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Events (v0.2) ---------- */
+.tile-icon.coral { background: var(--coral-soft); color: var(--danger); }
+.event-row { align-items: flex-start; }
+.event-row.cancelled .event-title { text-decoration: line-through; color: var(--text-3); }
+.date-tile { width: 52px; flex: none; border-radius: 14px; background: var(--violet-soft); color: var(--violet-dark); display: flex; flex-direction: column; align-items: center; padding: 6px 0; line-height: 1.1; }
+.date-tile span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.date-tile strong { font-family: var(--font-heading); font-size: 22px; }
+.event-row.cancelled .date-tile { background: var(--fill); color: var(--text-3); }
+.danger-pill { background: var(--coral-soft); color: var(--danger); }
+.live-pill { background: var(--mint); color: var(--ink); }
+.event-image { max-height: 50dvh; }
+.event-head { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-bottom: 8px solid var(--surface-2); }
+.event-head h2 { font-size: 24px; overflow-wrap: anywhere; }
+.event-head h2.struck { text-decoration: line-through; color: var(--text-3); }
+.event-head p { margin: 0; }
+.event-facts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.event-facts > div { display: flex; gap: 10px; align-items: flex-start; }
+.event-facts dt { color: var(--text-3); flex: none; padding-top: 1px; }
+.event-facts dd { margin: 0; overflow-wrap: anywhere; }
+.event-counts { display: flex; gap: 8px; align-items: center; color: var(--text-3); }
+.event-counts .linkish:disabled { color: var(--text-3); }
+.rsvp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rsvp .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.event-desc { padding: 16px; }
+.event-desc h3 { font-size: 16px; margin-bottom: 6px; }
+.event-desc p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+input[type='datetime-local'].input { min-width: 0; width: 100%; }
+.badges:empty { display: none; }

@@ -33,6 +33,8 @@ Use any `…@student.tharaka.ac.ke` or `…@tharaka.ac.ke` address; any 6-digit 
 | `/profile` | Your profile | #7 |
 | `/profile/edit` | Edit profile | #7 |
 | `/settings` | Install the app (Android/desktop dialog, or iPhone Share-menu steps), log out, delete account | #7 |
+| `/notifications` | Inbox: comments, answers, follows, group requests, cancelled events; unread ones highlighted, mark all as read; invites you to turn on push. The heart in the top bar shows the unread count (checked every minute and when a push arrives) | v0.2 |
+| `/settings/notifications` | Push on this device (on/off) and which kinds push to all your devices. `public/push-sw.js` (imported into the generated `sw.js`) shows pushes and opens the right screen on tap | v0.2 |
 
 Every post and comment has a "…" menu: report (8 reasons), block the author, and delete (own content; admins and the post's author can delete comments). It opens as a bottom sheet and asks before anything destructive.
 

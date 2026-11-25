@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { ContentMenu } from '../components/ContentMenu';
+import { EventCard } from '../components/EventCard';
 import { Icon } from '../components/Icon';
 import { PostCard } from '../components/PostCard';
 import { Sheet } from '../components/Sheet';
@@ -12,6 +13,7 @@ import {
   answerRequest, getGroup, getGroupPosts, getMembers, getRequests, joinGroup, leaveGroup,
   type Group, type JoinRequest, type Member,
 } from '../lib/community';
+import { getEvents, type CampusEvent } from '../lib/events';
 import type { Post } from '../lib/feed';
 import { GroupBadges } from './Groups';
 
@@ -21,7 +23,7 @@ export function GroupPage() {
   const navigate = useNavigate();
   const [group, setGroup] = useState<Group | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
-  const [tab, setTab] = useState<'posts' | 'members' | 'requests'>('posts');
+  const [tab, setTab] = useState<'posts' | 'events' | 'members' | 'requests'>('posts');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -103,12 +105,14 @@ export function GroupPage() {
         <>
           <div className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'posts'} className={tab === 'posts' ? 'active' : ''} onClick={() => setTab('posts')}>Posts</button>
+            <button type="button" role="tab" aria-selected={tab === 'events'} className={tab === 'events' ? 'active' : ''} onClick={() => setTab('events')}>Events</button>
             <button type="button" role="tab" aria-selected={tab === 'members'} className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Members</button>
             {admin && group.visibility === 'private' && !group.isClassGroup && (
               <button type="button" role="tab" aria-selected={tab === 'requests'} className={tab === 'requests' ? 'active' : ''} onClick={() => setTab('requests')}>Requests</button>
             )}
           </div>
           {tab === 'posts' && <GroupPosts groupId={group.id} />}
+          {tab === 'events' && <GroupEvents groupId={group.id} canCreate={canPost} />}
           {tab === 'members' && <Members groupId={group.id} />}
           {tab === 'requests' && <Requests groupId={group.id} onApproved={() => setGroup((g) => (g && g.memberCount !== null ? { ...g, memberCount: g.memberCount + 1 } : g))} />}
         </>
@@ -193,6 +197,36 @@ function GroupPosts({ groupId }: { groupId: string }) {
       ))}
       {cursor && <button type="button" className="linkish comments-more" onClick={() => load(cursor)}>Show more</button>}
     </div>
+  );
+}
+
+/** The group's upcoming events; members who may post here may also host one. */
+function GroupEvents({ groupId, canCreate }: { groupId: string; canCreate: boolean }) {
+  const [items, setItems] = useState<CampusEvent[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const load = useCallback(async (from: string | null) => {
+    try {
+      const page = await getEvents('upcoming', { groupId, cursor: from });
+      setItems((prev) => (from ? [...prev, ...page.items] : page.items));
+      setCursor(page.nextCursor); setState('ready');
+    } catch { setState('error'); }
+  }, [groupId]);
+  useEffect(() => { void load(null); }, [load]);
+
+  return (
+    <>
+      {canCreate && (
+        <div className="screen" style={{ paddingBottom: 4 }}>
+          <Link to={`/events/new?group=${groupId}`} className="btn secondary btn-link">Host an event</Link>
+        </div>
+      )}
+      {state === 'loading' && <p className="feed-foot" role="status">Loading…</p>}
+      {state === 'error' && <p className="feed-foot" role="alert">Events didn’t load. <button type="button" className="linkish" onClick={() => load(null)}>Try again</button></p>}
+      {state === 'ready' && items.length === 0 && <p className="feed-foot">No upcoming events.</p>}
+      <ul className="list">{items.map((e) => <li key={e.id}><EventCard e={e} /></li>)}</ul>
+      {cursor && <button type="button" className="linkish comments-more" onClick={() => load(cursor)}>Show more</button>}
+    </>
   );
 }
 

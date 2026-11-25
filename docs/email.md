@@ -22,17 +22,55 @@ members nothing to be phished with ("we never send links, only a code").
 
 | Setting | Meaning |
 |---|---|
-| `EMAIL_MODE` | `smtp` on the server. `log` in production refuses to send (and never prints a code) |
+| `EMAIL_MODE` | `resend` on KENET (HTTPS API), `smtp` elsewhere. `log` in production refuses to send (and never prints a code) |
 | `EMAIL_FROM` | Sender, e.g. `Hatua <no-reply@our-domain>`. Must be an address on a domain we control |
 | `SMTP_HOST`, `SMTP_PORT` | The mail server. Port 587 (STARTTLS) is the normal choice |
 | `SMTP_SECURE` | `true` only for port 465 |
 | `SMTP_REQUIRE_TLS` | Keep `true`. `false` only for a relay on the same private network that offers no encryption |
 | `SMTP_USER`, `SMTP_PASS` | Login. Leave both empty for a relay that trusts our server's address |
+| `RESEND_API_KEY` | For `EMAIL_MODE=resend` only: the Hatua-only Resend key (`re_…`). The `SMTP_*` settings are then ignored |
 
 A wrong or incomplete set-up stops the API at start-up with a clear message. Once running, the API logs
 `email ready` or `EMAIL IS NOT WORKING` at start-up.
 
-## Where the email is sent from — decision needed
+## Where the email is sent from — DECIDED 24 Nov: Resend, on our own domain
+
+We send through **Resend** (SMTP), not the university relay. The team's Resend account already has
+`nextup.co.ke` verified for another site (checked 24 Nov: DKIM at `resend._domainkey.nextup.co.ke`, SPF and bounce
+MX at `send.nextup.co.ke`). `student.tharaka.ac.ke` and `tharaka.ac.ke` both receive mail at **Google Workspace**,
+so Gmail's sender rules apply: SPF and DKIM must pass and the domain needs DMARC.
+
+### Now (testing and beta): reuse `nextup.co.ke`
+
+1. In Resend, create an **API key for Hatua only**: permission "Sending access", domain `nextup.co.ke`. Its own key
+   means it can be revoked without touching the other site.
+2. In `/opt/nextup/env/hatua.env` (KENET, `deploy/KENET.md`):
+
+   ```
+   EMAIL_MODE=resend
+   EMAIL_FROM=Hatua <no-reply@nextup.co.ke>
+   RESEND_API_KEY=<the Hatua API key>
+   ```
+
+   **Why not SMTP:** KENET's network blocks every outgoing mail port (25, 465, 587, 2465, 2587 — checked from
+   vm-app 24 Nov; all open from outside), but HTTPS to `api.resend.com` works. `EMAIL_MODE=resend` sends the same
+   email through Resend's HTTPS API. Elsewhere SMTP works with `EMAIL_MODE=smtp`, `SMTP_HOST=smtp.resend.com`,
+   `SMTP_PORT=587`, `SMTP_USER=resend`, `SMTP_PASS=<key>`.
+3. Add DMARC in Cloudflare (DNS only): `_dmarc.nextup.co.ke  TXT  "v=DMARC1; p=none; rua=mailto:<team address>"`.
+   `p=none` only asks for reports, so it changes nothing for the other site's mail.
+4. Recreate `hatua-api` (KENET's compose loads all of `hatua.env`, so no compose change is needed); the log must say `email ready`. Then run the deliverability test below.
+
+### Before launch (20 Dec)
+
+- **Limits:** the account's daily and monthly limits are **shared with the other site**. Launch day can mean a few
+  thousand codes in a day, so move to a paid plan with no low daily cap before launch (check Resend's current pricing).
+- **Own subdomain:** on a plan that allows a second domain, add `hatua.nextup.co.ke` (or the final domain once the
+  name is chosen), create the records Resend shows plus `_dmarc.hatua.nextup.co.ke`, and change `EMAIL_FROM`. Then
+  Hatua's sending reputation is separate from the other site's.
+- **Privacy:** members' email addresses and codes pass through Resend, outside Kenya. Say so in the privacy policy
+  and check the cross-border transfer rules with the ODPC (CLAUDE.md section 10).
+
+### The options we compared
 
 | Option | For | Against |
 |---|---|---|
@@ -84,7 +122,9 @@ sender, and re-test. Do not launch until this passes.
 
 | Symptom | Likely cause |
 |---|---|
-| API logs `EMAIL IS NOT WORKING` at start-up | Wrong host/port/login, the mail server is down, or `EMAIL_MODE` is still `log` |
+| API logs `EMAIL IS NOT WORKING` at start-up | Wrong host/port/login or Resend key, the mail server is down, or `EMAIL_MODE` is still `log` |
+| SMTP times out from the server, works from a laptop | The network blocks mail ports (KENET does): use `EMAIL_MODE=resend` |
+| Resend says `domain is not verified` | `EMAIL_FROM` uses a domain not verified in that Resend account, or the key is limited to another domain |
 | Members see "We couldn't send your code" | The API could not reach the mail server; look for `sign-in email was not sent` in the API log (it says whether it was temporary) |
 | Sent according to the log, but nothing arrives | Filtered by the receiving mail system: check spam, then SPF/DKIM/DMARC, then ask ICT |
 | Works for staff, not for students (or the reverse) | The two mail domains are filtered differently; test both |

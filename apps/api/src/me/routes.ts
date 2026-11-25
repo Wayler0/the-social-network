@@ -287,6 +287,9 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
       await tx.query(`update stories set image_id = null, deleted_at = coalesce(deleted_at, clock_timestamp()) where author_user_id = $1`, [userId]);
       await tx.query('delete from story_views where viewer_id = $1', [userId]);
       await tx.query('delete from event_rsvps where user_id = $1', [userId]);   // events they created stay, like posts
+      for (const table of ['notifications', 'push_subscriptions', 'push_outbox']) await tx.query(`delete from ${table} where user_id = $1`, [userId]);
+      await tx.query('update notifications set actor_user_id = null where actor_user_id = $1', [userId]);
+      await tx.query(`update users set notification_prefs = '{}' where id = $1`, [userId]);
       await tx.query('delete from close_friends where user_id = $1 or friend_id = $1', [userId]);
       await tx.query('delete from story_hidden_from where user_id = $1 or hidden_user_id = $1', [userId]);
       const adminOf = (await tx.query<{ group_id: string; role: string }>(

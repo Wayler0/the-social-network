@@ -18,6 +18,7 @@ import { followRoutes } from './follows/routes.js';
 import { suggestionRoutes } from './suggestions/routes.js';
 import { storyRoutes } from './stories/routes.js';
 import { eventRoutes } from './events/routes.js';
+import { notificationRoutes } from './notifications/routes.js';
 
 /**
  * Pieces tests can swap: `requireUser` replaces the session check (no cookie needed),
@@ -90,13 +91,14 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   app.register(meRoutes, { config, db });                // Kim — issues #20, #21
   app.register(postRoutes, { config, db });              // Kim — issues #22, #24
   app.register(safetyRoutes, { db });                    // Kim — issue #23
-  app.register(groupRoutes, { db });                     // Kim — issue #25
-  app.register(announcementRoutes, { db });              // Kim — issue #26
-  app.register(questionRoutes, { db });                  // Kim — issue #27
-  app.register(followRoutes, { db });                    // Kim — v0.2 follows
-  app.register(suggestionRoutes, { db });             // who to follow (onboarding, Discover)
+  app.register(groupRoutes, { config, db });             // Kim — issue #25
+  app.register(announcementRoutes, { config, db });      // Kim — issue #26
+  app.register(questionRoutes, { config, db });          // Kim — issue #27
+  app.register(followRoutes, { config, db });            // Kim — v0.2 follows
+  app.register(suggestionRoutes, { db });                // who to follow (onboarding, Discover)
   app.register(storyRoutes, { config, db });             // Kim — v0.2 stories
   app.register(eventRoutes, { config, db });             // Kim — v0.2 events
+  app.register(notificationRoutes, { config, db });      // Kim — v0.2 notifications and push
   app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
   app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 
