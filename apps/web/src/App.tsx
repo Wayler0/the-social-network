@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { Placeholder } from './components/Placeholder';
@@ -43,8 +44,17 @@ function GuestOnly() {
   return status === 'signedIn' ? <Navigate to="/" replace /> : <Outlet />;
 }
 
+/** Each screen opens at the top. Home is the exception: it puts you back where you were in the feed. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useLayoutEffect(() => { if (pathname !== '/') window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 export function App() {
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       <Route element={<GuestOnly />}>
         <Route path="/welcome" element={<SignUp />} />
@@ -79,5 +89,6 @@ export function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

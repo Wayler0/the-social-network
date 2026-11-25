@@ -7,6 +7,7 @@ import { PostCard } from '../components/PostCard';
 import { RichText } from '../components/RichText';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { getFeedState, patchPost, removePost } from '../lib/feed-store';
 import { addComment, COMMENT_MAX, deleteComment, getComments, getPost, timeAgo, type Comment, type Post } from '../lib/feed';
 
 /** One post with its comments, oldest first, and a box to add one (issue #22). */
@@ -14,7 +15,8 @@ export function PostDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { me } = useAuth();
-  const [post, setPost] = useState<Post | null>(null);
+  // The post as the feed already has it shows instantly; comments load underneath.
+  const [post, setPost] = useState<Post | null>(() => getFeedState().posts.find((p) => p.id === id) ?? null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -26,6 +28,7 @@ export function PostDetail() {
 
   const load = useCallback(async () => {
     setState('loading');
+    setPost((p) => (p?.id === id ? p : getFeedState().posts.find((x) => x.id === id) ?? null));
     try {
       const [p, c] = await Promise.all([getPost(id), getComments(id)]);
       setPost(p); setComments(c.items); setCursor(c.nextCursor); setState('ready');
@@ -36,6 +39,8 @@ export function PostDetail() {
     }
   }, [id]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (post) patchPost(post); }, [post]);
+  useEffect(() => { if (state === 'missing') removePost(id); }, [state, id]);
 
   async function more() {
     try {
@@ -72,7 +77,7 @@ export function PostDetail() {
     </header>
   );
 
-  if (state === 'loading') return <>{back}<p className="feed-foot" role="status">Loading…</p></>;
+  if (state === 'loading' && !post) return <>{back}<p className="feed-foot" role="status">Loading…</p></>;
   if (state === 'missing' || !post) {
     return (
       <>{back}
@@ -91,11 +96,12 @@ export function PostDetail() {
     <>
       {back}
       <PostCard post={post} linkToPost={false} onChange={setPost}
-        onRemoved={() => navigate('/', { replace: true })}
+        onRemoved={() => { removePost(post.id); navigate('/', { replace: true }); }}
         onBlocked={() => navigate('/', { replace: true })} />
 
       <section className="comments" aria-label="Comments">
-        {comments.length === 0 && <p className="muted comments-empty">No comments yet. Say something kind.</p>}
+        {state === 'loading' && <p className="muted comments-empty" role="status">Loading comments…</p>}
+        {state === 'ready' && comments.length === 0 && <p className="muted comments-empty">No comments yet. Say something kind.</p>}
         {comments.map((c) => (
           <div key={c.id} id={`comment-${c.id}`} className="comment">
             <Avatar name={c.author.name} photoUrl={c.author.photoUrl} size={32} />
