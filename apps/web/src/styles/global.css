@@ -559,3 +559,7 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .course-suggest button { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; }
 .course-suggest button:hover, .course-suggest button:focus-visible { background: var(--fill); }
 .course-suggest .muted { font-size: 12px; flex: none; }
+/* ---------- Sharing stories ---------- */
+.story-foot-end { gap: 10px; }
+.story-credit { width: 100%; font-size: 12px; opacity: 0.85; }
+.story-note { position: absolute; left: 16px; right: 16px; bottom: 90px; margin: 0; padding: 10px 14px; border-radius: var(--radius-m); background: rgba(255, 255, 255, 0.18); color: #fff; text-align: center; font-size: 14px; }

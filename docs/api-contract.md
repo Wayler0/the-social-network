@@ -474,6 +474,8 @@ Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").
 | `POST /api/stories` | `{ body?, imageId?, audience?: "followers"\|"close_friends", background?: "black"\|"violet"\|"coral"\|"mint"\|"sunshine"\|"white" (default black; migration 022), officeId? \| groupId? }` → `201` Story. Photo or text needed (body up to 500). Finished profile; 30 a day |
 | `POST /api/stories/:id/view` | Mark seen → `204` (idempotent; your own views are not counted) |
 | `PUT /api/stories/:id/like` · `DELETE …` | Like or unlike a story you can see (not your own; `400`) → `{ liked }`, idempotent. Liking also counts as viewing. Only the author sees likes: `likeCount` on their own stories and `liked` on each viewer |
+| `GET /api/stories/:id` | One story for a shared link → `{ author, isMine, story }`; `404` if you may not see it or it has gone |
+| `POST /api/stories/:id/reshare` | Add someone's story to your own → `201` Story with `resharedFrom: { name }`. Not your own (`400`), not a close-friends story (`403`). The reshare copies nothing: it shows the original, reaches **only your followers who may also see the original**, and disappears with it. Resharing a reshare reshares the original. Counts toward 30 stories a day. Migration 024 |
 | `GET /api/stories/:id/viewers` | `{ count, items: [{ id, name, photoUrl, viewedAt }] }` — only whoever manages the story (author, office members, club admins); `403` otherwise |
 | `DELETE /api/stories/:id` | Author, the office or club managing it, or an admin → `204` |
 | `GET /api/me/close-friends` · `PUT\|DELETE …/:userId` | Close friends list (up to 200; `409 list_full`) |

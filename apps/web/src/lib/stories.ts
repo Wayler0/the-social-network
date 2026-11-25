@@ -14,6 +14,8 @@ export const STORY_BACKGROUND_LABEL: Record<StoryBackground, string> = {
 export type StoryImage = { url: string; thumbUrl: string; width: number; height: number };
 export type Story = {
   id: string; body: string | null; image: StoryImage | null; audience: 'followers' | 'close_friends';
+  /** Shared from someone else's story: who it is from. */
+  resharedFrom?: { name: string } | null;
   /** Missing on stories from before colours existed: treat as black. */
   background?: StoryBackground;
   createdAt: string; expiresAt: string; seen: boolean; likedByMe: boolean;
@@ -35,3 +37,9 @@ export const getStoryViewers = (storyId: string) => call<{ count: number; likeCo
 /** Like or unlike someone else's story (only its author sees who liked it). */
 export const likeStory = (storyId: string, on: boolean) => call<{ liked: boolean }>(on ? 'PUT' : 'DELETE', `/api/stories/${id(storyId)}/like`);
 export const deleteStory = (storyId: string) => call<void>('DELETE', `/api/stories/${id(storyId)}`);
+
+/** Add someone's story to your own (with credit). Not your own or close-friends stories. */
+export const reshareStory = (storyId: string) => call<Story>('POST', `/api/stories/${id(storyId)}/reshare`);
+/** One story, for a shared link; 404 when you may not see it or it has gone. */
+export const getStory = (storyId: string) =>
+  call<{ author: StoryAuthor; isMine: boolean; story: Story }>('GET', `/api/stories/${id(storyId)}`);

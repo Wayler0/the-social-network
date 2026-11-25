@@ -12,10 +12,19 @@ export function postUrl(postId: string, origin = window.location.origin): string
 export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
 
 export async function sharePost(postId: string): Promise<ShareResult> {
-  const url = postUrl(postId);
+  return shareLink(postUrl(postId), `A post on ${APP_NAME}`);
+}
+
+/** A story's link: opens only for members who may see it (and only while it lasts). */
+export function shareStory(storyId: string): Promise<ShareResult> {
+  return shareLink(`${window.location.origin}/story/${encodeURIComponent(storyId)}`, `A story on ${APP_NAME}`);
+}
+
+/** The phone's share menu with a link and a short line, or copy the link where there is no menu. */
+export async function shareLink(url: string, text: string): Promise<ShareResult> {
   if (typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title: APP_NAME, text: `A post on ${APP_NAME}`, url });
+      await navigator.share({ title: APP_NAME, text, url });
       return 'shared';
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
