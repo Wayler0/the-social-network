@@ -26,7 +26,7 @@ type StoryRow = {
   office_id: string | null; office_name: string | null; office_photo: string | null;
   group_id: string | null; group_name: string | null; group_verified: boolean | null;
   image_path: string | null; image_width: number | null; image_height: number | null;
-  seen: boolean; view_count: number | null;
+  seen: boolean; view_count: number | null; liked_by_me: boolean; like_count: number | null;
 };
 
 const STORY_SELECT = `
@@ -36,7 +36,9 @@ const STORY_SELECT = `
          g.id as group_id, g.name as group_name, (g.club_verified_at is not null) as group_verified,
          i.path as image_path, i.width as image_width, i.height as image_height,
          exists (select 1 from story_views sv where sv.story_id = s.id and sv.viewer_id = $1) as seen,
-         case when s.author_user_id = $1 then (select count(*) from story_views sv where sv.story_id = s.id)::int end as view_count
+         case when s.author_user_id = $1 then (select count(*) from story_views sv where sv.story_id = s.id)::int end as view_count,
+         exists (select 1 from story_likes sl where sl.story_id = s.id and sl.user_id = $1) as liked_by_me,
+         case when s.author_user_id = $1 then (select count(*) from story_likes sl where sl.story_id = s.id)::int end as like_count
     from stories s
     join users au on au.id = s.author_user_id
     left join office_accounts o on o.id = s.author_office_id
@@ -61,7 +63,9 @@ function storyBody(s: StoryRow) {
     id: s.id, body: s.body,
     image: s.image_path ? { ...imageUrls(s.image_path), width: s.image_width, height: s.image_height } : null,
     audience: s.audience, createdAt: iso(s.created_at), expiresAt: iso(s.expires_at), seen: s.seen,
+    likedByMe: s.liked_by_me,
     ...(s.view_count !== null ? { viewCount: s.view_count } : {}),
+    ...(s.like_count !== null ? { likeCount: s.like_count } : {}),
   };
 }
 
@@ -106,6 +110,8 @@ const userParam = z.object({ userId: uuid });
  *   GET    /api/stories                 the stories row
  *   POST   /api/stories                 { body?, imageId?, audience?, officeId? | groupId? }
  *   POST   /api/stories/:id/view        mark as seen (idempotent)
+ *   PUT    /api/stories/:id/like        like it (idempotent; not your own)
+ *   DELETE /api/stories/:id/like        unlike it (idempotent)
  *   GET    /api/stories/:id/viewers     who saw it (whoever manages the story)
  *   DELETE /api/stories/:id             the author, the office/club managing it, or an admin
  *   GET|PUT|DELETE /api/me/close-friends[/:userId]
@@ -196,6 +202,31 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
     return reply.code(204).send();
   });
 
+  // ---- PUT / DELETE /api/stories/:id/like   a story you can see, not your own; liking also counts as viewing
+  for (const liked of [true, false]) {
+    app.route({
+      method: liked ? 'PUT' : 'DELETE',
+      url: '/api/stories/:id/like',
+      handler: async (req, reply) => {
+        const params = idParam.safeParse(req.params);
+        if (!params.success) return notFound(reply);
+        const { userId, campusId } = req.auth!;
+        const story = (await db.query<{ own: boolean }>(
+          `select s.author_user_id = $1 as own from stories s where s.id = $3 and ${visibleStory('s', V)}`,
+          [userId, campusId, params.data.id])).rows[0];
+        if (!story) return notFound(reply);
+        if (story.own) return fail(reply, 400, 'invalid_input', 'You can’t like your own story.');
+        if (liked) {
+          await db.query('insert into story_views (story_id, viewer_id) values ($1, $2) on conflict do nothing', [params.data.id, userId]);
+          await db.query('insert into story_likes (story_id, user_id) values ($1, $2) on conflict do nothing', [params.data.id, userId]);
+        } else {
+          await db.query('delete from story_likes where story_id = $1 and user_id = $2', [params.data.id, userId]);
+        }
+        return { liked };
+      },
+    });
+  }
+
   app.get('/api/stories/:id/viewers', async (req, reply) => {
     const params = idParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
@@ -203,13 +234,17 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
     const m = (await db.query<{ manages: boolean }>(MANAGES, [userId, campusId, params.data.id])).rows[0];
     if (!m) return notFound(reply);
     if (!m.manages) return fail(reply, 403, 'forbidden', 'Only whoever posted the story sees who viewed it.');
-    const { rows } = await db.query<{ id: string; name: string | null; photo_url: string | null; viewed_at: Date }>(
-      `select u.id, u.name, u.photo_url, v.viewed_at
+    const { rows } = await db.query<{ id: string; name: string | null; photo_url: string | null; viewed_at: Date; liked: boolean }>(
+      `select u.id, u.name, u.photo_url, v.viewed_at,
+              exists (select 1 from story_likes sl where sl.story_id = v.story_id and sl.user_id = u.id) as liked
          from story_views v join users u on u.id = v.viewer_id
         where v.story_id = $3 and u.campus_id = $2 and u.deleted_at is null and v.viewer_id <> $1 and ${notBlocked('u.id', V)}
         order by v.viewed_at desc limit 1000`,
       [userId, campusId, params.data.id]);
-    return { count: rows.length, items: rows.map((r) => ({ id: r.id, name: r.name, photoUrl: r.photo_url, viewedAt: iso(r.viewed_at) })) };
+    // Likers first, then the most recent viewers.
+    const items = rows.map((r) => ({ id: r.id, name: r.name, photoUrl: r.photo_url, viewedAt: iso(r.viewed_at), liked: r.liked }))
+      .sort((a, b) => Number(b.liked) - Number(a.liked));
+    return { count: rows.length, likeCount: items.filter((i) => i.liked).length, items };
   });
 
   app.delete('/api/stories/:id', async (req, reply) => {

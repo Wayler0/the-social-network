@@ -98,6 +98,8 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
   const [prefs] = await q<{ notification_prefs: Record<string, unknown> }>('select notification_prefs from users where id = $1');
   const storiesViewed = await q<{ story_id: string; viewed_at: Date }>(
     'select story_id, viewed_at from story_views where viewer_id = $1 order by viewed_at');
+  const storiesLiked = await q<{ story_id: string; created_at: Date }>(
+    'select story_id, created_at from story_likes where user_id = $1 order by created_at');
   const closeFriends = await q<{ id: string; name: string | null }>(
     `select u.id, u.name from close_friends c join users u on u.id = c.friend_id where c.user_id = $1 order by c.created_at`);
   const storyHidden = await q<{ id: string; name: string | null }>(
@@ -152,6 +154,7 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     pushDevices: devices.map((d) => ({ device: d.user_agent, since: iso(d.created_at), lastDelivered: iso(d.last_success_at) })),
     notificationSettings: prefs?.notification_prefs ?? {},
     storiesViewed: storiesViewed.map((v) => ({ storyId: v.story_id, viewedAt: iso(v.viewed_at) })),
+    storiesLiked: storiesLiked.map((l) => ({ storyId: l.story_id, likedAt: iso(l.created_at) })),
     closeFriends: closeFriends.map((c) => ({ id: c.id, name: c.name ?? 'Deleted member' })),
     storiesHiddenFrom: storyHidden.map((h) => ({ id: h.id, name: h.name ?? 'Deleted member' })),
     following: following.map((f) => ({ type: f.target_type, id: f.target_id, name: f.name, since: iso(f.created_at) })),

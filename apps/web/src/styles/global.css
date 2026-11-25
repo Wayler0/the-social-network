@@ -486,6 +486,11 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .announce-pill { margin-right: 6px; padding: 1px 7px; font-size: 10px; vertical-align: 1px; }
 .post-group-link { color: inherit; font-weight: 600; text-decoration: none; }
 
+/* ---------- Story likes ---------- */
+.story-foot-end { display: flex; justify-content: flex-end; }
+.story-like { width: 52px; height: 52px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+.story-like.liked { color: var(--coral); }
+.viewer-liked { color: var(--coral); display: inline-flex; flex: none; }
 /* ---------- Profile photo ---------- */
 .photo-edit { display: flex; align-items: center; gap: 16px; padding: 4px 0 20px; }
 .photo-edit-avatar { padding: 0; border: 0; background: none; border-radius: 50%; flex: none; }
@@ -503,3 +508,20 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .legal-body p { margin: 8px 0; }
 .legal-body ul { margin: 6px 0; padding-left: 20px; }
 .legal-body li { margin: 6px 0; }
+/* ---------- Photo editor (crop, zoom, rotate) ---------- */
+.cropper { position: fixed; inset: 0; z-index: 70; background: #000; color: #fff; display: flex; flex-direction: column; max-width: var(--max-w); margin: 0 auto; }
+.cropper-bar { display: flex; align-items: center; justify-content: space-between; padding: max(8px, env(safe-area-inset-top)) 8px 8px; }
+.cropper-bar h2 { font-size: 17px; }
+.cropper-text-btn { min-height: 44px; padding: 0 12px; border: 0; background: none; color: #fff; font: inherit; font-size: 16px; }
+.cropper-text-btn.strong { font-weight: 700; color: var(--sunshine); }
+.cropper-text-btn:disabled { opacity: 0.4; }
+.cropper-stage { position: relative; width: min(100vw - 32px, 420px); aspect-ratio: 1; margin: 12px auto; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.cropper-stage img { position: absolute; left: 50%; top: 50%; max-width: none; transform-origin: center; -webkit-user-drag: none; pointer-events: none; }
+/* Darkens everything outside the circle: what shows inside is the profile photo. */
+.cropper-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); outline: 2px solid rgba(255, 255, 255, 0.85); pointer-events: none; }
+.cropper-error { position: absolute; left: 12px; right: 12px; top: 45%; margin: 0; text-align: center; }
+.cropper-tools { padding: 8px 20px max(20px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.cropper-zoom { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 360px; }
+.cropper-zoom input { flex: 1; accent-color: var(--sunshine); }
+.cropper-buttons { display: flex; gap: 8px; }
+.cropper .hint { color: rgba(255, 255, 255, 0.7); margin: 0; }

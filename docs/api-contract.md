@@ -184,6 +184,13 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 ### `POST /api/me/member-number-dispute` ✅
 `{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
+### Moving up a year ✅ (migration 019)
+
+Each campus has an academic year start (`campuses.academic_year_start_month/day`; 1 September for the first campus). A student's `yearOfStudy` belongs to one academic year. When `GET /api/me` runs in a later academic year, the API moves freshers and continuing students up by the years that passed (Year 8 at most; a fresher becomes continuing), moves them to the new class group, and returns `yearCheck: { from, to }` until they answer:
+- `POST /api/me/year-check` → Me: "Yes, I'm in Year {to}" (clears `yearCheck`).
+- `PATCH /api/me` with `yearOfStudy` or `memberType` (staying in the old year, another year, or alumni with `graduationYear`) also clears it.
+`yearCheck` is `null` when there is nothing to ask. Alumni and staff are never moved. Code: `apps/api/src/me/year.ts`; SQL function `academic_year(campus, at)`.
+
 ### `GET /api/users/:id` ✅ — someone's public profile
 `{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing, followsYou, followerCount, followingCount }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. Follows: section 12 (v0.2).
 
@@ -458,12 +465,13 @@ Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").
 | `GET /api/stories` | The stories row: `{ items: [{ author: { type: "user"\|"office"\|"group", id, name, photoUrl, badges }, isMine, allSeen, stories: [Story] }] }` — your own first, then official accounts, then clubs, then people; within each, unseen before seen, then newest. Stories oldest first |
 | `POST /api/stories` | `{ body?, imageId?, audience?: "followers"\|"close_friends", officeId? \| groupId? }` → `201` Story. Photo or text needed (body up to 500). Finished profile; 30 a day |
 | `POST /api/stories/:id/view` | Mark seen → `204` (idempotent; your own views are not counted) |
+| `PUT /api/stories/:id/like` · `DELETE …` | Like or unlike a story you can see (not your own; `400`) → `{ liked }`, idempotent. Liking also counts as viewing. Only the author sees likes: `likeCount` on their own stories and `liked` on each viewer |
 | `GET /api/stories/:id/viewers` | `{ count, items: [{ id, name, photoUrl, viewedAt }] }` — only whoever manages the story (author, office members, club admins); `403` otherwise |
 | `DELETE /api/stories/:id` | Author, the office or club managing it, or an admin → `204` |
 | `GET /api/me/close-friends` · `PUT\|DELETE …/:userId` | Close friends list (up to 200; `409 list_full`) |
 | `GET /api/me/story-hidden` · `PUT\|DELETE …/:userId` | "Hide my stories from" list (up to 200) |
 
-**Story** `{ id, body, image: { url, thumbUrl, width, height } | null, audience, createdAt, expiresAt, seen, viewCount? }` — `viewCount` only on stories you posted.
+**Story** `{ id, body, image: { url, thumbUrl, width, height } | null, audience, createdAt, expiresAt, seen, likedByMe, viewCount?, likeCount? }` — `viewCount` and `likeCount` only on stories you posted. Viewers: `{ count, likeCount, items: [{ id, name, photoUrl, viewedAt, liked }] }`, likers first. Migration 020.
 
 Who sees a story (`visibleStory` in `apps/api/src/visibility.ts`; anything else is `404`):
 - **Personal:** your followers (section 12), except people you hide your stories from; close-friends stories only to your close friends. An **under-18** author's stories only reach people they follow back. **Staff** see a student's (fresher/continuing) story only if the student follows them.
