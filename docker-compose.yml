@@ -1,6 +1,9 @@
-# Slim stack for a shared, memory-tight server: Postgres + API only.
-# No Redis, no MinIO, no Caddy in v0.1 (see CLAUDE.md). The server's existing web
-# server serves apps/web/dist and forwards /api to the API on 127.0.0.1:3000.
+# Target: the campus KENET server (CLAUDE.md section 1, DECIDED). Not a personal droplet or VPS.
+# Slim stack for a small, memory-tight server: Postgres + API + Caddy (web app and HTTPS).
+# No Redis, no MinIO in v0.1. Local development uses only `db` (npm run db:up).
+# Server: docker compose --profile server up -d --build (runbook: deploy/README.md).
+# If the server already runs nginx or another web server on ports 80/443, add
+# -f docker-compose.yml -f deploy/behind-proxy.yml (see that file).
 services:
   db:
     image: postgis/postgis:16-3.4-alpine
@@ -32,9 +35,10 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://hatua:${POSTGRES_PASSWORD}@db:5432/hatua
       APP_NAME: ${APP_NAME:-Hatua}
-      APP_URL: ${APP_URL:-https://hatua.nextup.co.ke}
+      APP_URL: ${APP_URL:-https://localhost}   # set in .env: https://<the KENET server domain>
       CODE_PEPPER: ${CODE_PEPPER:-}   # required: the API refuses to start in production without it
       SESSION_COOKIE: ${SESSION_COOKIE:-}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}   # Caddy = 1; Caddy behind another web server = 2
       NODE_OPTIONS: --max-old-space-size=128
       MEDIA_DIR: /data/media
       # Email (sign-in codes): set these in .env on the server — docs/email.md
@@ -53,6 +57,24 @@ services:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     mem_limit: 192m
     profiles: ["server"]   # local dev runs the API with `npm run dev:api` instead
+
+  # The web app and the front door: HTTPS, the built PWA, /api and /media forwarded to the API.
+  web:
+    build: { context: ., dockerfile: deploy/web.Dockerfile }
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}   # the public domain, set in .env on the server
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - caddydata:/data       # HTTPS certificates and keys: keep, or Caddy asks for new ones on every start
+      - caddyconfig:/config
+    mem_limit: 64m
+    profiles: ["server"]
 
   # Encrypted off-server backups (restic). Not a running service: deploy/backup/*.sh start it
   # for each backup or restore. Settings come from .env — see deploy/backup/README.md.
@@ -82,3 +104,5 @@ volumes:
   dbdata:
   media:
   backupcache:
+  caddydata:
+  caddyconfig:
