@@ -42,4 +42,11 @@ await png(any, 192, 'icon-192.png');
 await png(any, 512, 'icon-512.png');
 await png(svg({ rounded: false, scale: 0.72 }), 512, 'icon-maskable-512.png');
 await png(svg({ rounded: false, scale: 0.86 }), 180, 'apple-touch-icon.png');
-console.log('Icons written to apps/web/public/');
+// Link preview card (WhatsApp, Telegram, Facebook, X): 1200 × 630, the mark on violet, no words,
+// so it stays right when the app is renamed (the name comes from the page title instead).
+const OG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">` +
+  `<rect width="1200" height="630" fill="${VIOLET}"/>` +
+  `<circle cx="1040" cy="120" r="210" fill="#7C55F7"/><circle cx="150" cy="560" r="170" fill="#5A2EE6"/>` +
+  `<g transform="translate(395 110) scale(0.8)"><rect width="512" height="512" rx="112" fill="#5228D9"/>${MARK}</g></svg>`;
+await sharp(Buffer.from(OG), { density: 144 }).resize(1200, 630).png().toFile(out('og-image.png'));
+console.log('Icons and the link preview card written to apps/web/public/');
