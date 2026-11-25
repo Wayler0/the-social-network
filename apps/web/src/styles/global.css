@@ -553,3 +553,8 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .cropper-zoom input { flex: 1; accent-color: var(--sunshine); }
 .cropper-buttons { display: flex; gap: 8px; }
 .cropper .hint { color: rgba(255, 255, 255, 0.7); margin: 0; }
+
+/* ---------- Sharing stories ---------- */
+.story-foot-end { gap: 10px; }
+.story-credit { width: 100%; font-size: 12px; opacity: 0.85; }
+.story-note { position: absolute; left: 16px; right: 16px; bottom: 90px; margin: 0; padding: 10px 14px; border-radius: var(--radius-m); background: rgba(255, 255, 255, 0.18); color: #fff; text-align: center; font-size: 14px; }
