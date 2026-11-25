@@ -184,6 +184,13 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 ### `POST /api/me/member-number-dispute` ✅
 `{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
+### Moving up a year ✅ (migration 019)
+
+Each campus has an academic year start (`campuses.academic_year_start_month/day`; 1 September for the first campus). A student's `yearOfStudy` belongs to one academic year. When `GET /api/me` runs in a later academic year, the API moves freshers and continuing students up by the years that passed (Year 8 at most; a fresher becomes continuing), moves them to the new class group, and returns `yearCheck: { from, to }` until they answer:
+- `POST /api/me/year-check` → Me: "Yes, I'm in Year {to}" (clears `yearCheck`).
+- `PATCH /api/me` with `yearOfStudy` or `memberType` (staying in the old year, another year, or alumni with `graduationYear`) also clears it.
+`yearCheck` is `null` when there is nothing to ask. Alumni and staff are never moved. Code: `apps/api/src/me/year.ts`; SQL function `academic_year(campus, at)`.
+
 ### `GET /api/users/:id` ✅ — someone's public profile
 `{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing, followsYou, followerCount, followingCount }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. Follows: section 12 (v0.2).
 
