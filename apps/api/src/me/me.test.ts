@@ -109,7 +109,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
       id: m.id, campus: { slug: expect.any(String), name: expect.any(String) }, email: m.email, memberType: 'continuing',
       name: null, photoUrl: null, course: null, yearOfStudy: null, graduationYear: null,
       memberNumber: null, memberNumberStatus: 'unverified', isUnder18: null, interests: [], badges: [], isAdmin: false, profileComplete: false,
-      memberNumberNeedsFix: false,
+      memberNumberNeedsFix: false, askFeedback: false,
     });
   });
 

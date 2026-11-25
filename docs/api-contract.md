@@ -184,6 +184,13 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 ### `POST /api/me/member-number-dispute` ✅
 `{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
+### Feedback ✅ (migration 021)
+
+`GET /api/me` counts the different days (Nairobi time) a member opens the app and returns `askFeedback: true` from the **third day** until they answer.
+- `POST /api/feedback` `{ rating: 1–5, body? (≤ 2000) }` → `201`; never asks again. 5 a day (`429`). Also reachable any time from Settings → Send feedback.
+- `POST /api/feedback/later` → `204`: "Not now" asks again three active days later.
+- `GET /api/admin/feedback?limit&cursor` (admins) → `{ count, average, items: [{ id, rating, body, createdAt }], nextCursor }`, newest first — **never who wrote it**, so members can be honest. Deleted with the account; in the data export. Code: `apps/api/src/feedback/routes.ts`.
+
 ### `GET /api/users/:id` ✅ — someone's public profile
 `{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing, followsYou, followerCount, followingCount }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. Follows: section 12 (v0.2).
 

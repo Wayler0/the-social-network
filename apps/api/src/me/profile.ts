@@ -17,12 +17,14 @@ export type MeRow = {
   member_number: string | null; member_number_status: string; is_under_18: boolean | null;
   interests: string[]; roles: string[]; is_admin: boolean;
   member_number_normalised?: string | null; reg_number_pattern?: string | null;
+  ask_feedback?: boolean;
 };
 
 const ME_SQL = `
   select u.id, c.slug as campus_slug, c.name as campus_name, u.email, u.member_type, u.name, u.photo_url, u.photo_image_id,
          u.course, u.year_of_study, u.graduation_year, u.member_number, u.member_number_status, u.is_under_18, u.interests,
          u.member_number_normalised, c.reg_number_pattern,
+         (u.feedback_given_at is null and u.active_days >= u.feedback_ask_at_day) as ask_feedback,
          coalesce(array(select distinct r.role from roles r
                          where r.user_id = u.id and r.starts_at <= clock_timestamp()
                            and (r.ends_at is null or r.ends_at > clock_timestamp())
@@ -78,6 +80,8 @@ export function meBody(u: MeRow) {
     isAdmin: u.is_admin,
     profileComplete: profileComplete(u),
     memberNumberNeedsFix: memberNumberNeedsFix(u),
+    /** Third day in the app and no feedback yet: show the "Enjoying it?" prompt. */
+    askFeedback: Boolean(u.ask_feedback) && profileComplete(u),
   };
 }
 

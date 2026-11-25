@@ -23,6 +23,8 @@ export type Me = {
   profileComplete: boolean;
   /** The saved reg number doesn't match the campus format (saved before the check existed): must be fixed. */
   memberNumberNeedsFix?: boolean;
+  /** Third day in the app and no feedback yet: show "Enjoying it?". */
+  askFeedback?: boolean;
 };
 
 export type ProfileInput = {

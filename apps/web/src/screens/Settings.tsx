@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { FeedbackSheet } from '../components/FeedbackPrompt';
 import { InstallHelp } from '../components/InstallHelp';
 import { ApiError, deleteMe } from '../lib/api';
 import { isModerator } from '../lib/admin';
@@ -19,6 +20,7 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null);
   const install = useInstallState();
   const [showIosHelp, setShowIosHelp] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [exporting, setExporting] = useState<'idle' | 'busy' | 'done' | string>('idle');
 
   /** Data Protection Act: a copy of everything we hold about the member, as a JSON file. */
@@ -86,6 +88,8 @@ export function Settings() {
         </button>
         {exporting === 'done' && <p className="muted install-help" role="status">Downloaded: a file with everything {APP_NAME} holds about you.</p>}
         {exporting !== 'idle' && exporting !== 'busy' && exporting !== 'done' && <p className="error install-help" role="alert">{exporting}</p>}
+        <button className="settings-row" onClick={() => setFeedbackOpen(true)}>Send feedback</button>
+        {feedbackOpen && <FeedbackSheet onDone={() => setFeedbackOpen(false)} onLater={() => setFeedbackOpen(false)} />}
         <a href="/privacy" className="settings-row">Privacy policy</a>
         <a href="/terms" className="settings-row">Terms and community guidelines</a>
         <button className="settings-row" onClick={() => void signOut().then(() => navigate('/welcome', { replace: true }))}>Log out</button>
