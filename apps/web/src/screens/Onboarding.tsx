@@ -2,6 +2,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { ProfileForm } from '../components/ProfileForm';
 import { APP_NAME } from '../config';
 import { useAuth } from '../lib/auth';
+import { takeReturnTo } from '../lib/return-to';
 
 /** Issue #7 — first-time profile, right after the code is verified. */
 export function Onboarding() {
@@ -16,7 +17,7 @@ export function Onboarding() {
         <h1 className="screen-title">Set up your profile</h1>
         <p>A few details so classmates can find you on {APP_NAME} and we can add you to your class group.</p>
       </div>
-      <ProfileForm me={me} submitLabel="Finish" onSaved={(m) => { setMe(m); navigate('/', { replace: true }); }} />
+      <ProfileForm me={me} submitLabel="Finish" onSaved={(m) => { setMe(m); navigate(takeReturnTo() ?? '/', { replace: true }); }} />
     </main>
   );
 }

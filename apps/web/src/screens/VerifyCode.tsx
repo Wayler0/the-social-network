@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { requestCode, verifyCode, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { takeReturnTo } from '../lib/return-to';
 
 const LENGTH = 6;
 
@@ -36,7 +37,7 @@ export function VerifyCode() {
     try {
       await verifyCode(email!, code);
       const me = await signIn();
-      navigate(me && !me.profileComplete ? '/onboarding' : '/', { replace: true });
+      navigate(me && !me.profileComplete ? '/onboarding' : (takeReturnTo() ?? '/'), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
       setDigits(Array(LENGTH).fill(''));

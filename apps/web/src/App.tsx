@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
+import { rememberReturnTo } from './lib/return-to';
 import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
 import { Admin } from './screens/Admin';
@@ -26,9 +27,12 @@ function Splash() {
 /** Signed in with a finished profile; otherwise send to sign-in or onboarding. */
 function RequireAuth() {
   const { status, me } = useAuth();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   if (status === 'loading') return <Splash />;
-  if (status === 'signedOut' || !me) return <Navigate to="/welcome" replace />;
+  if (status === 'signedOut' || !me) {
+    rememberReturnTo(pathname + search); // e.g. a shared post link: go there after sign-in
+    return <Navigate to="/welcome" replace />;
+  }
   if (!me.profileComplete && pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
   return <Outlet />;
 }

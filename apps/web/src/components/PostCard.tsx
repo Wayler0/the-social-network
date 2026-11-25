@@ -6,6 +6,8 @@ import { deletePost, likePost, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
 import { Icon } from './Icon';
+import { PhotoViewer } from './PhotoViewer';
+import { sharePost } from '../lib/share';
 import { RichText } from './RichText';
 
 /**
@@ -23,8 +25,18 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const [shareNote, setShareNote] = useState<string | null>(null);
   const isOwn = !!me && post.author.id === me.id;
   const href = `/post/${post.id}`;
+
+  async function share() {
+    const result = await sharePost(post.id);
+    const note = result === 'copied' ? 'Link copied. Only members can open it.'
+      : result === 'failed' ? 'Couldn’t share. Copy the link from the address bar instead.' : null;
+    setShareNote(note);
+    if (note) window.setTimeout(() => setShareNote(null), 3000);
+  }
 
   async function toggleLike() {
     const like = !post.likedByMe;
@@ -69,9 +81,12 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
       </p>
 
       {post.image && (
-        <img className="post-image" src={post.image.url} width={post.image.width} height={post.image.height}
-          alt="" loading="lazy" decoding="async" />
+        <button type="button" className="post-image-btn" aria-label="Open photo full screen" onClick={() => setViewing(true)}>
+          <img className="post-image" src={post.image.url} width={post.image.width} height={post.image.height}
+            alt="" loading="lazy" decoding="async" />
+        </button>
       )}
+      {viewing && post.image && <PhotoViewer src={post.image.url} alt="" onClose={() => setViewing(false)} />}
 
       <footer className="post-actions">
         <button type="button" className={`action${post.likedByMe ? ' liked' : ''}`} aria-pressed={post.likedByMe}
@@ -82,7 +97,11 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
         {linkToPost
           ? <Link to={href} className="action" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></Link>
           : <span className="action static" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></span>}
+        <button type="button" className="action" aria-label="Share link to this post" onClick={() => void share()}>
+          <Icon name="share" />
+        </button>
       </footer>
+      {shareNote && <p className="hint post-error" role="status">{shareNote}</p>}
       {likeError && <p className="error post-error" role="alert">{likeError}</p>}
 
       {menu && (
