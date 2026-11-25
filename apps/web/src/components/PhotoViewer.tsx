@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { APP_SLUG } from '../config';
+import { closeLayer, useBackCloses } from '../lib/back-closes';
 import { Icon } from './Icon';
 
 const MAX_SCALE = 4;
@@ -48,22 +49,19 @@ export function PhotoViewer({ src, alt, name = 'photo', onClose }: { src: string
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
-    history.pushState({ photoViewer: true }, '');
-    const onPop = () => onClose();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') history.back(); };
-    window.addEventListener('popstate', onPop);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLayer('photoViewer'); };
     document.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('popstate', onPop);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
       before?.focus();
     };
-  }, [onClose]);
+  }, []);
+  useBackCloses('photoViewer', onClose);
 
-  const close = () => history.back(); // pops our history entry, which calls onClose
+  const close = () => closeLayer('photoViewer'); // pops our history entry, which calls onClose
 
   const clamp = (v: View): View => {
     const scale = Math.min(MAX_SCALE, Math.max(1, v.scale));

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Link } from 'react-router-dom';
 import { InstallBanner } from '../components/InstallBanner';
 import { PostCard } from '../components/PostCard';
+import { StoriesRow } from '../components/StoriesRow';
 import { TodayBoard } from '../components/TodayBoard';
 import { TopBar } from '../components/TopBar';
 import { ApiError } from '../lib/api';
@@ -81,6 +82,7 @@ export function Home() {
   return (
     <>
       <TopBar />
+      <StoriesRow />
       <TodayBoard />
       <InstallBanner />
       {status === 'loading' && <FeedSkeleton />}

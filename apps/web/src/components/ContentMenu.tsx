@@ -10,7 +10,7 @@ type Step = 'menu' | 'report' | 'block' | 'delete' | 'reported';
  * Report and block are on every piece of content (CLAUDE.md section 6). Every destructive step asks first, in the sheet.
  */
 export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete, onBlocked, onClose, startAt = 'menu' }: {
-  kind: 'post' | 'comment' | 'group' | 'question' | 'answer' | 'profile';
+  kind: 'post' | 'comment' | 'group' | 'question' | 'answer' | 'profile' | 'story';
   /** Open straight on a step, e.g. 'report' when the caller has its own menu. */
   startAt?: 'menu' | 'report';
   targetId: string;

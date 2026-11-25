@@ -20,6 +20,7 @@ import { Profile } from './screens/Profile';
 import { UserProfile } from './screens/UserProfile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
 import { Settings } from './screens/Settings';
+import { StoryNew } from './screens/StoryNew';
 import { SignUp } from './screens/SignUp';
 import { VerifyCode } from './screens/VerifyCode';
 
@@ -70,6 +71,7 @@ export function App() {
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/create" element={<Compose />} />
+          <Route path="/story/new" element={<StoryNew />} />
           <Route path="/post/:id" element={<PostDetail />} />
           <Route path="/groups/new" element={<GroupNew />} />
           <Route path="/groups/:id" element={<GroupPage />} />

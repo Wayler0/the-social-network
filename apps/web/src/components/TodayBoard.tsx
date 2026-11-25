@@ -33,21 +33,12 @@ export function TodayBoard() {
   if (!pins || pins.length === 0) return null;
   const urgent = pins.filter((a) => a.urgency === 'urgent');
   const normal = pins.filter((a) => a.urgency === 'normal');
-  const offices = [...new Map(pins.map((a) => [a.office.id, a.office])).values()];
 
   return (
     <section className="today" aria-labelledby="today-title">
       <div className="today-head">
         <h2 id="today-title">Today</h2>
         <Link to="/today" className="linkish">See all</Link>
-      </div>
-      <div className="today-offices" aria-hidden="true">
-        {offices.map((o) => (
-          <Link key={o.id} to="/today" className="story" tabIndex={-1}>
-            <span className="story-ring"><Avatar name={o.name} photoUrl={o.photoUrl} size={52} /></span>
-            <span className="story-name">{o.name}</span>
-          </Link>
-        ))}
       </div>
       {urgent.map((a) => <AnnouncementCard key={a.id} a={a} />)}
       {normal.length > 0 && (open
