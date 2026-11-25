@@ -32,8 +32,15 @@ Use any `…@student.tharaka.ac.ke` or `…@tharaka.ac.ke` address; any 6-digit 
 | `/onboarding` | First-time profile after the code (name, member type, course, year, reg number, under-18) | #7 |
 | `/profile` | Your profile | #7 |
 | `/profile/edit` | Edit profile | #7 |
-| `/settings` | Log out, delete account | #7 |
+| `/settings` | Install the app (Android/desktop dialog, or iPhone Share-menu steps), log out, delete account | #7 |
 
 Every post and comment has a "…" menu: report (8 reasons), block the author, and delete (own content; admins and the post's author can delete comments). It opens as a bottom sheet and asks before anything destructive.
 
-**Name and campuses:** the app name is a placeholder and lives in `src/config.ts` (plus `index.html` and `public/manifest.webmanifest`). Allowed email domains come from the campus list in the same file; adding a campus is adding an entry, not changing code.
+**Name and campuses:** the app name is a placeholder and lives in `src/config.ts`; `index.html` and the install manifest are filled from it at build time (`vite.config.ts`). Allowed email domains come from the campus list in the same file; adding a campus is adding an entry, not changing code.
+
+**Installable app (PWA):** `vite-plugin-pwa` writes the manifest and a service worker (`sw.js`) on `npm run build:web`.
+The service worker caches only the app itself (so it opens on a bad connection or offline), never API answers or photos.
+A new version shows a "Reload" bar instead of reloading by itself. Install only works over HTTPS (or `localhost`):
+try it with `npm run build:web && npm run preview -w apps/web`. Icons: change the logo in `scripts/make-icons.mjs`, then
+run `node apps/web/scripts/make-icons.mjs`. The web server must not cache `sw.js` (send `Cache-Control: no-cache`),
+or members get stuck on an old version.

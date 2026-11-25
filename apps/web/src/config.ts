@@ -1,8 +1,9 @@
 /**
  * The one place for the app's name and campus list.
  *
- * - The name is a PLACEHOLDER. To rename the app, change APP_NAME here, plus the two
- *   static files a browser reads before any code runs: index.html and public/manifest.webmanifest.
+ * - The name is a PLACEHOLDER. To rename the app, change APP_NAME here. index.html and the
+ *   install manifest are filled from these values at build time (vite.config.ts); the icons
+ *   are drawn by scripts/make-icons.mjs.
  * - Campuses are data, not code (CLAUDE.md, Positioning). This list mirrors the `campuses`
  *   and `campus_email_domains` tables and will be loaded from the API once it exists.
  */
@@ -11,21 +12,19 @@ import type { MemberType } from './lib/email';
 export const APP_NAME = 'Hatua';
 /** Lower-case form used for the wordmark and storage keys. */
 export const APP_SLUG = APP_NAME.toLowerCase();
+/** Shown in the install manifest and the page description. */
+export const APP_TAGLINE = 'Your campus community, in one place.';
+/** Browser and phone status-bar colour (violet, same as --violet in styles/tokens.css). */
+export const THEME_COLOR = '#6A3DF5';
 
 export type Campus = {
   slug: string;
   name: string;
   /** Email domain → member type. Exact match only. */
   emailDomains: Record<string, MemberType>;
+  /** Registration number format (regular expression on the normalised number) and an example; null = no check. */
+  regNumberPattern?: string | null;
+  regNumberExample?: string | null;
 };
 
-export const CAMPUSES: Campus[] = [
-  {
-    slug: 'tharaka',
-    name: 'Tharaka University',
-    emailDomains: {
-      'student.tharaka.ac.ke': 'student',
-      'tharaka.ac.ke': 'staff',
-    },
-  },
-];
+/* The campus list is loaded from the server (lib/campuses.ts); nothing here names a campus. */

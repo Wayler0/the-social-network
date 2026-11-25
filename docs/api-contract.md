@@ -63,8 +63,10 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 ### `GET /api/campuses` *(public)* ✅
 ```json
 { "campuses": [{ "slug": "tharaka", "name": "Tharaka University",
-  "emailDomains": { "student.tharaka.ac.ke": "student", "tharaka.ac.ke": "staff" } }] }
+  "emailDomains": { "student.tharaka.ac.ke": "student", "tharaka.ac.ke": "staff" },
+  "regNumberPattern": "^[A-Z]{2,4}[0-9]/[0-9]{5}/[0-9]{2}$", "regNumberExample": "ABT5/09919/23" }] }
 ```
+`regNumberPattern` (migration 017, columns on `campuses`) is a regular expression checked against the normalised registration number (upper-case, spaces and dashes removed) by `PATCH /api/me` for students and alumni; `null` means no format check. Staff numbers are never format-checked. A wrong format answers `400 invalid_input` with the example in the message.
 
 ---
 
@@ -117,9 +119,9 @@ New students start as `memberType: "continuing"` and pick fresher/continuing/alu
 3. Right code → mark it consumed (in the same transaction, so it can't be used twice).
 4. No user with that email → create one: `campus_id` and `member_type` from the domain, `verified = true`, `verified_method = 'email_code'`, profile fields empty. `newUser: true`.
    Existing user → `newUser: false`. If `deleted_at` is set, treat as new (the old account stays deleted).
-5. Create a session: random 32-byte token (`crypto.randomBytes(32).toString('base64url')`), store **only** `sha256(token)` as `token_hash`, expires in **30 days**.
+5. Create a session: random 32-byte token (`crypto.randomBytes(32).toString('base64url')`), store **only** `sha256(token)` as `token_hash`, expires in **180 days**, moved forward each day the session is used (members sign in once per device; changed 25 Nov 2026 from 30 days).
 6. Set the cookie:
-   `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`
+   `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=15552000`
    (`Secure` off only when `NODE_ENV=development`; read the cookie name from config, not the app name in code).
 7. Rate limit: 200 verify attempts per IP per 10 minutes → `429` (see above: shared addresses).
 
@@ -145,7 +147,7 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
   "profileComplete": false
 }
 ```
-`profileComplete` is true once `name`, `memberType`, `memberNumber` and (students) `yearOfStudy` or (alumni) `graduationYear` are set and `isUnder18` is answered. The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
+`profileComplete` is true once `name`, `memberType`, `memberNumber` and (students) `yearOfStudy` or (alumni) `graduationYear` are set and `isUnder18` is answered. It is also false while `memberNumberNeedsFix` is true: a student's or alumnus's saved reg number doesn't match the campus format (`regNumberPattern`, migration 017), e.g. one saved before the check existed. The web app then shows "Update your registration number". The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
 
 ### Done when (#17–#19)
 - [ ] Tests (vitest + `app.inject`) for: allowed and look-alike domains, rate limits, wrong/expired/reused code, 5-attempt lockout, cookie flags, logout, logout-all, suspended user.
@@ -211,6 +213,10 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 | `DELETE /api/posts/:id/like` | | `200 { liked: false, likeCount }` |
 | `PUT /api/posts/:id/reaction` | `{ reaction: "like"\|"love"\|"haha"\|"wow"\|"sad"\|"support" }` (v0.2) | `200 { myReaction, likeCount, reactions: { love: 3, … } }` — one per member per post; PUT changes it |
 | `DELETE /api/posts/:id/reaction` | | `200 { myReaction: null, likeCount, reactions }` |
+| `PUT /api/posts/:id/save` | | `200 { saved: true }` (idempotent; private to the member) |
+| `DELETE /api/posts/:id/save` | | `200 { saved: false }` (works even if the post is now hidden) |
+| `GET /api/me/saved` | `?limit&cursor` | page of **Post** — posts I saved, newest save first; ones I can no longer see are left out |
+| `GET /api/users/:id/posts` | `?limit&cursor` | page of **Post** — that member's own posts (not office posts), newest first, including group posts only where the viewer is a member. `404` like `GET /api/users/:id` |
 
 **Post**
 ```json
@@ -218,7 +224,7 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
   "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
   "likeCount": 12, "commentCount": 3, "likedByMe": false, "myReaction": null, "reactions": { "like": 9, "love": 3 },
-  "createdAt": "…" }
+  "savedByMe": false, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 

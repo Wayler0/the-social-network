@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, disputeMemberNumber, updateMe } from '../lib/api';
+import { useCampuses } from '../lib/campuses';
 import {
   MAX_YEAR_OF_STUDY, toPatch, validateProfile,
   type Me, type MemberTypeFull, type ProfileErrors, type ProfileInput, type StudentType,
@@ -28,9 +29,21 @@ function initial(me: Me): ProfileInput {
  * Staff (decided by their email domain) don't pick a member type, course or year.
  */
 export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel: string; onSaved: (me: Me) => void }) {
+  // The campus's registration number format, from GET /api/campuses (the server checks it too).
+  const campuses = useCampuses();
+  const campus = campuses?.find((c) => c.slug === me.campus.slug);
+  const regFormat = campus ? { pattern: campus.regNumberPattern ?? null, example: campus.regNumberExample ?? null } : null;
+  const example = regFormat?.example;
+  useEffect(() => {
+    if (!me.memberNumberNeedsFix || !example) return;
+    setErrors((e) => (e.memberNumber?.startsWith('This registration number isn’t in the right format')
+      ? { ...e, memberNumber: `This registration number isn’t in the right format. It should look like ${example}.` } : e));
+  }, [me.memberNumberNeedsFix, example]);
   const staff = me.memberType === 'staff';
   const [p, setP] = useState<ProfileInput>(() => initial(me));
-  const [errors, setErrors] = useState<ProfileErrors>({});
+  // An old reg number in the wrong format: point at the field straight away.
+  const [errors, setErrors] = useState<ProfileErrors>(() => (me.memberNumberNeedsFix
+    ? { memberNumber: 'This registration number isn’t in the right format. Please correct it.' } : {}));
   const [formError, setFormError] = useState<string | null>(null);
   const [taken, setTaken] = useState(false);
   const [disputeSent, setDisputeSent] = useState(false);
@@ -44,7 +57,7 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const found = validateProfile(p);
+    const found = validateProfile(p, new Date(), regFormat);
     setErrors(found);
     setFormError(null);
     if (Object.keys(found).length) return;
@@ -139,7 +152,7 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
       <div className="field">
         <label htmlFor="number">{numberLabel}</label>
         <input id="number" className="input" autoCapitalize="characters" spellCheck={false} maxLength={40}
-          placeholder={staff ? 'Your staff number' : 'As on your student ID'}
+          placeholder={staff ? 'Your staff number' : regFormat?.example ? `e.g. ${regFormat.example}` : 'As on your student ID'}
           value={p.memberNumber} onChange={(e) => set('memberNumber', e.target.value)}
           aria-invalid={errors.memberNumber ? 'true' : 'false'} aria-describedby="number-msg" />
         {errors.memberNumber ? <span id="number-msg" className="error">{errors.memberNumber}</span>

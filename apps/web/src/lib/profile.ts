@@ -21,6 +21,8 @@ export type Me = {
   badges: string[];
   isAdmin: boolean;
   profileComplete: boolean;
+  /** The saved reg number doesn't match the campus format (saved before the check existed): must be fixed. */
+  memberNumberNeedsFix?: boolean;
 };
 
 export type ProfileInput = {
@@ -42,7 +44,15 @@ export function normaliseMemberNumber(raw: string): string {
 
 export const MAX_YEAR_OF_STUDY = 6;
 
-export function validateProfile(p: ProfileInput, now = new Date()): ProfileErrors {
+export type RegFormat = { pattern: string | null; example: string | null } | null;
+
+/** Same rule as the API's matchesRegFormat: no pattern (or a broken one) means no check. */
+export function matchesRegFormat(normalised: string, pattern: string | null | undefined): boolean {
+  if (!pattern) return true;
+  try { return new RegExp(pattern).test(normalised); } catch { return true; }
+}
+
+export function validateProfile(p: ProfileInput, now = new Date(), reg: RegFormat = null): ProfileErrors {
   const e: ProfileErrors = {};
   const name = p.name.trim();
   if (name.length < 2) e.name = 'Enter your name as people know you.';
@@ -66,6 +76,9 @@ export function validateProfile(p: ProfileInput, now = new Date()): ProfileError
   if (!n) e.memberNumber = `Enter your ${label}.`;
   else if (!/^[A-Z0-9/]+$/.test(n)) e.memberNumber = `Use only letters, numbers and "/" in your ${label}.`;
   else if (n.length < 3 || n.length > 40) e.memberNumber = `That doesn't look like a ${label}.`;
+  else if (p.memberType !== 'staff' && !matchesRegFormat(n, reg?.pattern)) {
+    e.memberNumber = `That doesn't look like a registration number${reg?.example ? `. It should look like ${reg.example}` : ''}.`;
+  }
 
   if ((p.memberType === 'fresher' || p.memberType === 'continuing') && p.isUnder18 == null) {
     e.isUnder18 = 'Please answer this question.';

@@ -3,6 +3,7 @@
 Google Form "Hatua campus survey (Week 0)", ~3 minutes, shared in class groups and clubs.
 Live link: https://forms.gle/UzhKWHRRcZrSEhQb8 (owner: WaylerTech Google account).
 **Anonymous:** email collection OFF, no names, no sign-in required, "submit another response" link OFF.
+**⚠️ 16 Nov:** the live form was found collecting verified emails, which contradicts the line above. See `week0-survey-results.md`.
 This file mirrors the live form — update it whenever the form changes.
 
 **Title:** Hatua: help us build your campus app

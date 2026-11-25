@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { APP_SLUG } from '../config';
 import { getMe, logout, onSignedOut } from './api';
+import { clearFeed } from './feed-store';
 import type { Me } from './profile';
 
 /**
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMeState] = useState<Me | null>(null);
 
   const setMe = useCallback((next: Me | null) => {
+    if (!next) clearFeed(); // signed out or account deleted: nothing from this account stays in memory
     setMeState(next);
     setStatus(next ? 'signedIn' : 'signedOut');
   }, []);

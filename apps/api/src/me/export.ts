@@ -48,6 +48,8 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     'select id, post_id, body, created_at, hidden_at, deleted_at from comments where user_id = $1 order by created_at');
   const likes = await q<{ post_id: string; reaction: string; created_at: Date }>(
     'select post_id, reaction, created_at from likes where user_id = $1 order by created_at');
+  const saved = await q<{ post_id: string; created_at: Date }>(
+    'select post_id, created_at from saved_posts where user_id = $1 order by created_at');
   const questions = await q<{ id: string; body: string; hide_name: boolean; created_at: Date; hidden_at: Date | null; deleted_at: Date | null }>(
     'select id, body, hide_name, created_at, hidden_at, deleted_at from questions where user_id = $1 order by created_at');
   const answers = await q<{ id: string; question_id: string; body: string; created_at: Date; hidden_at: Date | null; deleted_at: Date | null }>(
@@ -127,6 +129,7 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     })),
     comments: comments.map((c) => ({ id: c.id, postId: c.post_id, body: c.body, createdAt: iso(c.created_at), hiddenAt: iso(c.hidden_at), deletedAt: iso(c.deleted_at) })),
     likes: likes.map((l) => ({ postId: l.post_id, reaction: l.reaction, createdAt: iso(l.created_at) })),
+    savedPosts: saved.map((s) => ({ postId: s.post_id, createdAt: iso(s.created_at) })),
     questions: questions.map((x) => ({ id: x.id, body: x.body, hideName: x.hide_name, createdAt: iso(x.created_at), hiddenAt: iso(x.hidden_at), deletedAt: iso(x.deleted_at) })),
     answers: answers.map((a) => ({ id: a.id, questionId: a.question_id, body: a.body, createdAt: iso(a.created_at), hiddenAt: iso(a.hidden_at), deletedAt: iso(a.deleted_at) })),
     helpfulVotes: helpful.map((h) => ({ answerId: h.answer_id, createdAt: iso(h.created_at) })),

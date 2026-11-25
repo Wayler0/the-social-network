@@ -1,0 +1,14 @@
+# Keep the Docker build context small and free of secrets and local data.
+.git
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/.vite
+coverage
+.env
+.env.*
+!.env.example
+backups
+apps/api/media
+docs
+*.log

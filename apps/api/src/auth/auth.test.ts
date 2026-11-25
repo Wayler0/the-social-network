@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SESSION_DAYS } from './sessions.js';
 import { buildApp } from '../app.js';
 import { loadConfig, DEV_CODE_PEPPER } from '../config.js';
 import type { Db } from '../db.js';
@@ -332,13 +333,13 @@ describe.skipIf(!url)('POST /api/auth/verify-code (real database)', () => {
     expect(u).toMatchObject({ campus_id: campusId, member_type: 'continuing', verified: true, verified_method: 'email_code' });
 
     const cookie = res.cookies.find((c) => c.name === 'hatua_session')!;
-    expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 2_592_000 });
+    expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: SESSION_DAYS * 86_400 });
     expect(cookie.value).toMatch(/^[A-Za-z0-9_-]{43}$/);                       // 32 random bytes
 
     const [s] = await sessionsOf(u.id);
     expect(s!.token_hash.equals(createHash('sha256').update(cookie.value).digest())).toBe(true);
     expect(s!.token_hash.toString('base64url')).not.toBe(cookie.value);      // the token itself is never stored
-    expect(s).toMatchObject({ user_agent: 'TestPhone/1.0', ip: '10.3.0.1', days: 30 });
+    expect(s).toMatchObject({ user_agent: 'TestPhone/1.0', ip: '10.3.0.1', days: SESSION_DAYS });
   });
 
   it('staff emails make staff accounts', async () => {
@@ -595,9 +596,9 @@ describe.skipIf(!url)('session check, logout and logout-all (real database)', ()
     await client.query(`update sessions set expires_at = clock_timestamp() + interval '20 days', last_seen_at = clock_timestamp() - interval '2 days'
                          where token_hash = $1`, [createHash('sha256').update(token).digest()]);
     const res = await as(token, 'GET', '/api/test/whoami');
-    expect(res.cookies.find((c) => c.name === 'hatua_session')).toMatchObject({ value: token, maxAge: 2_592_000 });
+    expect(res.cookies.find((c) => c.name === 'hatua_session')).toMatchObject({ value: token, maxAge: SESSION_DAYS * 86_400 });
     const s = await session(token);
-    expect(s.days_left).toBe(30);
+    expect(s.days_left).toBe(SESSION_DAYS);
     expect(Date.now() - new Date(s.last_seen_at).getTime()).toBeLessThan(60_000);
   });
 
