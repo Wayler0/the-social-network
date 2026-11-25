@@ -1,11 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { initials } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { PostList } from '../components/PostList';
+import { ProfileHeader, type FollowCounts } from '../components/ProfileHeader';
 import { useAuth } from '../lib/auth';
-import { getSaved, getUserPosts } from '../lib/feed';
-import { memberTypeLabel } from '../lib/profile';
+import { getSaved, getUser, getUserPosts } from '../lib/feed';
 
 /**
  * Issue #7 — your own profile, with your posts and the posts you saved (only you see Saved).
@@ -18,11 +17,16 @@ export function Profile() {
   const userId = me?.id;
   const loadPosts = useCallback((cursor: string | null) => getUserPosts(userId!, cursor), [userId]);
   const loadSaved = useCallback((cursor: string | null) => getSaved(cursor), []);
+  // Follower counts come with the public profile (GET /api/users/:id), which works for yourself too.
+  const [counts, setCounts] = useState<FollowCounts | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    getUser(userId).then((u) => { if (alive) setCounts(u); }).catch(() => { /* counts are a nice-to-have */ });
+    return () => { alive = false; };
+  }, [userId]);
   if (!me) return null;
   const show = (t: 'posts' | 'saved') => setParams(t === 'saved' ? { tab: 'saved' } : {}, { replace: true });
-  const detail = me.memberType === 'staff' ? me.campus.name
-    : me.memberType === 'alumni' ? [me.course, me.graduationYear && `Class of ${me.graduationYear}`].filter(Boolean).join(' · ')
-    : [me.course, me.yearOfStudy && `Year ${me.yearOfStudy}`].filter(Boolean).join(' · ');
 
   return (
     <>
@@ -30,19 +34,7 @@ export function Profile() {
         <h1 className="topbar-title">Profile</h1>
         <Link to="/settings" className="icon-btn" aria-label="Settings and account"><Icon name="menu" /></Link>
       </header>
-      <section className="profile-head">
-        {me.photoUrl
-          ? <img className="avatar-lg" src={me.photoUrl} alt="" />
-          : <div className="avatar-lg" aria-hidden="true">{initials(me.name)}</div>}
-        <div className="profile-id">
-          <h2>{me.name}</h2>
-          <div className="badges">
-            {me.memberType && <span className="badge-pill">{memberTypeLabel[me.memberType]}</span>}
-            {me.badges.map((b) => <span key={b} className="badge-pill strong">{b}</span>)}
-          </div>
-          {detail && <p className="muted">{detail}</p>}
-        </div>
-      </section>
+      <ProfileHeader p={me} campusName={me.campus.name} counts={counts} listLinks />
       <div style={{ padding: '0 16px 16px' }}>
         <Link to="/profile/edit" className="btn secondary btn-link">Edit profile</Link>
       </div>

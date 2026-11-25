@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { ContentMenu } from '../components/ContentMenu';
 import { Icon } from '../components/Icon';
@@ -106,7 +106,7 @@ export function PostDetail() {
           <div key={c.id} id={`comment-${c.id}`} className="comment">
             <Avatar name={c.author.name} photoUrl={c.author.photoUrl} size={32} />
             <div className="comment-main">
-              <p className="comment-text"><strong>{c.author.name}</strong> <RichText text={c.body} /></p>
+              <p className="comment-text">{c.author.id ? <Link to={`/u/${c.author.id}`} className="comment-author">{c.author.name}</Link> : <strong>{c.author.name}</strong>} <RichText text={c.body} /></p>
               <time className="post-meta" dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
             </div>
             <button type="button" className="icon-btn small" aria-label="Comment options" onClick={() => setMenuFor(c)}>

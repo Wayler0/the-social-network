@@ -65,6 +65,8 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
     }
   }
 
+  // Personal posts link to the author's profile (office pages come later).
+  const profileHref = !post.office && post.author.id ? `/u/${post.author.id}` : null;
   const who = post.office
     ? <><strong>{post.office.name}</strong>{post.office.verified && <span className="badge-pill strong">Official</span>}</>
     : <><strong>{post.author.name}</strong>{post.author.badges.map((b) => <span key={b} className="badge-pill">{b}</span>)}</>;
@@ -72,9 +74,11 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
   return (
     <article className="post" aria-label={`Post by ${post.office?.name ?? post.author.name}`}>
       <header className="post-head">
-        <Avatar name={post.office?.name ?? post.author.name} photoUrl={post.office?.photoUrl ?? post.author.photoUrl} />
+        {profileHref
+          ? <Link to={profileHref} className="post-avatar-link" aria-hidden="true" tabIndex={-1}><Avatar name={post.author.name} photoUrl={post.author.photoUrl} /></Link>
+          : <Avatar name={post.office?.name ?? post.author.name} photoUrl={post.office?.photoUrl ?? post.author.photoUrl} />}
         <div className="post-who">
-          <div className="post-name">{who}</div>
+          <div className="post-name">{profileHref ? <Link to={profileHref} className="post-name-link">{who}</Link> : who}</div>
           <div className="post-meta">
             {post.office && <span>by {post.author.name} · </span>}
             {post.group && <span>in {post.group.name} · </span>}

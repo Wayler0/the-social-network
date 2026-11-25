@@ -15,7 +15,9 @@ import { GroupNew, Groups } from './screens/Groups';
 import { Today } from './screens/Today';
 import { Onboarding } from './screens/Onboarding';
 import { PostDetail } from './screens/PostDetail';
+import { FollowList } from './screens/FollowList';
 import { Profile } from './screens/Profile';
+import { UserProfile } from './screens/UserProfile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
 import { Settings } from './screens/Settings';
 import { SignUp } from './screens/SignUp';
@@ -82,6 +84,9 @@ export function App() {
           <Route path="today" element={<Today />} />
           <Route path="reels" element={<ReelsComingSoon />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="profile/followers" element={<FollowList which="followers" />} />
+          <Route path="profile/following" element={<FollowList which="following" />} />
+          <Route path="u/:id" element={<UserProfile />} />
           <Route path="notifications" element={<Placeholder title="Notifications" text="Likes, comments and replies will show here." />} />
           <Route path="messages" element={<Placeholder title="Messages" text="End-to-end encrypted chat arrives in v0.2." />} />
         </Route>

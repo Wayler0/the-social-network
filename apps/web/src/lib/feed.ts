@@ -3,6 +3,7 @@
  * These always talk to the real API: run it with `npm run dev -w apps/api`.
  */
 import { call } from './api';
+import type { MemberTypeFull } from './profile';
 
 export type Author = { id: string | null; name: string; photoUrl: string | null; badges: string[] };
 export type Office = { id: string; name: string; photoUrl: string | null; verified: boolean };
@@ -39,6 +40,23 @@ export const deletePost = (id: string) => call<void>('DELETE', `/api/posts/${enc
 
 export const likePost = (id: string, like: boolean) =>
   call<{ liked: boolean; likeCount: number }>(like ? 'PUT' : 'DELETE', `/api/posts/${encodeURIComponent(id)}/like`);
+
+/** Someone's public profile: never their email or reg number. */
+export type PublicProfile = {
+  id: string; name: string | null; photoUrl: string | null; memberType: MemberTypeFull;
+  course: string | null; yearOfStudy: number | null; graduationYear: number | null;
+  interests: string[]; badges: string[];
+  isFollowing: boolean; followsYou: boolean; followerCount: number; followingCount: number;
+};
+export const getUser = (id: string) => call<PublicProfile>('GET', `/api/users/${encodeURIComponent(id)}`);
+
+export type FollowType = 'user' | 'office' | 'group';
+export const follow = (type: FollowType, id: string, on: boolean) =>
+  call<{ following: boolean; followerCount: number }>(on ? 'PUT' : 'DELETE', `/api/follows/${type}/${encodeURIComponent(id)}`);
+export type Follower = { id: string; name: string | null; photoUrl: string | null; followsBack: boolean; since: string };
+export type Followed = { type: FollowType; id: string; name: string | null; photoUrl: string | null; since: string };
+export const getFollowers = (cursor?: string | null) => call<Page<Follower>>('GET', page('/api/me/followers', cursor));
+export const getFollowing = (cursor?: string | null) => call<Page<Followed>>('GET', page('/api/me/following', cursor));
 
 export const savePost = (id: string, save: boolean) =>
   call<{ saved: boolean }>(save ? 'PUT' : 'DELETE', `/api/posts/${encodeURIComponent(id)}/save`);
