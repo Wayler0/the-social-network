@@ -5,9 +5,17 @@ import { call } from './api';
  * The server decides who sees what (followers, close friends, under-18 and staff rules);
  * the app only shows what GET /api/stories returns.
  */
+/** Background colours for text stories (photos always sit on black). Black is the default. */
+export const STORY_BACKGROUNDS = ['black', 'violet', 'coral', 'mint', 'sunshine', 'white'] as const;
+export type StoryBackground = (typeof STORY_BACKGROUNDS)[number];
+export const STORY_BACKGROUND_LABEL: Record<StoryBackground, string> = {
+  black: 'Black', violet: 'Violet', coral: 'Coral', mint: 'Mint', sunshine: 'Sunshine', white: 'White',
+};
 export type StoryImage = { url: string; thumbUrl: string; width: number; height: number };
 export type Story = {
   id: string; body: string | null; image: StoryImage | null; audience: 'followers' | 'close_friends';
+  /** Missing on stories from before colours existed: treat as black. */
+  background?: StoryBackground;
   createdAt: string; expiresAt: string; seen: boolean; likedByMe: boolean;
   /** Only on your own stories. */
   viewCount?: number; likeCount?: number;
@@ -20,7 +28,7 @@ export const STORY_MAX = 500;
 const id = encodeURIComponent;
 
 export const getStories = () => call<{ items: StoryGroup[] }>('GET', '/api/stories');
-export const createStory = (input: { body?: string; imageId?: string; audience?: 'followers' | 'close_friends' }) =>
+export const createStory = (input: { body?: string; imageId?: string; audience?: 'followers' | 'close_friends'; background?: StoryBackground }) =>
   call<Story>('POST', '/api/stories', input);
 export const markStorySeen = (storyId: string) => call<void>('POST', `/api/stories/${id(storyId)}/view`);
 export const getStoryViewers = (storyId: string) => call<{ count: number; likeCount: number; items: StoryViewer[] }>('GET', `/api/stories/${id(storyId)}/viewers`);

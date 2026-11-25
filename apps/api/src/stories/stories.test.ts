@@ -55,7 +55,7 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     const res = await as('cynthia', 'POST', '/api/stories', { body: '  Exam week, good luck!  ' });
     expect(res.statusCode).toBe(201);
     const story = res.json();
-    expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers',
+    expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers', background: 'black',
       createdAt: expect.any(String), expiresAt: expect.any(String), seen: false, likedByMe: false, viewCount: 0, likeCount: 0 });
     expect(new Date(story.expiresAt).getTime() - new Date(story.createdAt).getTime()).toBe(24 * 3600 * 1000);
 
@@ -63,6 +63,15 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     expect(await seen('brian')).toEqual([story.id]);
     expect(await seen('david')).toEqual([]);              // does not follow
     expect(await seen('cynthia')).toEqual([story.id]);    // your own
+  });
+
+  it('text stories keep the background colour they were made with; unknown colours are refused', async () => {
+    const res = await as('cynthia', 'POST', '/api/stories', { body: 'Coral day', background: 'coral' });
+    expect(res.json()).toMatchObject({ background: 'coral' });
+    await follows('brian', 'cynthia');
+    const row = (await as('brian', 'GET', '/api/stories')).json().items.find((g: { isMine: boolean }) => !g.isMine);
+    expect(row.stories[0].background).toBe('coral');
+    expect((await as('cynthia', 'POST', '/api/stories', { body: 'x', background: 'pink' })).json().error).toBe('invalid_input');
   });
 
   it('rejects empty stories, both pages at once, close friends for pages, and unfinished profiles', async () => {

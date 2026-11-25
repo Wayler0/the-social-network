@@ -137,7 +137,7 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
         <button type="button" className="story-icon" aria-label="Close stories" onClick={close}><Icon name="close" /></button>
       </header>
 
-      <div className="story-stage" onPointerDown={onPointerDown} onPointerUp={onPointerUp}
+      <div className={`story-stage story-bg-${story.image ? 'black' : story.background ?? 'black'}`} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
         onPointerCancel={() => { if (holdTimer.current) window.clearTimeout(holdTimer.current); setHeld(false); }}
         onContextMenu={(e) => e.preventDefault()}>
         {story.image
