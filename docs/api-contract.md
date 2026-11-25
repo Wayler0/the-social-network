@@ -63,8 +63,10 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 ### `GET /api/campuses` *(public)* ✅
 ```json
 { "campuses": [{ "slug": "tharaka", "name": "Tharaka University",
-  "emailDomains": { "student.tharaka.ac.ke": "student", "tharaka.ac.ke": "staff" } }] }
+  "emailDomains": { "student.tharaka.ac.ke": "student", "tharaka.ac.ke": "staff" },
+  "regNumberPattern": "^[A-Z]{2,4}[0-9]/[0-9]{5}/[0-9]{2}$", "regNumberExample": "ABT5/09919/23" }] }
 ```
+`regNumberPattern` (migration 017, columns on `campuses`) is a regular expression checked against the normalised registration number (upper-case, spaces and dashes removed) by `PATCH /api/me` for students and alumni; `null` means no format check. Staff numbers are never format-checked. A wrong format answers `400 invalid_input` with the example in the message.
 
 ---
 
