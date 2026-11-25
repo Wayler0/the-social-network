@@ -11,19 +11,23 @@ import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   answerRequest, getGroup, getGroupPosts, getMembers, getRequests, joinGroup, leaveGroup,
-  type Group, type JoinRequest, type Member,
+  type Channel, type Group, type JoinRequest, type Member,
 } from '../lib/community';
 import { getEvents, type CampusEvent } from '../lib/events';
-import type { Post } from '../lib/feed';
+import { follow, type Post } from '../lib/feed';
 import { GroupBadges } from './Groups';
 
-/** One group: about, join/leave, its posts (members only), members, and join requests for admins (issue #25). */
+/**
+ * One group: about, join/leave, its posts (members only), members, and join requests for admins (issue #25).
+ * Clubs (CLAUDE.md section 4, Club pages): Follow, an Announcements tab (admins post; members and
+ * followers read; anyone may read a public club's) and a Discussion tab for members.
+ */
 export function GroupPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const [group, setGroup] = useState<Group | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
-  const [tab, setTab] = useState<'posts' | 'events' | 'members' | 'requests'>('posts');
+  const [tab, setTab] = useState<'posts' | 'announcements' | 'discussion' | 'events' | 'members' | 'requests'>('posts');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -57,6 +61,22 @@ export function GroupPage() {
   const member = group.myStatus === 'active';
   const admin = group.myRole === 'admin';
   const canPost = member && (group.posting === 'everyone' || admin);
+  const club = group.kind === 'club';
+  const clubTab = tab === 'posts' ? 'announcements' : tab;
+
+  async function toggleFollow() {
+    const before = group!;
+    const on = !before.following;
+    // Show it straight away; put it back if the server says no.
+    setGroup({ ...before, following: on, followerCount: before.followerCount === null ? null : Math.max(0, before.followerCount + (on ? 1 : -1)) });
+    try {
+      const r = await follow('group', before.id, on);
+      setGroup((g) => (g ? { ...g, following: r.following, followerCount: r.followerCount } : g));
+    } catch (err) {
+      setGroup(before);
+      setError(err instanceof ApiError ? err.message : 'Couldn’t update. Try again.');
+    }
+  }
 
   async function join() {
     setBusy(true); setError(null);
@@ -85,9 +105,15 @@ export function GroupPage() {
         <span className="group-icon large" aria-hidden="true">{group.name.trim()[0]?.toUpperCase()}</span>
         <h2>{group.name}</h2>
         <GroupBadges g={group} />
-        {group.memberCount !== null && <p className="post-meta">{group.memberCount} member{group.memberCount === 1 ? '' : 's'}</p>}
+        {(group.memberCount !== null || group.followerCount !== null) && (
+          <p className="post-meta">
+            {[group.memberCount !== null && `${group.memberCount} member${group.memberCount === 1 ? '' : 's'}`,
+              group.followerCount !== null && `${group.followerCount} follower${group.followerCount === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+          </p>
+        )}
         {group.description && <p className="group-desc">{group.description}</p>}
-        {group.posting === 'admins_only' && <p className="hint">Only admins post here.</p>}
+        {!club && group.posting === 'admins_only' && <p className="hint">Only admins post here.</p>}
+        {club && <p className="hint">Follow to get its announcements in your feed.{group.visibility === 'public' ? ' Join to take part in the discussion.' : ''}</p>}
 
         <div className="group-actions">
           {group.myStatus === 'none' && !group.isClassGroup && (
@@ -96,12 +122,42 @@ export function GroupPage() {
             </button>
           )}
           {group.myStatus === 'pending' && <button type="button" className="btn secondary" disabled>Request sent</button>}
-          {canPost && <Link to={`/create?group=${group.id}`} className="btn btn-link">Write a post</Link>}
+          {group.canFollow && (
+            <button type="button" className={`btn${group.following ? ' secondary' : ''}`} aria-pressed={group.following} onClick={() => void toggleFollow()}>
+              {group.following ? 'Following' : 'Follow'}
+            </button>
+          )}
+          {club && admin && <Link to={`/create?group=${group.id}&announcement=1`} className="btn btn-link">Post announcement</Link>}
+          {canPost && !(club && admin && group.posting === 'admins_only') && (
+            <Link to={`/create?group=${group.id}`} className={`btn btn-link${club ? ' secondary' : ''}`}>{club ? 'Write in discussion' : 'Write a post'}</Link>
+          )}
         </div>
         {error && <p className="error" role="alert">{error}</p>}
       </section>
 
-      {member ? (
+      {club && member ? (
+        <>
+          <div className="tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={clubTab === 'announcements'} className={clubTab === 'announcements' ? 'active' : ''} onClick={() => setTab('announcements')}>Announcements</button>
+            <button type="button" role="tab" aria-selected={clubTab === 'discussion'} className={clubTab === 'discussion' ? 'active' : ''} onClick={() => setTab('discussion')}>Discussion</button>
+            <button type="button" role="tab" aria-selected={tab === 'events'} className={tab === 'events' ? 'active' : ''} onClick={() => setTab('events')}>Events</button>
+            <button type="button" role="tab" aria-selected={tab === 'members'} className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Members</button>
+            {admin && group.visibility === 'private' && (
+              <button type="button" role="tab" aria-selected={tab === 'requests'} className={tab === 'requests' ? 'active' : ''} onClick={() => setTab('requests')}>Requests</button>
+            )}
+          </div>
+          {clubTab === 'announcements' && <GroupPosts key="ann" groupId={group.id} channel="announcements" empty="No announcements yet." />}
+          {clubTab === 'discussion' && <GroupPosts key="disc" groupId={group.id} channel="discussion" empty="No discussion yet. Start one." />}
+          {tab === 'events' && <GroupEvents groupId={group.id} canCreate={canPost} />}
+          {tab === 'members' && <Members groupId={group.id} />}
+          {tab === 'requests' && <Requests groupId={group.id} onApproved={() => setGroup((g) => (g && g.memberCount !== null ? { ...g, memberCount: g.memberCount + 1 } : g))} />}
+        </>
+      ) : club && group.visibility === 'public' ? (
+        <>
+          <h2 className="section-label">Announcements</h2>
+          <GroupPosts key="ann-public" groupId={group.id} channel="all" empty="No announcements yet." />
+        </>
+      ) : member ? (
         <>
           <div className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'posts'} className={tab === 'posts' ? 'active' : ''} onClick={() => setTab('posts')}>Posts</button>
@@ -171,22 +227,22 @@ function GroupMenu({ group, onClose, onLeave, onChange }: { group: Group; onClos
   );
 }
 
-function GroupPosts({ groupId }: { groupId: string }) {
+function GroupPosts({ groupId, channel = 'all', empty = 'No posts yet.' }: { groupId: string; channel?: Channel; empty?: string }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const load = useCallback(async (from: string | null) => {
     try {
-      const page = await getGroupPosts(groupId, from);
+      const page = await getGroupPosts(groupId, from, channel);
       setPosts((prev) => (from ? [...prev, ...page.items] : page.items));
       setCursor(page.nextCursor); setState('ready');
     } catch { setState('error'); }
-  }, [groupId]);
+  }, [groupId, channel]);
   useEffect(() => { void load(null); }, [load]);
 
   if (state === 'loading') return <p className="feed-foot" role="status">Loading…</p>;
   if (state === 'error') return <p className="feed-foot" role="alert">Posts didn’t load. <button type="button" className="linkish" onClick={() => load(null)}>Try again</button></p>;
-  if (posts.length === 0) return <p className="feed-foot">No posts yet.</p>;
+  if (posts.length === 0) return <p className="feed-foot">{empty}</p>;
   return (
     <div className="feed">
       {posts.map((p) => (

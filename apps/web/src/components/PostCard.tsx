@@ -99,7 +99,8 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
           <div className="post-name">{profileHref ? <Link to={profileHref} className="post-name-link">{who}</Link> : who}</div>
           <div className="post-meta">
             {post.office && <span>by {post.author.name} · </span>}
-            {post.group && <span>in {post.group.name} · </span>}
+            {post.announcement && <span className="pill announce-pill">Announcement</span>}
+            {post.group && <span>{post.announcement ? 'from' : 'in'} <Link to={`/groups/${post.group.id}`} className="post-group-link">{post.group.name}</Link> · </span>}
             <time dateTime={post.createdAt} title={new Date(post.createdAt).toLocaleString()}>{timeAgo(post.createdAt)}</time>
           </div>
         </div>
