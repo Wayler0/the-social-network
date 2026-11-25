@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { ApiError } from '../lib/api';
 import { IMAGE_MAX_BYTES, IMAGE_TYPES, uploadImage } from '../lib/feed';
-import { createStory, STORY_MAX } from '../lib/stories';
+import { createStory, STORY_BACKGROUND_LABEL, STORY_BACKGROUNDS, STORY_MAX, type StoryBackground } from '../lib/stories';
 
 type Photo = { preview: string; imageId: string | null; uploading: boolean };
 
@@ -17,6 +17,7 @@ export function StoryNew() {
   const [body, setBody] = useState('');
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [audience, setAudience] = useState<'followers' | 'close_friends'>('followers');
+  const [background, setBackground] = useState<StoryBackground>('black');
   const [error, setError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
 
@@ -45,7 +46,7 @@ export function StoryNew() {
     if (!canShare) return;
     setPosting(true); setError(null);
     try {
-      await createStory({ ...(trimmed ? { body: trimmed } : {}), ...(photo?.imageId ? { imageId: photo.imageId } : {}), audience });
+      await createStory({ ...(trimmed ? { body: trimmed } : {}), ...(photo?.imageId ? { imageId: photo.imageId } : {}), audience, ...(photo ? {} : { background }) });
       navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Your story didn’t post. Try again.');
@@ -61,7 +62,7 @@ export function StoryNew() {
         <button type="button" className="btn post-btn" disabled={!canShare} onClick={() => void share()}>{posting ? 'Sharing…' : 'Share'}</button>
       </header>
 
-      <div className={`story-canvas${photo ? ' has-photo' : ''}`}>
+      <div className={`story-canvas story-bg-${photo ? 'black' : background}${photo ? ' has-photo' : ''}`}>
         {photo && <img src={photo.preview} alt="" />}
         {photo?.uploading && <span className="story-canvas-note" role="status">Uploading photo…</span>}
         <label htmlFor="story-text" className="visually-hidden">{photo ? 'Caption' : 'Write something'}</label>
@@ -69,6 +70,14 @@ export function StoryNew() {
           placeholder={photo ? 'Add a caption…' : 'Type something…'} value={body} onChange={(e) => setBody(e.target.value)} />
       </div>
 
+      {!photo && (
+        <div className="story-swatches" role="radiogroup" aria-label="Background colour">
+          {STORY_BACKGROUNDS.map((b) => (
+            <button key={b} type="button" role="radio" aria-checked={background === b} aria-label={STORY_BACKGROUND_LABEL[b]}
+              className={`story-swatch story-bg-${b}${background === b ? ' chosen' : ''}`} onClick={() => setBackground(b)} />
+          ))}
+        </div>
+      )}
       <div className="story-tools">
         <input ref={fileRef} type="file" accept={IMAGE_TYPES} hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
         {photo
