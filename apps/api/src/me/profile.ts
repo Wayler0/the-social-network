@@ -98,3 +98,15 @@ export function normaliseMemberNumber(input: string): string | null {
   const n = input.toUpperCase().replace(/[\s-]+/g, '');
   return /^[A-Z0-9/]{3,40}$/.test(n) && /\d/.test(n) ? n : null;
 }
+
+/**
+ * Does a normalised registration number match its campus's format (campuses.reg_number_pattern)?
+ * No pattern means no format check. A pattern that isn't a valid regular expression is ignored
+ * rather than locking everyone out (an admin typo must not stop sign-ups).
+ */
+export function matchesRegFormat(normalised: string, pattern: string | null): boolean {
+  if (!pattern) return true;
+  let re: RegExp;
+  try { re = new RegExp(pattern); } catch { return true; }
+  return re.test(normalised);
+}

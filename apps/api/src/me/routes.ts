@@ -10,7 +10,7 @@ import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { notBlocked, type ViewerSql } from '../visibility.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { exportMemberData } from './export.js';
-import { badgesFor, isStudent, loadMe, meBody, normaliseInterests, normaliseMemberNumber, profileComplete } from './profile.js';
+import { badgesFor, isStudent, loadMe, matchesRegFormat, meBody, normaliseInterests, normaliseMemberNumber, profileComplete } from './profile.js';
 
 const year = (min: number, max: number) => z.number().int().min(min).max(max);
 
@@ -58,7 +58,11 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         const cur = (await tx.query<{
           member_type: string; course: string | null; year_of_study: number | null; graduation_year: number | null;
           member_number_normalised: string | null; photo_image_id: string | null;
-        }>('select member_type, course, year_of_study, graduation_year, member_number_normalised, photo_image_id from users where id = $1 for update', [userId])).rows[0]!;
+          reg_number_pattern: string | null; reg_number_example: string | null;
+        }>(`select u.member_type, u.course, u.year_of_study, u.graduation_year, u.member_number_normalised, u.photo_image_id,
+                   c.reg_number_pattern, c.reg_number_example
+              from users u join campuses c on c.id = u.campus_id
+             where u.id = $1 for update of u`, [userId])).rows[0]!;
         const bad = (message: string): Outcome => ({ ok: false, status: 400, error: 'invalid_input', message });
 
         // Staff accounts come from staff emails and stay staff; students choose fresher, continuing or alumni.
@@ -100,10 +104,10 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
 
         if (body.memberNumber !== undefined) {
           const normalised = normaliseMemberNumber(body.memberNumber);
-          if (!normalised) {
+          if (!normalised || (memberType !== 'staff' && !matchesRegFormat(normalised, cur.reg_number_pattern))) {
             return bad(memberType === 'staff'
               ? 'memberNumber: that doesn’t look like a staff number.'
-              : 'memberNumber: that doesn’t look like a registration number, e.g. ABT5/09919/23.');
+              : `memberNumber: that doesn’t look like a registration number${cur.reg_number_example ? `, e.g. ${cur.reg_number_example}` : ''}.`);
           }
           if (normalised !== cur.member_number_normalised) {
             set('member_number', body.memberNumber.trim().replace(/\s+/g, ' ').slice(0, 40));

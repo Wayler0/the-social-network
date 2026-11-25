@@ -192,10 +192,10 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
 
   it('a changed number goes back to unverified', async () => {
     const m = await member('renumber');
-    await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/1/23' });
+    await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/00001/23' });
     await client.query(`update users set member_number_status = 'verified' where id = $1`, [m.id]);
-    expect((await m.as('PATCH', '/api/me', { memberNumber: 'abt5/1/23' })).json().memberNumberStatus).toBe('verified');   // same number
-    expect((await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/2/23' })).json().memberNumberStatus).toBe('unverified');
+    expect((await m.as('PATCH', '/api/me', { memberNumber: 'abt5/00001/23' })).json().memberNumberStatus).toBe('verified');   // same number
+    expect((await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/00002/23' })).json().memberNumberStatus).toBe('unverified');
   });
 
   it('rejects bad input, saving nothing', async () => {
@@ -206,6 +206,23 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
       expect([res.statusCode, res.json().error], JSON.stringify(body)).toEqual([400, 'invalid_input']);
     }
     expect((await m.as('GET', '/api/me')).json()).toMatchObject({ name: null, memberNumber: null, memberNumberStatus: 'unverified' });
+  });
+
+  it('checks registration numbers against the campus format; staff numbers are not checked', async () => {
+    const m = await member('formatted');
+    for (const bad of ['EBT1', 'ebt1', 'ABT5/09919', 'ABT5/0991/23', 'ABT/09919/23', 'ABT5/09919/2023', 'ABCDE5/09919/23']) {
+      const res = await m.as('PATCH', '/api/me', { memberNumber: bad });
+      expect([res.statusCode, res.json().error], bad).toEqual([400, 'invalid_input']);
+      expect(res.json().message, bad).toContain('ABT5/09919/23');   // the example comes from the campus row
+    }
+    for (const good of ['EB1/12345/21', 'abt5 / 09919 / 23', 'SCIT4/00042/19']) {
+      expect((await m.as('PATCH', '/api/me', { memberNumber: good })).statusCode, good).toBe(200);
+    }
+    const s = await member('staffed', 'staff');
+    expect((await s.as('PATCH', '/api/me', { memberNumber: 'TS-1042' })).statusCode).toBe(200);
+    // A campus with no pattern has no format check.
+    await client.query('update campuses set reg_number_pattern = null');
+    expect((await m.as('PATCH', '/api/me', { memberNumber: 'EBT1' })).statusCode).toBe(200);
   });
 
   it('shows current role badges; admin is a permission, not a badge', async () => {
@@ -241,24 +258,24 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
 
   it('a dispute goes to the admin queue and flags the unverified holder', async () => {
     const holder = await member('holder');
-    await holder.as('PATCH', '/api/me', { memberNumber: 'ABT5/777/23' });
+    await holder.as('PATCH', '/api/me', { memberNumber: 'ABT5/00777/23' });
     const owner = await member('real.owner');
     const res = await dispute(owner, 'abt5-777/23', 'This is my reg number, see my ID.');
     expect([res.statusCode, res.json()]).toEqual([202, { received: true }]);
     const row = (await client.query('select member_number_normalised, reporter_user_id, details, status from member_number_disputes where reporter_user_id = $1', [owner.id])).rows[0];
     expect(row).toEqual({ member_number_normalised: 'ABT5777/23', reporter_user_id: owner.id, details: 'This is my reg number, see my ID.', status: 'open' });
     expect((await client.query('select 1 from users where id = $1', [holder.id])).rows).toHaveLength(1);
-    expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('unverified');   // normalised differently: ABT5/777/23
-    await dispute(owner, 'ABT5/777/23');
+    expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('unverified');   // normalised differently: ABT5/00777/23
+    await dispute(owner, 'ABT5/00777/23');
     expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('disputed');
   });
 
   it('an admin-verified holder stays verified; nobody learns whether a number is held', async () => {
     const holder = await member('verified.holder');
-    await holder.as('PATCH', '/api/me', { memberNumber: 'ABT5/888/23' });
+    await holder.as('PATCH', '/api/me', { memberNumber: 'ABT5/00888/23' });
     await client.query(`update users set member_number_status = 'verified' where id = $1`, [holder.id]);
     const claimer = await member('claimer');
-    const held = await dispute(claimer, 'ABT5/888/23');
+    const held = await dispute(claimer, 'ABT5/00888/23');
     const free = await dispute(claimer, 'ABT5/999/23');
     expect([held.statusCode, held.body]).toEqual([free.statusCode, free.body]);
     expect((await holder.as('GET', '/api/me')).json().memberNumberStatus).toBe('verified');
@@ -266,8 +283,8 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
 
   it('refuses your own number, nonsense, and more than 3 disputes a day', async () => {
     const m = await member('disputer');
-    await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/1/23' });
-    expect((await dispute(m, 'abt5/1/23')).json().error).toBe('invalid_input');
+    await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/00001/23' });
+    expect((await dispute(m, 'abt5/00001/23')).json().error).toBe('invalid_input');
     expect((await dispute(m, 'nope')).json().error).toBe('invalid_input');
     for (let i = 2; i <= 4; i++) expect((await dispute(m, `ABT5/${i}/23`)).statusCode).toBe(202);
     const fourth = await dispute(m, 'ABT5/5/23');
@@ -316,7 +333,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
 
   it('deletes personal data and files, signs out everywhere, keeps posts as "Deleted member"', async () => {
     const m = await member('leaving');
-    await m.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/4242/23', interests: ['Chess'] });
+    await m.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/04242/23', interests: ['Chess'] });
     const photo = await uploadedImage(m.id);
     await m.as('PATCH', '/api/me', { photoImageId: photo });
     const postImage = await uploadedImage(m.id);
@@ -353,7 +370,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
 
     // The email and the reg number are free again.
     const again = await member('leaving');
-    expect((await again.as('PATCH', '/api/me', { memberNumber: 'ABT5/4242/23' })).statusCode).toBe(200);
+    expect((await again.as('PATCH', '/api/me', { memberNumber: 'ABT5/04242/23' })).statusCode).toBe(200);
   });
 
   // ---------------------------------------------------------------- data export (DPA)
@@ -361,7 +378,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     const m = await member('exporter');
     await m.as('PATCH', '/api/me', { ...onboarding, interests: ['Chess'] });
     const other = await member('other.person');
-    await other.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/777/23' });
+    await other.as('PATCH', '/api/me', { ...onboarding, memberNumber: 'ABT5/00777/23' });
     const mine = (await client.query<{ id: string }>(
       `insert into posts (campus_id, author_user_id, body) values ($1, $2, 'kept post') returning id`, [campusId, m.id])).rows[0]!.id;
     await client.query(`insert into posts (campus_id, author_user_id, body, deleted_at) values ($1, $2, 'deleted post', now())`, [campusId, m.id]);
