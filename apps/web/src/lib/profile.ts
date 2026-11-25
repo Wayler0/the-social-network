@@ -21,6 +21,8 @@ export type Me = {
   badges: string[];
   isAdmin: boolean;
   profileComplete: boolean;
+  /** The saved reg number doesn't match the campus format (saved before the check existed): must be fixed. */
+  memberNumberNeedsFix?: boolean;
 };
 
 export type ProfileInput = {

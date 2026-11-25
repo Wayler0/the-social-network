@@ -16,11 +16,13 @@ export type MeRow = {
   year_of_study: number | null; graduation_year: number | null;
   member_number: string | null; member_number_status: string; is_under_18: boolean | null;
   interests: string[]; roles: string[]; is_admin: boolean;
+  member_number_normalised?: string | null; reg_number_pattern?: string | null;
 };
 
 const ME_SQL = `
   select u.id, c.slug as campus_slug, c.name as campus_name, u.email, u.member_type, u.name, u.photo_url, u.photo_image_id,
          u.course, u.year_of_study, u.graduation_year, u.member_number, u.member_number_status, u.is_under_18, u.interests,
+         u.member_number_normalised, c.reg_number_pattern,
          coalesce(array(select distinct r.role from roles r
                          where r.user_id = u.id and r.starts_at <= clock_timestamp()
                            and (r.ends_at is null or r.ends_at > clock_timestamp())
@@ -44,8 +46,11 @@ export const isStudent = (memberType: string) => memberType === 'fresher' || mem
  * and students have a year of study or alumni a graduation year. Until then the web app shows
  * onboarding, and posting or joining groups answers 403 profile_incomplete.
  */
-export function profileComplete(u: Pick<MeRow, 'name' | 'member_type' | 'member_number' | 'is_under_18' | 'year_of_study' | 'graduation_year'>): boolean {
+export function profileComplete(u: Pick<MeRow, 'name' | 'member_type' | 'member_number' | 'is_under_18' | 'year_of_study' | 'graduation_year'
+  | 'member_number_normalised' | 'reg_number_pattern'>): boolean {
   if (!u.name || !u.member_type || !u.member_number || u.is_under_18 === null) return false;
+  // A reg number saved before the campus format existed (e.g. "EBT1") must be fixed first.
+  if (memberNumberNeedsFix(u)) return false;
   if (isStudent(u.member_type)) return u.year_of_study !== null;
   if (u.member_type === 'alumni') return u.graduation_year !== null;
   return true;
@@ -69,6 +74,7 @@ export function meBody(u: MeRow) {
     badges: badgesFor(u.roles),
     isAdmin: u.is_admin,
     profileComplete: profileComplete(u),
+    memberNumberNeedsFix: memberNumberNeedsFix(u),
   };
 }
 
@@ -109,4 +115,10 @@ export function matchesRegFormat(normalised: string, pattern: string | null): bo
   let re: RegExp;
   try { re = new RegExp(pattern); } catch { return true; }
   return re.test(normalised);
+}
+
+/** A student's or alumnus's saved reg number doesn't match the campus format (staff are never checked). */
+export function memberNumberNeedsFix(u: Pick<MeRow, 'member_type' | 'member_number_normalised' | 'reg_number_pattern'>): boolean {
+  if (u.member_type === 'staff' || !u.member_number_normalised) return false;
+  return !matchesRegFormat(u.member_number_normalised, u.reg_number_pattern ?? null);
 }

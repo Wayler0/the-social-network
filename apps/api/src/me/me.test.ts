@@ -108,6 +108,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
       id: m.id, campus: { slug: expect.any(String), name: expect.any(String) }, email: m.email, memberType: 'continuing',
       name: null, photoUrl: null, course: null, yearOfStudy: null, graduationYear: null,
       memberNumber: null, memberNumberStatus: 'unverified', isUnder18: null, interests: [], badges: [], isAdmin: false, profileComplete: false,
+      memberNumberNeedsFix: false,
     });
   });
 
@@ -223,6 +224,21 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     // A campus with no pattern has no format check.
     await client.query('update campuses set reg_number_pattern = null');
     expect((await m.as('PATCH', '/api/me', { memberNumber: 'EBT1' })).statusCode).toBe(200);
+  });
+
+  it('a number saved before the format check (e.g. EBT1) must be fixed before posting', async () => {
+    const m = await member('oldnumber');
+    expect((await m.as('PATCH', '/api/me', onboarding)).json().profileComplete).toBe(true);
+    // As if saved before migration 017.
+    await client.query(`update users set member_number = 'EBT1', member_number_normalised = 'EBT1' where id = $1`, [m.id]);
+    expect((await m.as('GET', '/api/me')).json()).toMatchObject({ memberNumber: 'EBT1', memberNumberNeedsFix: true, profileComplete: false });
+    expect((await m.as('POST', '/api/posts', { body: 'hello' })).json().error).toBe('profile_incomplete');
+    expect((await m.as('PATCH', '/api/me', { memberNumber: 'EBT1/00123/24' })).json()).toMatchObject({ memberNumberNeedsFix: false, profileComplete: true });
+    // Staff with any number are fine.
+    const s = await member('oldstaff', 'staff');
+    await s.as('PATCH', '/api/me', { name: 'Dr S', memberNumber: 'TS-1042', isUnder18: false });
+    await client.query(`update users set member_number = 'S1', member_number_normalised = 'S1' where id = $1`, [s.id]);
+    expect((await s.as('GET', '/api/me')).json()).toMatchObject({ memberNumberNeedsFix: false, profileComplete: true });
   });
 
   it('shows current role badges; admin is a permission, not a badge', async () => {

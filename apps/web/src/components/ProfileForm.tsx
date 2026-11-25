@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, disputeMemberNumber, updateMe } from '../lib/api';
 import { useCampuses } from '../lib/campuses';
 import {
@@ -33,9 +33,17 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
   const campuses = useCampuses();
   const campus = campuses?.find((c) => c.slug === me.campus.slug);
   const regFormat = campus ? { pattern: campus.regNumberPattern ?? null, example: campus.regNumberExample ?? null } : null;
+  const example = regFormat?.example;
+  useEffect(() => {
+    if (!me.memberNumberNeedsFix || !example) return;
+    setErrors((e) => (e.memberNumber?.startsWith('This registration number isn’t in the right format')
+      ? { ...e, memberNumber: `This registration number isn’t in the right format. It should look like ${example}.` } : e));
+  }, [me.memberNumberNeedsFix, example]);
   const staff = me.memberType === 'staff';
   const [p, setP] = useState<ProfileInput>(() => initial(me));
-  const [errors, setErrors] = useState<ProfileErrors>({});
+  // An old reg number in the wrong format: point at the field straight away.
+  const [errors, setErrors] = useState<ProfileErrors>(() => (me.memberNumberNeedsFix
+    ? { memberNumber: 'This registration number isn’t in the right format. Please correct it.' } : {}));
   const [formError, setFormError] = useState<string | null>(null);
   const [taken, setTaken] = useState(false);
   const [disputeSent, setDisputeSent] = useState(false);
