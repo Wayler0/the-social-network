@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ApiError } from '../lib/api';
 import { timeAgo } from '../lib/feed';
-import { deleteStory, getStoryViewers, markStorySeen, type StoryGroup, type StoryViewer as Viewer } from '../lib/stories';
+import { deleteStory, getStoryViewers, likeStory, markStorySeen, type StoryGroup, type StoryViewer as Viewer } from '../lib/stories';
 import { closeLayer, useBackCloses } from '../lib/back-closes';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
@@ -30,6 +30,8 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
   const [held, setHeld] = useState(false);
   const [sheet, setSheet] = useState<'none' | 'viewers' | 'menu' | 'report' | 'delete'>('none');
   const [ready, setReady] = useState(false);
+  // Likes made while the viewer is open (the stories list itself is not refetched).
+  const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const holdTimer = useRef<number | null>(null);
   const progressRef = useRef(0);
@@ -144,11 +146,29 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
         {story.body && <p className={`story-text${story.image ? ' over-photo' : ''}`}>{story.body}</p>}
       </div>
 
-      {group.isMine && (
+      {group.isMine ? (
         <footer className="story-foot">
           <button type="button" className="story-seen" onClick={() => setSheet('viewers')}>
             <Icon name="eye" size={18} /> Seen by {story.viewCount ?? 0}
+            {(story.likeCount ?? 0) > 0 && <><span aria-hidden="true"> · </span><Icon name="heart" size={16} fill="currentColor" /> {story.likeCount}</>}
           </button>
+        </footer>
+      ) : (
+        <footer className="story-foot story-foot-end">
+          {(() => {
+            const isLiked = liked[story.id] ?? story.likedByMe;
+            return (
+              <button type="button" className={`story-like${isLiked ? ' liked' : ''}`} aria-pressed={isLiked}
+                aria-label={isLiked ? 'Unlike story' : 'Like story'}
+                onClick={() => {
+                  const next = !isLiked;
+                  setLiked((m) => ({ ...m, [story.id]: next }));   // straight away; put back if the server says no
+                  likeStory(story.id, next).catch(() => setLiked((m) => ({ ...m, [story.id]: !next })));
+                }}>
+                <Icon name="heart" size={28} fill={isLiked ? 'currentColor' : 'none'} />
+              </button>
+            );
+          })()}
         </footer>
       )}
 
@@ -186,13 +206,13 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
 }
 
 function ViewersSheet({ storyId, onClose }: { storyId: string; onClose: () => void }) {
-  const [data, setData] = useState<{ count: number; items: Viewer[] } | null>(null);
+  const [data, setData] = useState<{ count: number; likeCount: number; items: Viewer[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     getStoryViewers(storyId).then(setData).catch((err) => setError(err instanceof ApiError ? err.message : 'Couldn’t load viewers.'));
   }, [storyId]);
   return (
-    <Sheet title={data ? `Seen by ${data.count}` : 'Seen by'} onClose={onClose}>
+    <Sheet title={data ? `Seen by ${data.count}${data.likeCount ? ` · ${data.likeCount} like${data.likeCount === 1 ? '' : 's'}` : ''}` : 'Seen by'} onClose={onClose}>
       {error && <p className="error" role="alert">{error}</p>}
       {!data && !error && <p className="muted sheet-text" role="status">Loading…</p>}
       {data && data.items.length === 0 && <p className="muted sheet-text">No views yet.</p>}
@@ -201,6 +221,7 @@ function ViewersSheet({ storyId, onClose }: { storyId: string; onClose: () => vo
           {data.items.map((v) => (
             <li key={v.id} className="person-row">
               <span className="person-main"><Avatar name={v.name} photoUrl={v.photoUrl} size={36} /><span><strong>{v.name}</strong> <span className="muted">· {timeAgo(v.viewedAt)}</span></span></span>
+              {v.liked && <span className="viewer-liked" aria-label="Liked your story"><Icon name="heart" size={18} fill="currentColor" /></span>}
             </li>
           ))}
         </ul>
