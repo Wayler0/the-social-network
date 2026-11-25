@@ -17,11 +17,14 @@ export const STORY_HOURS = 24;
 const STORIES_PER_DAY = 30;
 const LIST_LIMIT = 200;   // close friends and "hide from"
 
+/** Story background colours (migration 022); photos always sit on black. */
+export const STORY_BACKGROUNDS = ['black', 'violet', 'coral', 'mint', 'sunshine', 'white'] as const;
+
 /** Live stories the row can show at once; more than enough for 24 hours of one campus. */
 const ROW_LIMIT = 500;
 
 type StoryRow = {
-  id: string; body: string | null; audience: 'followers' | 'close_friends'; created_at: Date; expires_at: Date;
+  id: string; body: string | null; audience: 'followers' | 'close_friends'; background: string; created_at: Date; expires_at: Date;
   author_user_id: string; author_name: string | null; author_photo: string | null; author_roles: string[];
   office_id: string | null; office_name: string | null; office_photo: string | null;
   group_id: string | null; group_name: string | null; group_verified: boolean | null;
@@ -30,7 +33,7 @@ type StoryRow = {
 };
 
 const STORY_SELECT = `
-  select s.id, s.body, s.audience, s.created_at, s.expires_at,
+  select s.id, s.body, s.audience, s.background, s.created_at, s.expires_at,
          s.author_user_id, au.name as author_name, au.photo_url as author_photo, ${activeRoles('au.id')} as author_roles,
          o.id as office_id, o.name as office_name, o.photo_url as office_photo,
          g.id as group_id, g.name as group_name, (g.club_verified_at is not null) as group_verified,
@@ -62,7 +65,7 @@ function storyBody(s: StoryRow) {
   return {
     id: s.id, body: s.body,
     image: s.image_path ? { ...imageUrls(s.image_path), width: s.image_width, height: s.image_height } : null,
-    audience: s.audience, createdAt: iso(s.created_at), expiresAt: iso(s.expires_at), seen: s.seen,
+    audience: s.audience, background: s.background, createdAt: iso(s.created_at), expiresAt: iso(s.expires_at), seen: s.seen,
     likedByMe: s.liked_by_me,
     ...(s.view_count !== null ? { viewCount: s.view_count } : {}),
     ...(s.like_count !== null ? { likeCount: s.like_count } : {}),
@@ -134,6 +137,8 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
       body: z.string().transform((s) => s.trim()).pipe(z.string().min(1, 'cannot be empty').max(500)).optional(),
       imageId: z.string().uuid().optional(),
       audience: z.enum(['followers', 'close_friends']).default('followers'),
+      /** Text stories: the background colour (black by default). */
+      background: z.enum(STORY_BACKGROUNDS).default('black'),
       officeId: z.string().uuid().optional(),
       groupId: z.string().uuid().optional(),
     }).strict()
@@ -171,9 +176,9 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
         imageId = image.id;
       }
       const { rows } = await tx.query<{ id: string }>(
-        `insert into stories (campus_id, author_user_id, author_office_id, author_group_id, body, image_id, audience, created_at, expires_at)
-         values ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp() + make_interval(hours => $8)) returning id`,
-        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body ?? null, imageId, body.audience, STORY_HOURS]);
+        `insert into stories (campus_id, author_user_id, author_office_id, author_group_id, body, image_id, audience, background, created_at, expires_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp() + make_interval(hours => $9)) returning id`,
+        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body ?? null, imageId, body.audience, body.background, STORY_HOURS]);
       return { ok: true, id: rows[0]!.id };
     });
     if (!outcome.ok) {

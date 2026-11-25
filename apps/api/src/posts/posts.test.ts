@@ -355,6 +355,14 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
     });
   });
 
+  it('each post says whether the viewer follows its author', async () => {
+    expect((await as('brian', 'GET', `/api/posts/${P('photo')}`)).json().followingAuthor).toBe(false);   // photo is cynthia's
+    await client.query(`insert into follows (follower_id, target_type, target_id) values ($1, 'user', $2) on conflict do nothing`, [U('brian'), U('cynthia')]);
+    expect((await as('brian', 'GET', `/api/posts/${P('photo')}`)).json().followingAuthor).toBe(true);
+    const feed = (await as('brian', 'GET', '/api/feed?limit=50')).json().items as Array<{ author: { id: string }; followingAuthor: boolean }>;
+    for (const p of feed.filter((x) => x.author.id === U('cynthia'))) expect(p.followingAuthor).toBe(true);
+  });
+
   // ---------------------------------------------------------------- a member's posts
   describe('GET /api/users/:id/posts', () => {
     it('lists the member’s own posts newest first, not office posts, hidden ones or groups the viewer can’t see', async () => {

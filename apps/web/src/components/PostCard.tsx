@@ -2,11 +2,12 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { deletePost, REACTION_EMOJI, REACTION_LABEL, REACTIONS, reactToPost, savePost, type Reaction, plural, timeAgo, type Post } from '../lib/feed';
+import { follow, deletePost, REACTION_EMOJI, REACTION_LABEL, REACTIONS, reactToPost, savePost, type Reaction, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
 import { Icon } from './Icon';
 import { PhotoViewer } from './PhotoViewer';
+import { setFollowingAuthor } from '../lib/feed-store';
 import { sharePost } from '../lib/share';
 import { RichText } from './RichText';
 
@@ -83,6 +84,21 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
     .sort((a, b) => (post.reactions[b] ?? 0) - (post.reactions[a] ?? 0)).slice(0, 3);
 
 
+  // Follow straight from a post: only on personal posts by someone you don't follow yet.
+  const [followBusy, setFollowBusy] = useState(false);
+  const canFollow = !post.office && !!post.author.id && !isOwn && !post.followingAuthor;
+  async function followAuthor() {
+    if (!post.author.id || followBusy) return;
+    setFollowBusy(true);
+    onChange({ ...post, followingAuthor: true });   // straight away; put back if the server says no
+    try {
+      await follow('user', post.author.id, true);
+      setFollowingAuthor(post.author.id, true);       // their other posts in the feed too
+    } catch {
+      onChange({ ...post, followingAuthor: false });
+    } finally { setFollowBusy(false); }
+  }
+
   // Personal posts link to the author's profile (office pages come later).
   const profileHref = !post.office && post.author.id ? `/u/${post.author.id}` : null;
   const who = post.office
@@ -96,7 +112,14 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
           ? <Link to={profileHref} className="post-avatar-link" aria-hidden="true" tabIndex={-1}><Avatar name={post.author.name} photoUrl={post.author.photoUrl} /></Link>
           : <Avatar name={post.office?.name ?? post.author.name} photoUrl={post.office?.photoUrl ?? post.author.photoUrl} />}
         <div className="post-who">
-          <div className="post-name">{profileHref ? <Link to={profileHref} className="post-name-link">{who}</Link> : who}</div>
+          <div className="post-name">
+            {profileHref ? <Link to={profileHref} className="post-name-link">{who}</Link> : who}
+            {canFollow && (
+              <><span className="post-dot" aria-hidden="true">·</span>
+              <button type="button" className="post-follow" disabled={followBusy} onClick={() => void followAuthor()}
+                aria-label={`Follow ${post.author.name}`}>Follow</button></>
+            )}
+          </div>
           <div className="post-meta">
             {post.office && <span>by {post.author.name} · </span>}
             {post.announcement && <span className="pill announce-pill">Announcement</span>}

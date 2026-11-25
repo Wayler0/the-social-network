@@ -11,6 +11,33 @@
 
 ---
 
+## Status — Wed 25 Nov 2026
+
+**Live:** the app runs at hatua.nextup.co.ke on the KENET server (first live 24 Nov). `main` deploys itself once CI passes (Kim, PR #62), when `DEPLOY_ENABLED` is set. `main` is protected: CI must pass and one other person must approve each PR.
+
+**Ahead of plan.** M1 and most of M2–M3 are done, and several "after launch" items are built (v0.2 backend by Kim, frontend in the 25 Nov sprint):
+
+| Area | Done (on `main`) |
+|---|---|
+| Accounts | Email-code sign-in (Resend), sign in once per device (180-day sessions), remembered email, profile photo, optional reg number with format check, "Make Home yours" follow step, download my data, delete account |
+| Social | Follows (people, offices, clubs), other members' profiles, reactions, saved posts, share a post's link, stories (row, viewer, who viewed), club pages (Follow, Announcements / Discussion), events, notifications + push |
+| Feel | Feed kept in memory (no reload when you come back), no zoom except photos, photo viewer and download, install banner, link previews (Hatua logo card, never post content) |
+
+**Waiting for review (PRs, CI green or pending):** moving up a year on 1 September (`feat/year-rollover`, migration 019) · story likes (`feat/story-likes`, 020) · story backgrounds (`feat/story-backgrounds`, 022, merge after story likes) · day-3 feedback prompt + admin Feedback tab (`feat/feedback-prompt`, 021) · Follow button on posts (`feat/follow-from-post`) · **privacy policy and terms pages** (`feat/legal-pages-real`).
+
+**Decisions made 25 Nov** (also in CLAUDE.md): reg number optional (format-checked when given) · student email closes at graduation, so alumni need a personal-email sign-in · students move up a year on 1 September and confirm it · link previews show only the Hatua logo card · stories: people you follow, official accounts, clubs you follow or belong to.
+
+**Before inviting the beta group (week 3):**
+1. Merge `feat/legal-pages-real` (the sign-up links to Terms and Privacy policy went nowhere) and set `CONTACT_EMAIL` in `apps/web/src/config.ts`. Have someone read the privacy policy against ODPC guidance.
+2. Merge `feat/feedback-prompt` so testers can send feedback in the app.
+3. **Back up the database**, then deploy (migrations 019–022 run on live data). `deploy.sh` has no backup step yet: add one.
+4. Confirm on the server: disk encryption and nightly off-server backups (the privacy policy only promises HTTPS and limited access until then).
+5. Invite 15–20 testers aged 18+ (class reps, IEEE, ISACA, student council, 1–2 staff).
+
+**Still to build:** personal-email sign-in for alumni (before the next graduation) · search (MVP item 10) · "followed by people you know", post count and bio on profiles · backup step in the deploy · phone test on Android + iPhone (Peter).
+
+**Open questions:** next graduation date (decides how urgent alumni sign-in is) · team contact email for privacy requests · club stories: keep, or only people + official accounts? · photo previews for official posts (option B) — not now.
+
 ## What ships on 20 Dec (v0.1 "Holiday preview")
 
 Only what a member needs to join and use it daily:

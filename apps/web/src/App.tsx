@@ -26,6 +26,7 @@ import { Profile } from './screens/Profile';
 import { UserProfile } from './screens/UserProfile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
 import { Settings } from './screens/Settings';
+import { PrivacyPolicy, Terms } from './screens/Legal';
 import { StoryNew } from './screens/StoryNew';
 import { SignUp } from './screens/SignUp';
 import { VerifyCode } from './screens/VerifyCode';
@@ -65,6 +66,9 @@ export function App() {
     <>
     <ScrollToTop />
     <Routes>
+      {/* Public: readable before signing in (linked from sign-up). */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route element={<GuestOnly />}>
         <Route path="/welcome" element={<SignUp />} />
         <Route path="/verify" element={<VerifyCode />} />

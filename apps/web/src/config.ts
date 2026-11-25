@@ -19,6 +19,13 @@ export const APP_TAGLINE = 'Your campus community, in one place.';
  * A PLACEHOLDER domain like the name: change it here when the final domain is chosen.
  */
 export const PUBLIC_URL = 'https://hatua.nextup.co.ke';
+/**
+ * Where members send privacy questions and data requests (shown on the privacy policy and terms).
+ * Set this to the team's real address before inviting people; empty shows "ask the team" instead.
+ */
+export const CONTACT_EMAIL = '';
+/** Last time the privacy policy and terms changed (shown at the top of both). */
+export const LEGAL_UPDATED = '25 November 2026';
 /** Browser and phone status-bar colour (violet, same as --violet in styles/tokens.css). */
 export const THEME_COLOR = '#6A3DF5';
 
