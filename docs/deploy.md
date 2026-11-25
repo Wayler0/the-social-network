@@ -61,7 +61,7 @@ browser ──HTTPS──▶ nginx (host) ──┬─ /            → /var/www
 
 ## Every deploy
 
-From your own machine, in the repo. Only **committed and pushed** code is deployed:
+Usually automatic (next section). By hand, from your own machine, in the repo. Only **committed and pushed** code is deployed:
 
 ```sh
 DEPLOY_HOST=ubuntu@197.137.65.49 DEPLOY_SSH_KEY=~/.ssh/kenet_rsa deploy/deploy.sh            # origin/main
@@ -73,6 +73,45 @@ or `backups/`), rebuilds and restarts the API (migrations run first), waits for 
 the web app. If the API doesn't come up, the old web app stays live and the script prints the API's logs.
 
 After each deploy: open the site, sign in, open the feed. `cat /srv/hatua/REVISION` shows the deployed commit.
+
+## Automatic deploys (CI/CD)
+
+`.github/workflows/deploy.yml` deploys every commit on `main` that passes **CI**, with the same
+`deploy/deploy.sh` as above. Pull requests never deploy; only reviewed code that reached `main` does.
+One deploy runs at a time and is never cancelled halfway.
+
+**Turn it on (once; Peter + a repo admin):**
+
+1. **A deploy-only key pair** (not anyone's personal key). On your machine:
+   ```sh
+   ssh-keygen -t ed25519 -N '' -C hatua-github-deploy -f hatua_deploy
+   ```
+   On the server, append `hatua_deploy.pub` to `~/.ssh/authorized_keys` of the deploy user (the one that owns
+   `/srv/hatua` and `/var/www/hatua` and is in the `docker` group). Remove the key there to revoke CI's access.
+2. **The server's host key**, checked so CI never talks to an impostor:
+   ```sh
+   ssh-keyscan -t ed25519 197.137.65.49 > known_hosts
+   ssh-keygen -lf known_hosts            # compare with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server
+   ```
+3. **GitHub → Settings → Environments → New environment `production`:**
+   - Deployment branches: **Selected branches → `main`** only.
+   - Optional: **Required reviewers** (someone clicks Approve before each deploy).
+   - Environment secrets: `DEPLOY_HOST` = `ubuntu@197.137.65.49` (the deploy user), `DEPLOY_SSH_KEY` = the
+     contents of `hatua_deploy` (private key), `DEPLOY_KNOWN_HOSTS` = the contents of `known_hosts`.
+   Then delete the local `hatua_deploy` file.
+4. **Settings → Secrets and variables → Actions → Variables:** `DEPLOY_ENABLED` = `true`, and
+   `APP_URL` = `https://hatua.nextup.co.ke` (CI checks `/api/health` there after each deploy).
+
+To pause automatic deploys, set `DEPLOY_ENABLED` to `false`.
+
+**Deploy or roll back by hand from GitHub:** Actions → Deploy → Run workflow, and enter a commit or tag. It
+must be on `main` (an older commit rolls back). Migrations only go forward, as above.
+
+**If GitHub can't reach the server:** the job fails at "Deploy" with an SSH timeout. That means KENET's
+firewall blocks port 22 from GitHub's machines (their addresses change, so allow-listing them is impractical). In
+that case ask ICT to allow it, or install a [self-hosted runner](https://docs.github.com/actions/hosting-your-own-runners)
+on the server and change `runs-on: ubuntu-latest` to `runs-on: [self-hosted, hatua]` (the runner then deploys over
+SSH to itself; nothing else changes).
 
 ## Day to day
 

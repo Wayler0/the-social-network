@@ -1,0 +1,99 @@
+# Continuous deployment: every commit on main that passes CI is deployed to the KENET server with
+# deploy/deploy.sh — the same script used by hand (docs/deploy.md, "Automatic deploys").
+#
+# Off until the team turns it on: set the repository variable DEPLOY_ENABLED=true and the secrets
+# below in the "production" environment (Settings → Environments → production).
+#   DEPLOY_HOST         ubuntu@197.137.65.49 (the deploy user on the server)
+#   DEPLOY_SSH_KEY      private key of a key pair made only for deploys (never someone's personal key)
+#   DEPLOY_KNOWN_HOSTS  output of `ssh-keyscan -t ed25519 197.137.65.49`, checked against the server
+# Optional repository variable: APP_URL (e.g. https://hatua.nextup.co.ke) for the check after deploying.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit, tag or branch on main to deploy (an older one rolls back). Default: main"
+        required: false
+        default: main
+
+# One deploy at a time, in order; a deploy is never cancelled halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to the KENET server
+    # After CI: only a green run of a push to main (not a pull request that targets main).
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    env:
+      REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.REF }}
+          fetch-depth: 0   # deploy.sh resolves the ref and archives that exact commit
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22   # same as CI and deploy/api.Dockerfile
+          cache: npm
+
+      - name: SSH key and pinned server key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          for v in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_HOST; do
+            [ -n "${!v}" ] || { echo "::error::Secret $v is not set (docs/deploy.md, Automatic deploys)"; exit 1; }
+          done
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: never accept an unknown server (no StrictHostKeyChecking=no).
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+
+      - name: Only reviewed code (commits on main)
+        run: |
+          git fetch --quiet origin main
+          COMMIT=$(git rev-parse --verify "HEAD^{commit}")
+          git merge-base --is-ancestor "$COMMIT" origin/main \
+            || { echo "::error::$REF ($COMMIT) is not on main. Only reviewed, merged code is deployed."; exit 1; }
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          COMMIT=$(git rev-parse --verify "HEAD^{commit}")
+          echo "Deploying $COMMIT ($REF)"
+          DEPLOY_SSH_KEY="$HOME/.ssh/deploy_key" deploy/deploy.sh "$COMMIT"
+
+      - name: Site answers
+        if: vars.APP_URL != ''
+        run: |
+          for i in $(seq 1 10); do
+            curl -fsS "${{ vars.APP_URL }}/api/health" | grep -q '"db":"up"' && exit 0
+            sleep 3
+          done
+          echo "::error::${{ vars.APP_URL }}/api/health did not answer with the database up"; exit 1
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
