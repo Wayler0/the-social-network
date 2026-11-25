@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { PostList } from '../components/PostList';
 import { ProfileHeader, type FollowCounts } from '../components/ProfileHeader';
+import { ProfilePhotoButton } from '../components/ProfilePhoto';
 import { useAuth } from '../lib/auth';
 import { getSaved, getUser, getUserPosts } from '../lib/feed';
 
@@ -34,7 +35,8 @@ export function Profile() {
         <h1 className="topbar-title">Profile</h1>
         <Link to="/settings" className="icon-btn" aria-label="Settings and account"><Icon name="menu" /></Link>
       </header>
-      <ProfileHeader p={me} campusName={me.campus.name} counts={counts} listLinks />
+      <ProfileHeader p={me} campusName={me.campus.name} counts={counts} listLinks photo={<ProfilePhotoButton />} />
+      {!me.photoUrl && <p className="profile-nudge">Tap your initials to add a photo, so classmates recognise you.</p>}
       <div style={{ padding: '0 16px 16px' }}>
         <Link to="/profile/edit" className="btn secondary btn-link">Edit profile</Link>
       </div>
