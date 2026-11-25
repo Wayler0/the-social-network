@@ -147,7 +147,7 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
   "profileComplete": false
 }
 ```
-`profileComplete` is true once `name`, `memberType`, `memberNumber` and (students) `yearOfStudy` or (alumni) `graduationYear` are set and `isUnder18` is answered. It is also false while `memberNumberNeedsFix` is true: a student's or alumnus's saved reg number doesn't match the campus format (`regNumberPattern`, migration 017), e.g. one saved before the check existed. The web app then shows "Update your registration number". The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
+`profileComplete` is true once `name` and `memberType` are set, `isUnder18` is answered, staff have a `memberNumber` (staff number), and (students) `yearOfStudy` or (alumni) `graduationYear` is set. The registration number is **optional** for students and alumni (decided 25 Nov 2026): `PATCH /api/me` with `memberNumber: ""` or `null` removes it (staff get `400`). It is also false while `memberNumberNeedsFix` is true: a student's or alumnus's saved reg number doesn't match the campus format (`regNumberPattern`, migration 017), e.g. one saved before the check existed. The web app then shows "Update your registration number". The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
 
 ### Done when (#17–#19)
 - [ ] Tests (vitest + `app.inject`) for: allowed and look-alike domains, rate limits, wrong/expired/reused code, 5-attempt lockout, cookie flags, logout, logout-all, suspended user.

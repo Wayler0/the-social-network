@@ -20,7 +20,8 @@ const patchSchema = z.object({
   course: z.string().max(200).nullable(),
   yearOfStudy: year(1, 8).nullable(),
   graduationYear: year(1990, 2100).nullable(),
-  memberNumber: z.string().max(60),
+  /** Optional for students and alumni: an empty string or null removes it. Staff must keep one. */
+  memberNumber: z.string().max(60).nullable(),
   isUnder18: z.boolean(),
   /** Up to 10, each up to 40 characters; replaces the whole list. */
   interests: z.array(z.string().max(200)).max(30),
@@ -102,7 +103,14 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         if (yearOfStudy !== cur.year_of_study) set('year_of_study', yearOfStudy);
         if (graduationYear !== cur.graduation_year) set('graduation_year', graduationYear);
 
-        if (body.memberNumber !== undefined) {
+        const clearing = body.memberNumber === null || (typeof body.memberNumber === 'string' && body.memberNumber.trim() === '');
+        if (clearing && memberType === 'staff') return bad('memberNumber: staff need a staff number.');
+        if (clearing && cur.member_number_normalised !== null) {
+          set('member_number', null);
+          set('member_number_normalised', null);
+          set('member_number_status', 'unverified');
+        }
+        if (typeof body.memberNumber === 'string' && !clearing) {
           const normalised = normaliseMemberNumber(body.memberNumber);
           if (!normalised || (memberType !== 'staff' && !matchesRegFormat(normalised, cur.reg_number_pattern))) {
             return bad(memberType === 'staff'

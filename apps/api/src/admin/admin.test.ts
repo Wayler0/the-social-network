@@ -217,9 +217,9 @@ describe.skipIf(!url)('admin API (real database)', () => {
   describe('members', () => {
     it('finds members by name, email or member number, with private details for admins', async () => {
       expect((await get('/api/admin/users?q=amina')).json().items[0]).toMatchObject({
-        id: U('amina'), email: expect.stringMatching(/^seed\.amina@/), memberNumber: 'SEED/0001/26', isUnder18: true, suspended: null, roles: [],
+        id: U('amina'), email: expect.stringMatching(/^seed\.amina@/), memberNumber: 'SEED1/00001/26', isUnder18: true, suspended: null, roles: [],
       });
-      expect((await get(`/api/admin/users?q=${encodeURIComponent('seed / 0003-/26')}`)).json().items.map((u: { id: string }) => u.id)).toEqual([U('cynthia')]);
+      expect((await get(`/api/admin/users?q=${encodeURIComponent('seed1 / 00003-/26')}`)).json().items.map((u: { id: string }) => u.id)).toEqual([U('cynthia')]);
       expect((await get('/api/admin/users?q=seed.grace')).json().items[0].roles).toMatchObject([{ role: 'moderator' }]);
       expect((await get(`/api/admin/users?q=${encodeURIComponent('%%')}`)).json().items).toEqual([]); // wildcards are literal
       expect((await get('/api/admin/users?q=a')).statusCode).toBe(400);
@@ -320,9 +320,9 @@ describe.skipIf(!url)('admin API (real database)', () => {
     it('shows who holds the number, and releasing it frees it for its owner', async () => {
       await client.query(
         `insert into member_number_disputes (campus_id, member_number_normalised, reporter_user_id, details)
-         select campus_id, 'SEED/0003/26', id, 'That is my number' from users where id = $1`, [U('brian')]);
+         select campus_id, 'SEED1/00003/26', id, 'That is my number' from users where id = $1`, [U('brian')]);
       const items = (await get('/api/admin/disputes')).json().items;
-      expect(items).toMatchObject([{ memberNumber: 'SEED/0003/26', reporter: { id: U('brian') }, holder: { id: U('cynthia'), email: expect.stringContaining('seed.cynthia@') } }]);
+      expect(items).toMatchObject([{ memberNumber: 'SEED1/00003/26', reporter: { id: U('brian') }, holder: { id: U('cynthia'), email: expect.stringContaining('seed.cynthia@') } }]);
 
       const res = await post(`/api/admin/disputes/${items[0].id}/resolve`, { releaseNumber: true });
       expect(res.json()).toEqual({ status: 'resolved', numberReleased: true });
@@ -336,10 +336,10 @@ describe.skipIf(!url)('admin API (real database)', () => {
     it('keeping the number changes nothing but closes the dispute', async () => {
       await client.query(
         `insert into member_number_disputes (campus_id, member_number_normalised, reporter_user_id)
-         select campus_id, 'SEED/0003/26', id from users where id = $1`, [U('brian')]);
+         select campus_id, 'SEED1/00003/26', id from users where id = $1`, [U('brian')]);
       const id = (await get('/api/admin/disputes')).json().items[0].id;
       expect((await post(`/api/admin/disputes/${id}/resolve`, { releaseNumber: false })).json()).toEqual({ status: 'resolved', numberReleased: false });
-      expect((await one<{ member_number: string }>('select member_number from users where id = $1', [U('cynthia')])).member_number).toBe('SEED/0003/26');
+      expect((await one<{ member_number: string }>('select member_number from users where id = $1', [U('cynthia')])).member_number).toBe('SEED1/00003/26');
     });
   });
 

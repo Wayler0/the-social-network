@@ -25,10 +25,11 @@ describe('member numbers', () => {
 
 describe('profileComplete', () => {
   const base = { name: 'A', member_type: 'continuing', member_number: 'X1', is_under_18: false, year_of_study: 2, graduation_year: null };
-  it('needs name, number, the under-18 answer, and a year for students or a graduation year for alumni', () => {
+  it('needs name, the under-18 answer, a staff number for staff, and a year for students or a graduation year for alumni', () => {
     expect(profileComplete(base)).toBe(true);
     expect(profileComplete({ ...base, name: null })).toBe(false);
-    expect(profileComplete({ ...base, member_number: null })).toBe(false);
+    expect(profileComplete({ ...base, member_number: null })).toBe(true);    // optional for students (25 Nov 2026)
+    expect(profileComplete({ ...base, member_type: 'staff', member_number: null })).toBe(false);
     expect(profileComplete({ ...base, is_under_18: null })).toBe(false);
     expect(profileComplete({ ...base, year_of_study: null })).toBe(false);
     expect(profileComplete({ ...base, member_type: 'alumni', year_of_study: null })).toBe(false);
@@ -226,6 +227,25 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     expect((await m.as('PATCH', '/api/me', { memberNumber: 'EBT1' })).statusCode).toBe(200);
   });
 
+  it('the registration number is optional for students and alumni; staff keep a staff number', async () => {
+    const m = await member('nonumber');
+    const { memberNumber: _skip, ...withoutNumber } = onboarding;
+    expect((await m.as('PATCH', '/api/me', withoutNumber)).json()).toMatchObject({ memberNumber: null, profileComplete: true });
+    expect((await m.as('POST', '/api/posts', { body: 'hello' })).statusCode).toBe(201);
+    // Add one, then remove it again with an empty value or null.
+    expect((await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/09919/23' })).json().memberNumber).toBe('ABT5/09919/23');
+    expect((await m.as('PATCH', '/api/me', { memberNumber: '  ' })).json()).toMatchObject({ memberNumber: null, profileComplete: true });
+    await m.as('PATCH', '/api/me', { memberNumber: 'ABT5/09919/23' });
+    expect((await m.as('PATCH', '/api/me', { memberNumber: null })).json().memberNumber).toBeNull();
+    // A number that IS given must still be in the right format.
+    expect((await m.as('PATCH', '/api/me', { memberNumber: 'EBT1' })).json().error).toBe('invalid_input');
+
+    const s = await member('staffnumber', 'staff');
+    expect((await s.as('PATCH', '/api/me', { name: 'Dr N', isUnder18: false })).json().profileComplete).toBe(false);
+    await s.as('PATCH', '/api/me', { memberNumber: 'TS-1042' });
+    expect((await s.as('PATCH', '/api/me', { memberNumber: '' })).json().error).toBe('invalid_input');
+  });
+
   it('a number saved before the format check (e.g. EBT1) must be fixed before posting', async () => {
     const m = await member('oldnumber');
     expect((await m.as('PATCH', '/api/me', onboarding)).json().profileComplete).toBe(true);
@@ -234,6 +254,9 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     expect((await m.as('GET', '/api/me')).json()).toMatchObject({ memberNumber: 'EBT1', memberNumberNeedsFix: true, profileComplete: false });
     expect((await m.as('POST', '/api/posts', { body: 'hello' })).json().error).toBe('profile_incomplete');
     expect((await m.as('PATCH', '/api/me', { memberNumber: 'EBT1/00123/24' })).json()).toMatchObject({ memberNumberNeedsFix: false, profileComplete: true });
+    // Or simply remove it: the number is optional.
+    await client.query(`update users set member_number = 'EBT1', member_number_normalised = 'EBT1' where id = $1`, [m.id]);
+    expect((await m.as('PATCH', '/api/me', { memberNumber: '' })).json()).toMatchObject({ memberNumber: null, memberNumberNeedsFix: false, profileComplete: true });
     // Staff with any number are fine.
     const s = await member('oldstaff', 'staff');
     await s.as('PATCH', '/api/me', { name: 'Dr S', memberNumber: 'TS-1042', isUnder18: false });

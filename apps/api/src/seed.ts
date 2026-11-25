@@ -117,7 +117,7 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
   // ---- members
   const U = (key: string) => seedId(`user:${key}`);
   const userRows = members.map((m, i) => {
-    const number = m.deleted ? null : m.name === null ? null : m.staff ? `SEEDSTAFF/${String(i + 1).padStart(4, '0')}` : `SEED/${String(i + 1).padStart(4, '0')}/26`;
+    const number = m.deleted ? null : m.name === null ? null : m.staff ? `SEEDSTAFF/${String(i + 1).padStart(4, '0')}` : `SEED1/${String(i + 1).padStart(5, '0')}/26`  /* matches the campus reg number format (migration 017) */;
     return {
       id: U(m.key), campus_id: campus.id,
       email: m.deleted ? null : `seed.${m.key}@${m.staff ? staffDomain : studentDomain}`,
