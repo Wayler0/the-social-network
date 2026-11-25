@@ -11,7 +11,10 @@ type Photo = { preview: string; imageId: string | null; uploading: boolean };
 /** New post: text (required) and one optional photo (issues #22, #32). `?group=<id>` posts into that group. */
 export function Compose() {
   const navigate = useNavigate();
-  const groupId = useSearchParams()[0].get('group');
+  const [search] = useSearchParams();
+  const groupId = search.get('group');
+  // Club admins: an announcement goes to the club's members and followers, in their feeds too.
+  const announcement = !!groupId && search.get('announcement') === '1';
   const [groupName, setGroupName] = useState<string | null>(null);
   useEffect(() => { if (groupId) getGroup(groupId).then((g) => setGroupName(g.name)).catch(() => setGroupName(null)); }, [groupId]);
   const [body, setBody] = useState('');
@@ -46,9 +49,11 @@ export function Compose() {
     if (!canPost) return;
     setPosting(true); setError(null);
     try {
-      const created = await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}) });
+      const created = await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}), ...(announcement ? { announcement: true } : {}) });
       addPostToTop(created);
-      navigate(groupId ? `/groups/${groupId}` : '/', { replace: true });
+      // Back to the club tab the post went to (Discussion posts aren't on the Announcements tab).
+      const clubTab = created.group?.kind === 'club' ? (created.announcement ? '?tab=announcements' : '?tab=discussion') : '';
+      navigate(groupId ? `/groups/${groupId}${clubTab}` : '/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Your post didn’t send. Try again.');
       setPosting(false);
@@ -64,7 +69,9 @@ export function Compose() {
       </header>
 
       <div className="screen compose-body">
-        {groupId && <p className="notice">Posting in {groupName ?? 'the group'}. Only its members will see it.</p>}
+        {groupId && <p className="notice">{announcement
+          ? <>Announcement from {groupName ?? 'the club'}. Its members and followers will see it, in their feeds too.</>
+          : <>Posting in {groupName ?? 'the group'}. Only its members will see it.</>}</p>}
         <label htmlFor="post-body" className="visually-hidden">What’s happening on campus?</label>
         <textarea id="post-body" className="compose-text" placeholder="What’s happening on campus?" autoFocus
           value={body} onChange={(e) => setBody(e.target.value)} aria-invalid={tooLong} aria-describedby="post-count" />

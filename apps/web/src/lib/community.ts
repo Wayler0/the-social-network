@@ -18,6 +18,8 @@ export type Group = {
   kind: 'group' | 'club'; clubVerified: boolean; posting: 'everyone' | 'admins_only';
   isClassGroup: boolean; memberCount: number | null;
   myStatus: 'none' | 'pending' | 'active'; myRole: 'member' | 'admin' | null;
+  /** Club follows (v0.2): only public clubs can be followed; followerCount is null otherwise. */
+  canFollow: boolean; following: boolean; followerCount: number | null;
 };
 export type Member = { id: string; name: string; photoUrl: string | null; memberType: string; role: 'admin' | 'member'; joinedAt: string };
 export type JoinRequest = { id: string; name: string; photoUrl: string | null; memberType: string; requestedAt: string };
@@ -28,7 +30,10 @@ export const createGroup = (input: { name: string; description?: string; visibil
   call<Group>('POST', '/api/groups', input);
 export const joinGroup = (groupId: string) => call<{ status: 'active' | 'pending' }>('PUT', `/api/groups/${id(groupId)}/membership`);
 export const leaveGroup = (groupId: string) => call<void>('DELETE', `/api/groups/${id(groupId)}/membership`);
-export const getGroupPosts = (groupId: string, cursor?: string | null) => call<Page<Post>>('GET', q(`/api/groups/${id(groupId)}/posts`, { limit: 20, cursor }));
+/** Clubs: `announcements` (admins post) or `discussion` (members); `all` for other groups. */
+export type Channel = 'all' | 'announcements' | 'discussion';
+export const getGroupPosts = (groupId: string, cursor?: string | null, channel: Channel = 'all') =>
+  call<Page<Post>>('GET', q(`/api/groups/${id(groupId)}/posts`, { limit: 20, cursor, channel }));
 export const getMembers = (groupId: string, cursor?: string | null) => call<Page<Member>>('GET', q(`/api/groups/${id(groupId)}/members`, { limit: 50, cursor }));
 export const getRequests = (groupId: string) => call<{ items: JoinRequest[] }>('GET', `/api/groups/${id(groupId)}/requests`);
 export const answerRequest = (groupId: string, userId: string, approve: boolean) =>

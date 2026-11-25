@@ -13,7 +13,9 @@ export type Post = {
   id: string;
   author: Author;
   office: Office | null;
-  group: { id: string; name: string } | null;
+  group: { id: string; name: string; kind?: 'group' | 'club' } | null;
+  /** A club announcement (club admins only); also shown in followers' feeds. */
+  announcement?: boolean;
   body: string;
   image: PostImage | null;
   likeCount: number;
@@ -38,7 +40,7 @@ const page = (path: string, cursor?: string | null, limit = 20) =>
 
 export const getFeed = (cursor?: string | null) => call<Page<Post>>('GET', page('/api/feed', cursor));
 export const getPost = (id: string) => call<Post>('GET', `/api/posts/${encodeURIComponent(id)}`);
-export const createPost = (input: { body: string; imageId?: string; groupId?: string }) => call<Post>('POST', '/api/posts', input);
+export const createPost = (input: { body: string; imageId?: string; groupId?: string; announcement?: boolean }) => call<Post>('POST', '/api/posts', input);
 export const deletePost = (id: string) => call<void>('DELETE', `/api/posts/${encodeURIComponent(id)}`);
 
 export const likePost = (id: string, like: boolean) =>
