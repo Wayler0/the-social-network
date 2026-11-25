@@ -524,7 +524,7 @@ An in-app inbox plus Web Push (VAPID). The inbox always records; push follows ea
 | `GET /api/push/key` | `{ publicKey }`, or `null` when push is off on this server |
 | `PUT /api/push/subscriptions` | The browser's `PushSubscription.toJSON()` (`https://` endpoint only) → `204`; `503 push_unavailable` when push is off |
 | `DELETE /api/push/subscriptions` | `{ endpoint }` → `204` (idempotent) |
-| `GET /api/me/notification-settings` | `{ comments, answers, follows, groups, events, urgent }` (all `true` by default) |
+| `GET /api/me/notification-settings` | `{ comments, answers, follows, groups, events, urgent, stories }` (all `true` by default) |
 | `PATCH /api/me/notification-settings` | Any of those booleans → the full settings |
 
 **Notification** `{ id, type, text, count, actor: { id, name, photoUrl } | null, target: { type, id }, url, read, createdAt }`
