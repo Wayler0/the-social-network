@@ -10,6 +10,16 @@ import { Sheet } from './Sheet';
 const setPhoto = (photoImageId: string | null) => call<Me>('PATCH', '/api/me', { photoImageId });
 
 /**
+ * What to tell the member when it fails. The server explains its own refusals (too big, wrong type,
+ * too many uploads); no answer at all, or a gateway error, means the server couldn't be reached.
+ */
+function failText(err: unknown, fallback: string): string {
+  const unreachable = !(err instanceof ApiError) || (err.status >= 500 && !err.code);
+  if (unreachable) return 'Couldn’t reach the server. Check your connection and try again.';
+  return err.message || fallback;
+}
+
+/**
  * Add, change or remove your profile photo. Saved straight away (not with the profile form), and
  * shown everywhere at once (posts, comments, stories). The server re-encodes it and makes a
  * 320 px thumbnail; `accept` lists JPEG/PNG/WebP so iPhones hand over a JPEG, not HEIC.
@@ -34,7 +44,7 @@ function usePhotoUpload() {
       setMe(await setPhoto(up.imageId));
       return true;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'The photo didn’t upload. Try again.');
+      setError(failText(err, 'The photo didn’t upload. Try again.'));
       return false;
     } finally {
       setPreview(null);
@@ -45,7 +55,7 @@ function usePhotoUpload() {
   async function remove(): Promise<boolean> {
     setBusy(true); setError(null);
     try { setMe(await setPhoto(null)); return true; } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Couldn’t remove the photo. Try again.');
+      setError(failText(err, 'Couldn’t remove the photo. Try again.'));
       return false;
     } finally { setBusy(false); }
   }
