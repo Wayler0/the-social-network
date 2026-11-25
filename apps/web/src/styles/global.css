@@ -486,6 +486,14 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .announce-pill { margin-right: 6px; padding: 1px 7px; font-size: 10px; vertical-align: 1px; }
 .post-group-link { color: inherit; font-weight: 600; text-decoration: none; }
 
+/* ---------- Feedback ---------- */
+.stars { display: flex; justify-content: center; gap: 4px; }
+.star { width: 48px; height: 48px; border: 0; background: none; font-size: 34px; line-height: 1; color: var(--line); }
+.star.on { color: var(--sunshine); }
+.feedback-item { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.feedback-item p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-stars { color: var(--sunshine); letter-spacing: 2px; }
+.feedback-stars .muted { color: var(--line); }
 /* ---------- Follow from a post ---------- */
 .post-dot { color: var(--text-3); }
 .post-follow { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }

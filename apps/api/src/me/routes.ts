@@ -4,6 +4,7 @@ import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
 import { ensureGroupHasAdmin } from '../groups/admins.js';
 import { normaliseCourse, syncClassGroup } from '../groups/class-groups.js';
+import { countActiveDay } from '../feedback/routes.js';
 import { rollStudyYear } from './year.js';
 import { clearSessionCookie } from '../auth/sessions.js';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
@@ -43,6 +44,7 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
   useContractErrors(app);
 
   app.get('/api/me', async (req, reply) => {
+    await countActiveDay(db, req.auth!.userId);   // for the day-3 feedback prompt
     // A new academic year since their year was set? Move them up first (src/me/year.ts).
     await rollStudyYear(db, req.auth!.userId);
     const me = await loadMe(db, req.auth!.userId);
@@ -298,6 +300,7 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         await tx.query(`delete from rate_limit_events where bucket = 'code_email' and key = $1`, [email]);
       }
       await tx.query('delete from likes where user_id = $1', [userId]);
+      await tx.query('delete from feedback where user_id = $1', [userId]);
       await tx.query('delete from saved_posts where user_id = $1', [userId]);
       await tx.query('delete from answer_helpful where user_id = $1', [userId]);
       await tx.query('delete from blocks where blocker_id = $1 or blocked_id = $1', [userId]);

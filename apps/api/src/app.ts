@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { adminRoutes } from './admin/routes.js';
+import { feedbackRoutes } from './feedback/routes.js';
 import { announcementRoutes } from './announcements/routes.js';
 import { authRoutes } from './auth/routes.js';
 import { groupRoutes } from './groups/routes.js';
@@ -100,6 +101,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   app.register(eventRoutes, { config, db });             // Kim — v0.2 events
   app.register(notificationRoutes, { config, db });      // Kim — v0.2 notifications and push
   app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
+  app.register(feedbackRoutes, { db, requireUser });     // in-app feedback prompt (day 3)
   app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 
   return app;

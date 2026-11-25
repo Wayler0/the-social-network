@@ -10,8 +10,9 @@ import {
 } from '../lib/admin';
 import { useAuth } from '../lib/auth';
 import { REPORT_REASONS, timeAgo } from '../lib/feed';
+import { getFeedbackList, type FeedbackItem } from '../lib/feedback';
 
-type Tab = 'reports' | 'members' | 'offices' | 'log';
+type Tab = 'reports' | 'members' | 'offices' | 'feedback' | 'log';
 const errText = (err: unknown, fallback = 'That didn’t work. Try again.') => (err instanceof ApiError ? err.message : fallback);
 const reasonLabel = (r: string) => REPORT_REASONS.find(([v]) => v === r)?.[1] ?? r;
 const CONTENT: readonly string[] = ['post', 'comment', 'question', 'answer'];
@@ -29,7 +30,7 @@ export function Admin() {
 
   const show = (t: Tab, extra: Record<string, string> = {}) => setParams({ tab: t, ...extra }, { replace: true });
   const tabs: [Tab, string][] = admin
-    ? [['reports', 'Reports'], ['members', 'Members'], ['offices', 'Offices'], ['log', 'Log']]
+    ? [['reports', 'Reports'], ['members', 'Members'], ['offices', 'Offices'], ['feedback', 'Feedback'], ['log', 'Log']]
     : [['reports', 'Reports']];
 
   return (
@@ -49,6 +50,7 @@ export function Admin() {
       {tab === 'reports' && <Reports admin={admin} onFindMember={(name) => show('members', { q: name })} />}
       {tab === 'members' && <Members initial={params.get('q') ?? ''} myId={me!.id} />}
       {tab === 'offices' && <Offices />}
+      {tab === 'feedback' && <FeedbackList />}
       {tab === 'log' && <Log />}
     </>
   );
@@ -492,5 +494,38 @@ function Log() {
       </ul>
       {cursor && <button type="button" className="linkish comments-more" onClick={() => load(cursor)}>Show older</button>}
     </>
+  );
+}
+
+// ================================================================ Feedback
+
+/** What members said in the "Enjoying it?" prompt, newest first. No names, so people can be honest. */
+function FeedbackList() {
+  const [data, setData] = useState<{ count: number; average: number | null; items: FeedbackItem[]; nextCursor: string | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = async (cursor: string | null) => {
+    try {
+      const page = await getFeedbackList(cursor);
+      setData((prev) => (cursor && prev ? { ...page, items: [...prev.items, ...page.items] } : page));
+    } catch (err) { setError(errText(err, 'Couldn’t load feedback.')); }
+  };
+  useEffect(() => { void load(null); }, []);
+  if (error) return <p className="error feed-foot" role="alert">{error}</p>;
+  if (!data) return <p className="feed-foot" role="status">Loading…</p>;
+  return (
+    <div className="screen">
+      <p className="muted">{data.count} response{data.count === 1 ? '' : 's'}{data.average !== null ? ` · average ${data.average} ★` : ''}. Names are never shown.</p>
+      {data.items.length === 0 && <p className="muted">No feedback yet. Members are asked on their third day in the app.</p>}
+      <ul className="people-list">
+        {data.items.map((f) => (
+          <li key={f.id} className="feedback-item">
+            <span className="feedback-stars" aria-label={`${f.rating} out of 5`}>{'★'.repeat(f.rating)}<span className="muted">{'★'.repeat(5 - f.rating)}</span></span>
+            {f.body && <p>{f.body}</p>}
+            <time className="post-meta" dateTime={f.createdAt}>{new Date(f.createdAt).toLocaleDateString()}</time>
+          </li>
+        ))}
+      </ul>
+      {data.nextCursor && <button type="button" className="linkish feed-foot" onClick={() => void load(data.nextCursor)}>Show more</button>}
+    </div>
   );
 }
