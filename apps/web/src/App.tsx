@@ -16,6 +16,7 @@ import { Today } from './screens/Today';
 import { Onboarding } from './screens/Onboarding';
 import { PostDetail } from './screens/PostDetail';
 import { FollowList } from './screens/FollowList';
+import { FollowSuggestions } from './screens/FollowSuggestions';
 import { Profile } from './screens/Profile';
 import { UserProfile } from './screens/UserProfile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
@@ -66,12 +67,14 @@ export function App() {
 
       <Route element={<RequireAuth />}>
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/onboarding/follow" element={<div className="shell"><FollowSuggestions onboarding /></div>} />
         {/* Full-screen pages without the bottom nav, still in the one-column frame. */}
         <Route element={<div className="shell"><Outlet /></div>}>
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/create" element={<Compose />} />
           <Route path="/story/new" element={<StoryNew />} />
+          <Route path="/people" element={<FollowSuggestions />} />
           <Route path="/post/:id" element={<PostDetail />} />
           <Route path="/groups/new" element={<GroupNew />} />
           <Route path="/groups/:id" element={<GroupPage />} />

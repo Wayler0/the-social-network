@@ -441,6 +441,14 @@ Rules (code: `apps/api/src/follows/routes.ts`, table `follows`, migration 011):
 
 ---
 
+### 12a. Who to follow ✅
+
+`GET /api/suggestions` → `{ people: [{ id, name, photoUrl, memberType, course, yearOfStudy, badges, reason, mutualCount }], clubs: [{ id, name, description, clubVerified, followerCount }] }` — up to 20 people and 6 clubs, for the onboarding "follow classmates" step and "People in your course" on Discover. Code: `apps/api/src/suggestions/routes.ts`.
+
+- People: live, verified, finished profiles on your campus that you don't follow, no block either way, not suspended. Ranked same class (students, same course and year) → same course → mutual follows → followers. Only people in your course, with mutual follows, or staff are suggested.
+- **Privacy:** staff are never shown students (student-first rule). An **under-18** member is suggested only to their own classmates. `reason` is only "Same class", "Same course", "Staff" and/or "N mutual" — never where someone lives or anything else personal. No email or member number.
+- Clubs: public clubs you may see and are neither in nor following; CLUB-badged first, then most followed.
+
 ## 13. Stories (v0.2) ✅
 
 Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").

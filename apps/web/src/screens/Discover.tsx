@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Avatar } from '../components/Avatar';
+import { follow } from '../lib/feed';
+import { getSuggestions, type SuggestedPerson } from '../lib/suggestions';
 import { Icon, type IconName } from '../components/Icon';
 
 const tiles: { to: string | null; title: string; text: string; icon: IconName; tone: string }[] = [
@@ -14,6 +18,7 @@ export function Discover() {
   return (
     <>
       <header className="topbar"><h1 className="topbar-title">Discover</h1></header>
+      <PeopleCards />
       <div className="tiles">
         {tiles.map((t) => {
           const inner = (<>
@@ -27,5 +32,43 @@ export function Discover() {
         })}
       </div>
     </>
+  );
+}
+
+/** "People in your course": a row of cards with Follow, from GET /api/suggestions. Hidden when empty. */
+function PeopleCards() {
+  const [people, setPeople] = useState<SuggestedPerson[] | null>(null);
+  const [on, setOn] = useState<Record<string, boolean>>({});
+  useEffect(() => { getSuggestions().then((s) => setPeople(s.people.slice(0, 10))).catch(() => setPeople([])); }, []);
+  if (!people || people.length === 0) return null;
+
+  async function toggle(id: string) {
+    const next = !on[id];
+    setOn((s) => ({ ...s, [id]: next }));
+    try { await follow('user', id, next); } catch { setOn((s) => ({ ...s, [id]: !next })); }
+  }
+
+  return (
+    <section className="people-cards" aria-labelledby="people-cards-title">
+      <div className="people-cards-head">
+        <h2 id="people-cards-title">People you may know</h2>
+        <Link to="/people" className="linkish">See all</Link>
+      </div>
+      <ul className="people-cards-row">
+        {people.map((p) => (
+          <li key={p.id} className="person-card">
+            <Link to={`/u/${p.id}`} className="person-card-main">
+              <Avatar name={p.name} photoUrl={p.photoUrl} size={60} />
+              <strong>{p.name}</strong>
+              <span className="muted">{p.reason || p.course}</span>
+            </Link>
+            <button type="button" className={`btn small-btn${on[p.id] ? ' secondary' : ''}`} aria-pressed={!!on[p.id]}
+              aria-label={`${on[p.id] ? 'Unfollow' : 'Follow'} ${p.name}`} onClick={() => void toggle(p.id)}>
+              {on[p.id] ? 'Following' : 'Follow'}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
