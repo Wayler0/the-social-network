@@ -331,6 +331,8 @@ Rules (code: `apps/api/src/safety/`):
 | `PUT /api/groups/:id/members/:userId/role` | Admins: `{ role: "admin"\|"member" }` → `{ role }`. `409 last_admin` if it would leave no admin |
 | `DELETE /api/groups/:id/members/:userId` | Admins remove a member → `204`. Not other admins (demote first), not in class groups |
 
+`GET /api/courses` → `{ items: [{ name, members }] }`: courses members of your campus already use (students and alumni), most used first, at most 300. Spellings that differ only in capitals or spaces count as one, shown in the most common spelling. The profile form suggests them as you type, so classmates pick the same name and land in the same class group (fixes "we chose the same year but the class group has one member", 25 Nov).
+
 Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
 **Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, isClassGroup, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null, canFollow, following, followerCount }` — `canFollow` only for public clubs (v0.2, section 12); `followerCount` is `null` otherwise

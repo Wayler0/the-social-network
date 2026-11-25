@@ -68,3 +68,18 @@ export const markHelpful = (aId: string, helpful: boolean) =>
 
 /** Shown in place of an author whose name is hidden from you. */
 export const HIDDEN_AUTHOR: Author = { id: null, name: 'A student', photoUrl: null, badges: [] };
+
+/** Courses members of your campus already use (GET /api/courses), most used first. */
+export type Course = { name: string; members: number };
+export const getCourses = () => call<{ items: Course[] }>('GET', '/api/courses');
+
+/** Loose key for matching what someone types to a course: lower-case, letters and digits only. */
+export const courseKey = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+
+/** Up to `max` suggestions for what has been typed so far (all courses when nothing is typed yet). */
+export function suggestCourses(courses: Course[], typed: string, max = 6): Course[] {
+  const key = courseKey(typed);
+  if (!key) return courses.slice(0, max);
+  if (courses.some((c) => c.name.toLowerCase() === typed.trim().replace(/\s+/g, ' ').toLowerCase())) return [];   // already exact
+  return courses.filter((c) => courseKey(c.name).includes(key)).slice(0, max);
+}

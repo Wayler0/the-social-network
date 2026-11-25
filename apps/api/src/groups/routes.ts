@@ -64,6 +64,26 @@ export async function groupRoutes(app: FastifyInstance, { config, db }: { config
   const badCursor = (reply: Parameters<typeof fail>[0]) => fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.');
 
   // ---- GET /api/groups?mine=true&limit&cursor   newest first
+  // ---- GET /api/courses   courses members of your campus already use, most used first: the profile
+  //      form suggests them so classmates type the same name and land in the same class group.
+  //      Spellings that differ only in capitals or spaces count as one (as class groups do); the
+  //      most common spelling is shown.
+  app.get('/api/courses', async (req) => {
+    const { rows } = await db.query<{ name: string; members: number }>(
+      `with c as (
+         select regexp_replace(btrim(course), '\\s+', ' ', 'g') as course
+           from users
+          where campus_id = $1 and deleted_at is null and member_type in ('fresher', 'continuing', 'alumni')
+            and course is not null and btrim(course) <> ''
+       )
+       select mode() within group (order by course) as name, count(*)::int as members
+         from c group by lower(course)
+        order by members desc, name
+        limit 300`,
+      [req.auth!.campusId]);
+    return { items: rows };
+  });
+
   app.get('/api/groups', async (req, reply) => {
     const q = parse(z.object({ ...pageQuery, mine: z.enum(['true', 'false']).default('false') }).strict(), req.query, reply);
     if (!q) return;

@@ -553,3 +553,9 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .cropper-zoom input { flex: 1; accent-color: var(--sunshine); }
 .cropper-buttons { display: flex; gap: 8px; }
 .cropper .hint { color: rgba(255, 255, 255, 0.7); margin: 0; }
+
+/* ---------- Course suggestions (same spelling = same class group) ---------- */
+.course-suggest { list-style: none; margin: 4px 0 0; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); box-shadow: 0 6px 20px rgba(17, 16, 24, 0.08); }
+.course-suggest button { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; }
+.course-suggest button:hover, .course-suggest button:focus-visible { background: var(--fill); }
+.course-suggest .muted { font-size: 12px; flex: none; }

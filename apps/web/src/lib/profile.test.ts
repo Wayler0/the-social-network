@@ -91,3 +91,17 @@ describe('registration number is optional (team decision 25 Nov 2026)', () => {
     expect(isComplete({ name: 'A', memberType: 'staff', memberNumber: null, yearOfStudy: null, graduationYear: null, isUnder18: false })).toBe(false);
   });
 });
+
+import { courseKey, suggestCourses } from './community';
+describe('course suggestions', () => {
+  const courses = [{ name: 'BSc Computer Science', members: 12 }, { name: 'Bachelor of Commerce', members: 8 }, { name: 'BSc Computer Security', members: 2 }];
+  it('matches loosely: case, dots and spaces do not matter', () => {
+    expect(courseKey('B.Sc  computer-Science')).toBe('bsccomputerscience');
+    expect(suggestCourses(courses, 'bsc comp').map((c) => c.name)).toEqual(['BSc Computer Science', 'BSc Computer Security']);
+    expect(suggestCourses(courses, 'B.Sc. Computer Sci').map((c) => c.name)).toEqual(['BSc Computer Science']);
+  });
+  it('shows the most used when nothing is typed, and nothing once it matches exactly', () => {
+    expect(suggestCourses(courses, '')[0]!.name).toBe('BSc Computer Science');
+    expect(suggestCourses(courses, 'bsc computer science')).toEqual([]);
+  });
+});
