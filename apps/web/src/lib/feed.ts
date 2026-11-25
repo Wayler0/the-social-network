@@ -19,6 +19,9 @@ export type Post = {
   likeCount: number;
   commentCount: number;
   likedByMe: boolean;
+  /** v0.2 reactions: the viewer's own (null if none) and the count of each. */
+  myReaction: Reaction | null;
+  reactions: Partial<Record<Reaction, number>>;
   /** Saved by the viewer (private: nobody else is told). */
   savedByMe: boolean;
   createdAt: string;
@@ -63,6 +66,15 @@ export const savePost = (id: string, save: boolean) =>
 export const getSaved = (cursor?: string | null) => call<Page<Post>>('GET', page('/api/me/saved', cursor));
 export const getUserPosts = (userId: string, cursor?: string | null) =>
   call<Page<Post>>('GET', page(`/api/users/${encodeURIComponent(userId)}/posts`, cursor));
+
+export const REACTIONS = ['like', 'love', 'haha', 'wow', 'sad', 'support'] as const;
+export type Reaction = (typeof REACTIONS)[number];
+export const REACTION_EMOJI: Record<Reaction, string> = { like: '❤️', love: '😍', haha: '😂', wow: '😮', sad: '😢', support: '🤝' };
+export const REACTION_LABEL: Record<Reaction, string> = { like: 'Like', love: 'Love', haha: 'Haha', wow: 'Wow', sad: 'Sad', support: 'Support' };
+/** Set (or with null, remove) the viewer's reaction: one per member per post. */
+export const reactToPost = (id: string, reaction: Reaction | null) =>
+  call<{ myReaction: Reaction | null; likeCount: number; reactions: Partial<Record<Reaction, number>> }>(
+    reaction ? 'PUT' : 'DELETE', `/api/posts/${encodeURIComponent(id)}/reaction`, reaction ? { reaction } : undefined);
 
 export const getComments = (postId: string, cursor?: string | null) =>
   call<Page<Comment>>('GET', page(`/api/posts/${encodeURIComponent(postId)}/comments`, cursor, 30));

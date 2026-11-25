@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { deletePost, likePost, savePost, plural, timeAgo, type Post } from '../lib/feed';
+import { deletePost, REACTION_EMOJI, REACTION_LABEL, REACTIONS, reactToPost, savePost, type Reaction, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
 import { Icon } from './Icon';
@@ -51,19 +51,37 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
     }
   }
 
-  async function toggleLike() {
-    const like = !post.likedByMe;
-    // Show it straight away; put it back if the server says no.
-    onChange({ ...post, likedByMe: like, likeCount: Math.max(0, post.likeCount + (like ? 1 : -1)) });
+  const [picker, setPicker] = useState(false);
+  const pressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+
+  /** Set, change or (with null) remove my reaction. Shows straight away; puts it back if the server says no. */
+  async function react(reaction: Reaction | null) {
+    setPicker(false);
+    const counts = { ...post.reactions };
+    if (post.myReaction) counts[post.myReaction] = Math.max(0, (counts[post.myReaction] ?? 1) - 1);
+    if (reaction) counts[reaction] = (counts[reaction] ?? 0) + 1;
+    const delta = (reaction ? 1 : 0) - (post.myReaction ? 1 : 0);
+    onChange({ ...post, myReaction: reaction, likedByMe: reaction !== null, reactions: counts, likeCount: Math.max(0, post.likeCount + delta) });
     setLikeError(null);
     try {
-      const r = await likePost(post.id, like);
-      onChange({ ...post, likedByMe: r.liked, likeCount: r.likeCount });
+      const r = await reactToPost(post.id, reaction);
+      onChange({ ...post, myReaction: r.myReaction, likedByMe: r.myReaction !== null, likeCount: r.likeCount, reactions: r.reactions });
     } catch (err) {
       onChange(post);
-      setLikeError(err instanceof ApiError ? err.message : 'Couldn’t save your like. Try again.');
+      setLikeError(err instanceof ApiError ? err.message : 'Couldn’t save your reaction. Try again.');
     }
   }
+  // Tap: like / remove. Press and hold (or right-click): choose a reaction.
+  const pressStart = () => {
+    longPressed.current = false;
+    pressTimer.current = window.setTimeout(() => { longPressed.current = true; setPicker(true); }, 450);
+  };
+  const pressEnd = () => { if (pressTimer.current) window.clearTimeout(pressTimer.current); };
+  const tapLike = () => { if (longPressed.current) return; void react(post.myReaction ? null : 'like'); };
+  const topReactions = REACTIONS.filter((r) => (post.reactions[r] ?? 0) > 0)
+    .sort((a, b) => (post.reactions[b] ?? 0) - (post.reactions[a] ?? 0)).slice(0, 3);
+
 
   // Personal posts link to the author's profile (office pages come later).
   const profileHref = !post.office && post.author.id ? `/u/${post.author.id}` : null;
@@ -106,11 +124,29 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
       {viewing && post.image && <PhotoViewer src={post.image.url} alt="" name={post.id.slice(0, 8)} onClose={() => setViewing(false)} />}
 
       <footer className="post-actions">
-        <button type="button" className={`action${post.likedByMe ? ' liked' : ''}`} aria-pressed={post.likedByMe}
-          aria-label={`${post.likedByMe ? 'Unlike' : 'Like'}, ${plural(post.likeCount, 'like')}`} onClick={toggleLike}>
-          <Icon name="heart" fill={post.likedByMe ? 'currentColor' : 'none'} />
-          <span>{post.likeCount}</span>
-        </button>
+        <span className="react-wrap">
+          <button type="button" className={`action${post.myReaction ? ' liked' : ''}`} aria-pressed={post.myReaction !== null}
+            aria-label={`${post.myReaction ? `Remove ${REACTION_LABEL[post.myReaction]}` : 'Like'}, ${plural(post.likeCount, 'reaction')}. Press and hold for more reactions`}
+            onClick={tapLike} onPointerDown={pressStart} onPointerUp={pressEnd} onPointerLeave={pressEnd}
+            onContextMenu={(e) => { e.preventDefault(); setPicker(true); }}>
+            {post.myReaction && post.myReaction !== 'like'
+              ? <span className="react-emoji" aria-hidden="true">{REACTION_EMOJI[post.myReaction]}</span>
+              : <Icon name="heart" fill={post.myReaction ? 'currentColor' : 'none'} />}
+            <span>{post.likeCount}</span>
+            {topReactions.length > 1 && <span className="react-top" aria-hidden="true">{topReactions.map((r) => REACTION_EMOJI[r]).join('')}</span>}
+          </button>
+          {picker && <span className="react-backdrop" aria-hidden="true" onClick={() => setPicker(false)} />}
+          {picker && (
+            <span className="react-picker" role="menu" aria-label="Reactions">
+              {REACTIONS.map((r) => (
+                <button key={r} type="button" role="menuitem" aria-label={REACTION_LABEL[r]}
+                  className={post.myReaction === r ? 'chosen' : ''} onClick={() => void react(post.myReaction === r ? null : r)}>
+                  {REACTION_EMOJI[r]}
+                </button>
+              ))}
+            </span>
+          )}
+        </span>
         {linkToPost
           ? <Link to={href} className="action" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></Link>
           : <span className="action static" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></span>}
