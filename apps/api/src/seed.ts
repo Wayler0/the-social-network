@@ -40,8 +40,9 @@ type Row = Record<string, unknown>;
 
 /**
  * Inserts rows, skipping any that already exist. Table and column names are constants in this file.
- * `refresh` lists time columns to reset on rows that already exist (same id), so dates relative to
- * "now" (a pin that ends in 2 days) stay true when the seed runs again days later. Returns how many
+ * `refresh` lists columns to reset on rows that already exist (same id), so dates relative to
+ * "now" (a pin that ends in 2 days) stay true when the seed runs again days later, and seeded
+ * member numbers follow format changes. Every refreshed table needs a uuid `id`. Returns how many
  * rows were new.
  */
 async function insert(db: pg.Client, table: string, rows: Row[], refresh: string[] = []): Promise<number> {
@@ -52,13 +53,24 @@ async function insert(db: pg.Client, table: string, rows: Row[], refresh: string
   if (odd) throw new Error(`seed: every ${table} row needs the same columns (${columns.join(', ')}); got ${Object.keys(odd).join(', ')}`);
   const values: unknown[] = [];
   const tuples = rows.map((row) => `(${columns.map((c) => { values.push(row[c] ?? null); return `$${values.length}`; }).join(', ')})`);
-  const onConflict = refresh.length
-    ? `on conflict (id) do update set ${refresh.map((c) => `${c} = excluded.${c}`).join(', ')}`
-    : 'on conflict do nothing';
+  // "do nothing" without a target checks every unique index (id, email, member number...). An
+  // "on conflict (id) do update" checks only id, and test files seeding a fresh database at the same
+  // time then deadlock on the other unique indexes (CI, 25 Nov 2026).
   const result = await db.query<{ inserted: boolean }>(
-    `insert into ${table} (${columns.join(', ')}) values ${tuples.join(', ')} ${onConflict} returning (xmax = 0) as inserted`,
+    `insert into ${table} (${columns.join(', ')}) values ${tuples.join(', ')} on conflict do nothing returning (xmax = 0) as inserted`,
     values,
   );
+  if (refresh.length) {
+    const fresh = JSON.stringify(rows.map((row) => Object.fromEntries(['id', ...refresh].map((c) => [c, row[c] ?? null]))));
+    const ids = rows.map((row) => row.id);
+    // Lock in id order first, so two runs updating the same rows can't deadlock either.
+    await db.query(`select 1 from ${table} where id = any($1::uuid[]) order by id for update`, [ids]);
+    await db.query(
+      `update ${table} t set ${refresh.map((c) => `${c} = r.${c}`).join(', ')}
+         from jsonb_populate_recordset(null::${table}, $1::jsonb) r where t.id = r.id`,
+      [fresh],
+    );
+  }
   return result.rows.filter((r) => r.inserted).length;
 }
 
