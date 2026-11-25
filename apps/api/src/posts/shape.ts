@@ -31,12 +31,17 @@ export const POST_SELECT = `
          (select l.reaction from likes l where l.post_id = p.id and l.user_id = $1) as my_reaction,
          (select coalesce(jsonb_object_agg(r.reaction, r.n), '{}') from (select l.reaction, count(*)::int as n from likes l where l.post_id = p.id group by l.reaction) r) as reaction_counts,
          exists (select 1 from saved_posts s where s.post_id = p.id and s.user_id = $1) as saved_by_me,
+         ev.id as event_id, ev.title as event_title, ev.location as event_location, ev.starts_at as event_starts_at,
+         (ev.cancelled_at is not null) as event_cancelled,
+         (select count(*) from event_rsvps er where er.event_id = ev.id and er.status = 'going')::int as event_going,
+         (select er.status from event_rsvps er where er.event_id = ev.id and er.user_id = $1) as event_my_rsvp,
          exists (select 1 from follows fa where fa.follower_id = $1 and fa.target_type = 'user' and fa.target_id = p.author_user_id) as following_author
     from posts p
     join users au on au.id = p.author_user_id
     left join office_accounts o on o.id = p.author_office_id
     left join groups g on g.id = p.group_id
-    left join images i on i.id = p.image_id`;
+    left join images i on i.id = p.image_id
+    left join events ev on ev.id = p.event_id and ev.hidden_at is null and ev.deleted_at is null`;
 
 export type AuthorRow = { author_id: string | null; author_name: string | null; author_photo: string | null; author_roles: string[] };
 
@@ -46,7 +51,9 @@ export type PostRow = AuthorRow & {
   group_id: string | null; group_name: string | null; group_kind: string | null;
   image_path: string | null; image_width: number | null; image_height: number | null;
   like_count: number; comment_count: number; my_reaction: Reaction | null; reaction_counts: Partial<Record<Reaction, number>>;
-  saved_by_me: boolean; following_author: boolean;
+  saved_by_me: boolean;
+  event_id: string | null; event_title: string | null; event_location: string | null; event_starts_at: Date | null;
+  event_cancelled: boolean | null; event_going: number | null; event_my_rsvp: string | null; following_author: boolean;
 };
 
 export function author(r: AuthorRow) {
@@ -70,6 +77,9 @@ export function postBody(r: PostRow) {
     myReaction: r.my_reaction,
     reactions: r.reaction_counts,
     savedByMe: r.saved_by_me,
+    /** A shared event: its card (null if it was deleted or hidden). */
+    event: r.event_id ? { id: r.event_id, title: r.event_title, location: r.event_location, startsAt: r.event_starts_at!.toISOString(),
+      cancelled: Boolean(r.event_cancelled), goingCount: r.event_going ?? 0, myRsvp: r.event_my_rsvp } : null,
     /** Whether the viewer follows the author (for the Follow button next to the name). */
     followingAuthor: r.following_author,
     createdAt: r.created_at.toISOString(),

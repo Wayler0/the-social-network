@@ -11,6 +11,22 @@
 
 ---
 
+## Status — Wed 25 Nov 2026, evening
+
+**Merged today after the morning status:** moving up a year (019), story likes (020), story backgrounds (022), Follow button on posts, privacy policy and terms pages, link previews, profile photo + photo editor. Feedback prompt (021) is in PR #73.
+
+**Fixed: class groups split by spelling.** Classmates who typed their course differently ("BSc Computer Science" vs "Bsc. Computer Science") landed in separate one-person class groups. The course box now suggests courses classmates already use (`fix/course-suggestions`). Existing members: open Edit profile and pick the course from the list.
+
+**New branches waiting for review** (merge in this order; each tested on a clean database):
+1. `fix/course-suggestions` — course suggestions (`GET /api/courses`).
+2. `feat/story-notifications` (023) — notifications for new stories from people you follow and official accounts; Stories switch in notification settings.
+3. `feat/story-sharing` (024, built on 2) — add someone's story to yours (only seen by people who may see the original; gone with it) or share its link.
+4. `feat/event-posts` (025) — share an event to the feed as a post with an event card.
+
+**Still to check by hand on a phone** (the browser tool was down): story sharing sheet, course suggestions, event card in the feed.
+
+**Open:** APK — wait for the final domain, or build a Trusted Web Activity now? · team contact email for the privacy policy · next graduation date (alumni sign-in).
+
 ## Status — Wed 25 Nov 2026
 
 **Live:** the app runs at hatua.nextup.co.ke on the KENET server (first live 24 Nov). `main` deploys itself once CI passes (Kim, PR #62), when `DEPLOY_ENABLED` is set. `main` is protected: CI must pass and one other person must approve each PR.
