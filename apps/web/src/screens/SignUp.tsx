@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { APP_SLUG } from '../config';
 import { useCampuses } from '../lib/campuses';
 import { allowedDomains, checkCampusEmail, emailErrorText } from '../lib/email';
@@ -63,7 +63,7 @@ export function SignUp() {
       </form>
 
       <p className="auth-foot">
-        By continuing you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy policy</a>.
+        By continuing you agree to the <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy policy</Link>.
       </p>
     </main>
   );
