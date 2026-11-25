@@ -23,6 +23,8 @@ export type Me = {
   profileComplete: boolean;
   /** The saved reg number doesn't match the campus format (saved before the check existed): must be fixed. */
   memberNumberNeedsFix?: boolean;
+  /** Moved up a year when a new academic year started: asks "You're now in Year {to}, right?". */
+  yearCheck?: { from: number; to: number } | null;
 };
 
 export type ProfileInput = {

@@ -14,6 +14,11 @@ export const APP_NAME = 'Hatua';
 export const APP_SLUG = APP_NAME.toLowerCase();
 /** Shown in the install manifest and the page description. */
 export const APP_TAGLINE = 'Your campus community, in one place.';
+/**
+ * The site's public address, for link previews (WhatsApp, Telegram, Facebook need full image URLs).
+ * A PLACEHOLDER domain like the name: change it here when the final domain is chosen.
+ */
+export const PUBLIC_URL = 'https://hatua.nextup.co.ke';
 /** Browser and phone status-bar colour (violet, same as --violet in styles/tokens.css). */
 export const THEME_COLOR = '#6A3DF5';
 
