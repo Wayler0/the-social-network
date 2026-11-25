@@ -7,7 +7,7 @@ import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
-import { visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
+import { notBlocked, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
 import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, type CommentRow, type PostRow } from './shape.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
@@ -226,6 +226,72 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     await db.query('update comments set deleted_at = clock_timestamp() where id = $1', [params.data.id]);
     return reply.code(204).send();
   });
+
+  // ---- GET /api/users/:id/posts   a member's own posts (not as an office), newest first:
+  //      the campus feed ones and those in groups the viewer can see. 404 like GET /api/users/:id.
+  app.get('/api/users/:id/posts', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    const q = parse(pageSchema, req.query, reply);
+    if (!q) return;
+    const notFound = () => fail(reply, 404, 'not_found', 'Member not found.');
+    if (!params.success) return notFound();
+    let cursor;
+    try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.'); throw e; }
+    const member = await db.query(
+      `select 1 from users u where u.id = $3 and u.campus_id = $2 and u.deleted_at is null and ${notBlocked('u.id', V)}`,
+      [req.auth!.userId, req.auth!.campusId, params.data.id]);
+    if (member.rows.length === 0) return notFound();
+    const { rows } = await db.query<PostRow>(
+      `${POST_SELECT}
+        where p.author_user_id = $3 and p.author_office_id is null and ${visiblePost('p', V)}
+          and ($4::timestamptz is null or (p.created_at, p.id) < ($4::timestamptz, $5::uuid))
+        order by p.created_at desc, p.id desc
+        limit $6`,
+      [req.auth!.userId, req.auth!.campusId, params.data.id, cursor?.at ?? null, cursor?.id ?? null, q.limit + 1],
+    );
+    const p = page(rows, q.limit);
+    return { items: p.rows.map(postBody), nextCursor: p.nextCursor };
+  });
+
+  // ---- GET /api/me/saved   posts I saved, newest save first; ones I can no longer see are left out
+  app.get('/api/me/saved', async (req, reply) => {
+    const q = parse(pageSchema, req.query, reply);
+    if (!q) return;
+    let cursor;
+    try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.'); throw e; }
+    const { rows } = await db.query<PostRow>(
+      `${POST_SELECT.replace('p.created_at::text as cursor_at', 'sp.created_at::text as cursor_at')}
+        join saved_posts sp on sp.post_id = p.id and sp.user_id = $1
+        where ${visiblePost('p', V)}
+          and ($3::timestamptz is null or (sp.created_at, p.id) < ($3::timestamptz, $4::uuid))
+        order by sp.created_at desc, p.id desc
+        limit $5`,
+      [req.auth!.userId, req.auth!.campusId, cursor?.at ?? null, cursor?.id ?? null, q.limit + 1],
+    );
+    const p = page(rows, q.limit);
+    return { items: p.rows.map(postBody), nextCursor: p.nextCursor };
+  });
+
+  // ---- PUT / DELETE /api/posts/:id/save   idempotent; private to the member
+  for (const saved of [true, false]) {
+    app.route({
+      method: saved ? 'PUT' : 'DELETE',
+      url: '/api/posts/:id/save',
+      handler: async (req, reply) => {
+        const params = idParam.safeParse(req.params);
+        if (!params.success) return fail(reply, 404, 'not_found', 'Post not found.');
+        // Unsaving always works (even a post that is now hidden); saving needs a post you can see.
+        if (saved && !(await loadPost(db, req.auth!, params.data.id))) return fail(reply, 404, 'not_found', 'Post not found.');
+        await db.query(
+          saved
+            ? 'insert into saved_posts (user_id, post_id) values ($1, $2) on conflict do nothing'
+            : 'delete from saved_posts where user_id = $1 and post_id = $2',
+          [req.auth!.userId, params.data.id],
+        );
+        return { saved };
+      },
+    });
+  }
 
   // ---- PUT / DELETE /api/posts/:id/like   idempotent
   for (const liked of [true, false]) {

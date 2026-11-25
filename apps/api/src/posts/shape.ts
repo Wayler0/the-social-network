@@ -28,7 +28,8 @@ export const POST_SELECT = `
          i.path as image_path, i.width as image_width, i.height as image_height,
          (select count(*) from likes l where l.post_id = p.id)::int as like_count,
          (select count(*) from comments c where c.post_id = p.id and c.hidden_at is null and c.deleted_at is null)::int as comment_count,
-         exists (select 1 from likes l where l.post_id = p.id and l.user_id = $1) as liked_by_me
+         exists (select 1 from likes l where l.post_id = p.id and l.user_id = $1) as liked_by_me,
+         exists (select 1 from saved_posts s where s.post_id = p.id and s.user_id = $1) as saved_by_me
     from posts p
     join users au on au.id = p.author_user_id
     left join office_accounts o on o.id = p.author_office_id
@@ -42,7 +43,7 @@ export type PostRow = AuthorRow & {
   office_id: string | null; office_name: string | null; office_photo: string | null; office_verified: boolean | null;
   group_id: string | null; group_name: string | null;
   image_path: string | null; image_width: number | null; image_height: number | null;
-  like_count: number; comment_count: number; liked_by_me: boolean;
+  like_count: number; comment_count: number; liked_by_me: boolean; saved_by_me: boolean;
 };
 
 export function author(r: AuthorRow) {
@@ -62,6 +63,7 @@ export function postBody(r: PostRow) {
     likeCount: r.like_count,
     commentCount: r.comment_count,
     likedByMe: r.liked_by_me,
+    savedByMe: r.saved_by_me,
     createdAt: r.created_at.toISOString(),
   };
 }

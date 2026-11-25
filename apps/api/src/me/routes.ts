@@ -231,7 +231,7 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
   /**
    * DELETE /api/me   { confirm: "DELETE" }  (Data Protection Act: erasure)
    * Removed: email, name, photo, course, years, member number, under-18 answer, every uploaded
-   *   image (profile and post photos, files included), sessions, sign-in codes, likes, helpful
+   *   image (profile and post photos, files included), sessions, sign-in codes, likes, saved posts, helpful
    *   votes, blocks, group memberships (a group they ran alone gets a new admin). Roles and office
  *   memberships are ended (kept as history).
    * Kept, shown as "Deleted member": posts, comments, questions and answers; reports and the
@@ -260,6 +260,7 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         await tx.query(`delete from rate_limit_events where bucket = 'code_email' and key = $1`, [email]);
       }
       await tx.query('delete from likes where user_id = $1', [userId]);
+      await tx.query('delete from saved_posts where user_id = $1', [userId]);
       await tx.query('delete from answer_helpful where user_id = $1', [userId]);
       await tx.query('delete from blocks where blocker_id = $1 or blocked_id = $1', [userId]);
       const adminOf = (await tx.query<{ group_id: string; role: string }>(

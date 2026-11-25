@@ -18,6 +18,8 @@ export type Post = {
   likeCount: number;
   commentCount: number;
   likedByMe: boolean;
+  /** Saved by the viewer (private: nobody else is told). */
+  savedByMe: boolean;
   createdAt: string;
 };
 
@@ -37,6 +39,12 @@ export const deletePost = (id: string) => call<void>('DELETE', `/api/posts/${enc
 
 export const likePost = (id: string, like: boolean) =>
   call<{ liked: boolean; likeCount: number }>(like ? 'PUT' : 'DELETE', `/api/posts/${encodeURIComponent(id)}/like`);
+
+export const savePost = (id: string, save: boolean) =>
+  call<{ saved: boolean }>(save ? 'PUT' : 'DELETE', `/api/posts/${encodeURIComponent(id)}/save`);
+export const getSaved = (cursor?: string | null) => call<Page<Post>>('GET', page('/api/me/saved', cursor));
+export const getUserPosts = (userId: string, cursor?: string | null) =>
+  call<Page<Post>>('GET', page(`/api/users/${encodeURIComponent(userId)}/posts`, cursor));
 
 export const getComments = (postId: string, cursor?: string | null) =>
   call<Page<Comment>>('GET', page(`/api/posts/${encodeURIComponent(postId)}/comments`, cursor, 30));

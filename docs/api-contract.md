@@ -209,13 +209,17 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 | `DELETE /api/comments/:id` | author, post author, or admin | `204` |
 | `PUT /api/posts/:id/like` | | `200 { liked: true, likeCount }` (idempotent) |
 | `DELETE /api/posts/:id/like` | | `200 { liked: false, likeCount }` |
+| `PUT /api/posts/:id/save` | | `200 { saved: true }` (idempotent; private to the member) |
+| `DELETE /api/posts/:id/save` | | `200 { saved: false }` (works even if the post is now hidden) |
+| `GET /api/me/saved` | `?limit&cursor` | page of **Post** — posts I saved, newest save first; ones I can no longer see are left out |
+| `GET /api/users/:id/posts` | `?limit&cursor` | page of **Post** — that member's own posts (not office posts), newest first, including group posts only where the viewer is a member. `404` like `GET /api/users/:id` |
 
 **Post**
 ```json
 { "id": "…", "author": { "id": "…", "name": "…", "photoUrl": null, "badges": ["Staff"] },
   "office": null, "group": null,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
-  "likeCount": 12, "commentCount": 3, "likedByMe": false, "createdAt": "…" }
+  "likeCount": 12, "commentCount": 3, "likedByMe": false, "savedByMe": false, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 

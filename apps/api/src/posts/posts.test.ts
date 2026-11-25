@@ -289,4 +289,63 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
       expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/like`)).statusCode).toBe(404);
     });
   });
+
+  // ---------------------------------------------------------------- saved posts
+  describe('saved posts', () => {
+    it('save and unsave are idempotent, private, and listed newest save first', async () => {
+      expect((await as('felix', 'PUT', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: true });
+      expect((await as('felix', 'PUT', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: true });
+      expect((await as('felix', 'PUT', `/api/posts/${P('photo')}/save`)).json()).toEqual({ saved: true });
+      expect((await as('felix', 'GET', `/api/posts/${P('feed:2')}`)).json().savedByMe).toBe(true);
+      expect((await as('brian', 'GET', `/api/posts/${P('feed:2')}`)).json().savedByMe).toBe(false);
+
+      const list = (await as('felix', 'GET', '/api/me/saved')).json();
+      expect(list.items.map((p: { id: string }) => p.id)).toEqual([P('photo'), P('feed:2')]);
+      expect((await as('brian', 'GET', '/api/me/saved')).json().items).toEqual([]);
+
+      expect((await as('felix', 'DELETE', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: false });
+      expect((await as('felix', 'DELETE', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: false });
+      expect((await as('felix', 'GET', '/api/me/saved')).json().items.map((p: { id: string }) => p.id)).toEqual([P('photo')]);
+    });
+
+    it('can’t save a post you can’t see; a saved post that gets hidden drops out of the list', async () => {
+      expect((await as('cynthia', 'PUT', `/api/posts/${P('spam')}/save`)).statusCode).toBe(404);
+      expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/save`)).statusCode).toBe(404);
+      await as('felix', 'PUT', `/api/posts/${P('feed:2')}/save`);
+      await client.query('update posts set hidden_at = now() where id = $1', [P('feed:2')]);
+      expect((await as('felix', 'GET', '/api/me/saved')).json().items).toEqual([]);
+      expect((await as('felix', 'DELETE', `/api/posts/${P('feed:2')}/save`)).statusCode).toBe(200);
+    });
+  });
+
+  // ---------------------------------------------------------------- a member's posts
+  describe('GET /api/users/:id/posts', () => {
+    it('lists the member’s own posts newest first, not office posts, hidden ones or groups the viewer can’t see', async () => {
+      const first = (await post('cynthia', { body: 'First' })).json().id;
+      const second = (await post('cynthia', { body: 'Second' })).json().id;
+      const ids = (await as('brian', 'GET', `/api/users/${U('cynthia')}/posts?limit=50`)).json().items.map((p: { id: string }) => p.id);
+      expect(ids.indexOf(second)).toBeLessThan(ids.indexOf(first));
+      expect(ids).toContain(P('photo'));
+      const expected = (await client.query<{ id: string }>(
+        `select id from posts where author_user_id = $1 and author_office_id is null and group_id is null
+            and hidden_at is null and deleted_at is null`, [U('cynthia')])).rows.map((r) => r.id);
+      for (const id of expected) expect(ids).toContain(id);
+      const officeOrHidden = (await client.query<{ id: string }>(
+        `select id from posts where author_user_id = $1 and (author_office_id is not null or hidden_at is not null or deleted_at is not null)`,
+        [U('cynthia')])).rows.map((r) => r.id);
+      for (const id of officeOrHidden) expect(ids).not.toContain(id);
+      // Group posts only for members of that group (study1 is in a group felix isn't in).
+      const studyAuthor = (await client.query('select author_user_id from posts where id = $1', [P('study1')])).rows[0].author_user_id;
+      const felixSees = (await as('felix', 'GET', `/api/users/${studyAuthor}/posts?limit=50`)).json().items.map((p: { id: string }) => p.id);
+      expect(felixSees).not.toContain(P('study1'));
+    });
+
+    it('404 for blocked, deleted or unknown members', async () => {
+      await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2)', [U('david'), U('cynthia')]);
+      expect((await as('david', 'GET', `/api/users/${U('cynthia')}/posts`)).statusCode).toBe(404);
+      expect((await as('cynthia', 'GET', `/api/users/${U('david')}/posts`)).statusCode).toBe(404);
+      expect((await as('brian', 'GET', `/api/users/${randomUUID()}/posts`)).statusCode).toBe(404);
+      expect((await as('brian', 'GET', '/api/users/nonsense/posts')).statusCode).toBe(404);
+    });
+  });
 });

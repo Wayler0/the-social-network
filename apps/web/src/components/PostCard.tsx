@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { deletePost, likePost, plural, timeAgo, type Post } from '../lib/feed';
+import { deletePost, likePost, savePost, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
 import { Icon } from './Icon';
@@ -36,6 +36,19 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
       : result === 'failed' ? 'Couldn’t share. Copy the link from the address bar instead.' : null;
     setShareNote(note);
     if (note) window.setTimeout(() => setShareNote(null), 3000);
+  }
+
+  async function toggleSave() {
+    const save = !post.savedByMe;
+    onChange({ ...post, savedByMe: save }); // straight away; put back if the server says no
+    setShareNote(save ? 'Saved. Find it on your profile.' : null);
+    try {
+      await savePost(post.id, save);
+      if (save) window.setTimeout(() => setShareNote(null), 2500);
+    } catch (err) {
+      onChange(post);
+      setShareNote(err instanceof ApiError ? err.message : 'Couldn’t save. Try again.');
+    }
   }
 
   async function toggleLike() {
@@ -99,6 +112,10 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
           : <span className="action static" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></span>}
         <button type="button" className="action" aria-label="Share link to this post" onClick={() => void share()}>
           <Icon name="share" />
+        </button>
+        <button type="button" className={`action action-end${post.savedByMe ? ' saved' : ''}`} aria-pressed={post.savedByMe}
+          aria-label={post.savedByMe ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()}>
+          <Icon name="bookmark" fill={post.savedByMe ? 'currentColor' : 'none'} />
         </button>
       </footer>
       {shareNote && <p className="hint post-error" role="status">{shareNote}</p>}
