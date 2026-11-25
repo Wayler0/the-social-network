@@ -231,7 +231,7 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
   "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
   "likeCount": 12, "commentCount": 3, "likedByMe": false, "myReaction": null, "reactions": { "like": 9, "love": 3 },
-  "savedByMe": false, "createdAt": "…" }
+  "savedByMe": false, "followingAuthor": false, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 

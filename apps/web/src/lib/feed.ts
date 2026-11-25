@@ -26,6 +26,8 @@ export type Post = {
   reactions: Partial<Record<Reaction, number>>;
   /** Saved by the viewer (private: nobody else is told). */
   savedByMe: boolean;
+  /** Whether you follow the author: a Follow button shows next to the name when you don't. */
+  followingAuthor: boolean;
   createdAt: string;
 };
 
