@@ -499,7 +499,41 @@ Rules (code: `apps/api/src/events/routes.ts`, `visibleEvent` in `visibility.ts`,
 - Cancelled events stay listed (`cancelled: true`) so people who planned to go find out.
 - Reports take `targetType: "event"` (3 hide it; moderators see title and description). Deleting an account removes its RSVPs; events it created stay, like posts.
 
+## 15. Notifications and push (v0.2) ✅
+
+An in-app inbox plus Web Push (VAPID). The inbox always records; push follows each member's settings.
+
+| Endpoint | Answer |
+|---|---|
+| `GET /api/notifications?limit&cursor` | `{ items: [Notification], unreadCount, nextCursor }`, newest first |
+| `POST /api/notifications/read` | `{ ids: [...] }` (1–100) or `{ all: true }` → `{ unreadCount }` |
+| `GET /api/push/key` | `{ publicKey }`, or `null` when push is off on this server |
+| `PUT /api/push/subscriptions` | The browser's `PushSubscription.toJSON()` (`https://` endpoint only) → `204`; `503 push_unavailable` when push is off |
+| `DELETE /api/push/subscriptions` | `{ endpoint }` → `204` (idempotent) |
+| `GET /api/me/notification-settings` | `{ comments, answers, follows, groups, events, urgent }` (all `true` by default) |
+| `PATCH /api/me/notification-settings` | Any of those booleans → the full settings |
+
+**Notification** `{ id, type, text, count, actor: { id, name, photoUrl } | null, target: { type, id }, url, read, createdAt }`
+
+| `type` | Sent to | When | `url` |
+|---|---|---|---|
+| `comment` | post author | someone comments | `/post/:id` |
+| `answer` | asker (even with a hidden name) | someone answers | `/ask/:id` |
+| `follow` | the member followed | someone follows them (not offices or clubs) | `/notifications` |
+| `group_request` | the group's admins | someone asks to join a private group | `/groups/:id` |
+| `group_approved` | the member | their request is approved (a refusal sends nothing) | `/groups/:id` |
+| `event_cancelled` | everyone Going or Interested | the host cancels | `/events/:id` |
+
+Rules (code: `apps/api/src/notifications/`, migration 018):
+- **Never** about your own action, to deleted members, or across a block. An actor who is deleted or blocked later shows as `actor: null`.
+- **Collapsing:** one unread notification per member, type and thing; more of the same raise `count` and set the latest actor. After it is read, the next one starts fresh. Admins' `group_request` is marked read once nobody is waiting.
+- **Push:** one per *new* unread notification (a burst of comments is one push), only to members with a subscription who did not turn that kind off. Text is generic ("New comment on your post"): no names or content, because it shows on lock screens.
+- **Urgent announcements** push to everyone on the campus who is not suspended and did not turn `urgent` off, with the announcement title (official public information). Normal ones never push.
+- **Worker:** the API sends due pushes every 5 s (`push_outbox`, `SKIP LOCKED`). It retries with back-off (1, 2, 4, 8 min, at most 5 tries) only when no device got the push. Subscriptions the browser dropped (`404`/`410`) are deleted; one that fails 10 times is dropped. Each member keeps at most their 10 newest subscriptions.
+- **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
+- **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
+
 ---
 
 ## Not built yet
-Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events ✅ → push → chat (end-to-end encrypted, after the library choice and an external review).
+Chat, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events ✅ → push ✅ → chat (end-to-end encrypted, after the library choice and an external review).

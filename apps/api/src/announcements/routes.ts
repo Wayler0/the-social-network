@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
+import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
+import { queueUrgentAnnouncement } from '../notifications/notify.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
 import type { Queryable } from '../images/store.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
@@ -46,7 +48,7 @@ async function officeRole(q: Queryable, userId: string, campusId: string, office
  * Today board (docs/api-contract.md section 9, issue #26): official announcements from verified
  * office accounts. Everyone on the campus sees them; there is no blocking an office.
  */
-export async function announcementRoutes(app: FastifyInstance, { db }: { db: Db }) {
+export async function announcementRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
 
   // ---- GET /api/announcements   first page: every current pin (urgent first, newest first), then the rest newest first
@@ -113,6 +115,8 @@ export async function announcementRoutes(app: FastifyInstance, { db }: { db: Db 
          values ($1, $2, $3, $4, $5, $6, $7) returning id`,
         [campusId, input.officeId, userId, input.title, input.body, input.urgency, pinnedUntil],
       );
+      // Urgent always reaches phones (CLAUDE.md section 4.7), unless a member turned urgent pushes off.
+      if (input.urgency === 'urgent') await queueUrgentAnnouncement(tx, config.APP_NAME, campusId, input.title);
       return { ok: true, id: rows[0]!.id };
     });
 

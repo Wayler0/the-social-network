@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
+import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
+import { notify } from '../notifications/notify.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
 import type { Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
@@ -73,7 +75,7 @@ const text = (max: number) => z.string().transform((s) => s.trim()).pipe(z.strin
  * Ask a Senior (docs/api-contract.md section 10, issue #27). Questions and answers stay
  * searchable. Hidden names are hidden from every member except the asker, moderators and admins.
  */
-export async function questionRoutes(app: FastifyInstance, { db }: { db: Db }) {
+export async function questionRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
   const notFound = (reply: Parameters<typeof fail>[0]) => fail(reply, 404, 'not_found', 'Question not found.');
 
@@ -154,6 +156,8 @@ export async function questionRoutes(app: FastifyInstance, { db }: { db: Db }) {
       if (wait) return { ok: false as const, wait };
       const { rows } = await tx.query<{ id: string }>(
         'insert into answers (question_id, user_id, body) values ($1, $2, $3) returning id', [params.data.id, viewer.userId, body.body]);
+      const { rows: asker } = await tx.query<{ user_id: string }>('select user_id from questions where id = $1', [params.data.id]);
+      await notify(tx, config.APP_NAME, { type: 'answer', userIds: asker.map((a) => a.user_id), actorId: viewer.userId, targetId: params.data.id });
       return { ok: true as const, id: rows[0]!.id };
     });
     if (!outcome.ok) {

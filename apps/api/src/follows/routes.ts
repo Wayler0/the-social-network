@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { takeRateLimits, waitText } from '../auth/rate-limit.js';
+import type { Config } from '../config.js';
 import { inTransaction, type Db } from '../db.js';
+import { notify } from '../notifications/notify.js';
 import { fail, iso, parse, useContractErrors, uuid } from '../http.js';
 import type { Queryable } from '../images/store.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
@@ -36,7 +38,7 @@ const params = z.object({ type: z.enum(['user', 'office', 'group']), id: uuid })
  *   GET    /api/me/following?type&limit&cursor   whom I follow, newest first
  *   GET    /api/me/followers?limit&cursor        members who follow me, newest first
  */
-export async function followRoutes(app: FastifyInstance, { db }: { db: Db }) {
+export async function followRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
   const badCursor = (reply: Parameters<typeof fail>[0]) => fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.');
 
@@ -63,6 +65,7 @@ export async function followRoutes(app: FastifyInstance, { db }: { db: Db }) {
           const wait = await takeRateLimits(tx, [{ bucket: 'follow_user', key: userId, max: FOLLOWS_PER_HOUR, windowSeconds: 3600 }]);
           if (wait) return wait;
           await tx.query('insert into follows (follower_id, target_type, target_id) values ($1, $2, $3) on conflict do nothing', [userId, type, id]);
+          if (type === 'user') await notify(tx, config.APP_NAME, { type: 'follow', userIds: [id], actorId: userId, targetId: userId });
           return 'ok' as const;
         });
         if (outcome === 'missing') return fail(reply, 404, 'not_found', 'Not found.');

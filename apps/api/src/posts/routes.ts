@@ -6,6 +6,7 @@ import { inTransaction, type Db } from '../db.js';
 import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
+import { notify } from '../notifications/notify.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
 import { followsOrMemberOf, notBlocked, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
 import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, REACTIONS, type CommentRow, type PostRow, type Reaction } from './shape.js';
@@ -210,6 +211,8 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
          ${COMMENT_SELECT.replace('from comments c', 'from c')}`,
         [params.data.id, viewer.userId, body.body],
       );
+      const { rows: owner } = await tx.query<{ author_user_id: string }>('select author_user_id from posts where id = $1', [params.data.id]);
+      await notify(tx, config.APP_NAME, { type: 'comment', userIds: owner.map((o) => o.author_user_id), actorId: viewer.userId, targetId: params.data.id });
       return { ok: true as const, comment: rows[0]! };
     });
     if (!outcome.ok) return rateLimited(reply, outcome.wait, 'commented');

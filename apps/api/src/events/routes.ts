@@ -6,6 +6,7 @@ import { inTransaction, type Db } from '../db.js';
 import { fail, idParam, iso, parse, useContractErrors } from '../http.js';
 import { attachImage, deleteImage, imageUrls, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
+import { notify } from '../notifications/notify.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
 import { author, authorColumns, type AuthorRow } from '../posts/shape.js';
 import { notBlocked, visibleEvent, visibleGroup, type ViewerSql } from '../visibility.js';
@@ -222,6 +223,10 @@ export async function eventRoutes(app: FastifyInstance, { config, db }: { config
     if (body.endsAt !== undefined) set('ends_at', body.endsAt);
     if (body.cancelled !== undefined) sets.push(body.cancelled ? 'cancelled_at = coalesce(cancelled_at, clock_timestamp())' : 'cancelled_at = null');
     if (sets.length) await db.query(`update events set ${sets.join(', ')} where id = $1`, values);
+    if (body.cancelled === true && !e.cancelled_at) {
+      const people = await db.query<{ user_id: string }>('select user_id from event_rsvps where event_id = $1', [e.id]);
+      await notify(db, config.APP_NAME, { type: 'event_cancelled', userIds: people.rows.map((p) => p.user_id), actorId: req.auth!.userId, targetId: e.id });
+    }
     return eventBody((await loadEvent(db, req.auth!, e.id))!);
   });
 
