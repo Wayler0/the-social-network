@@ -91,7 +91,7 @@ export function uploadImage(file: File) {
   return call<{ imageId: string; url: string; width: number; height: number }>('POST', '/api/images', form);
 }
 
-export type ReportTarget = 'post' | 'comment' | 'user' | 'group' | 'question' | 'answer' | 'story';
+export type ReportTarget = 'post' | 'comment' | 'user' | 'group' | 'question' | 'answer' | 'story' | 'event';
 export const REPORT_REASONS = [
   ['spam', 'Spam or scam'],
   ['harassment', 'Bullying or harassment'],

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { APP_SLUG } from '../config';
 import { getMe, logout, onSignedOut } from './api';
 import { clearFeed } from './feed-store';
+import { forgetPushOnThisDevice } from './notifications';
 import type { Me } from './profile';
 
 /**
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [setMe]);
 
   const signOut = useCallback(async () => {
+    // Unsubscribe this browser first (needs the session), so the next person here doesn't get our pushes.
+    await forgetPushOnThisDevice();
     try { await logout(); } finally { setMe(null); }
   }, [setMe]);
 

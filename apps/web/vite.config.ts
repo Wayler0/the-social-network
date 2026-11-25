@@ -47,6 +47,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/media\//],
         cleanupOutdatedCaches: true,
+        // Web Push (v0.2): the push and notification-click handlers live in public/push-sw.js.
+        importScripts: ['/push-sw.js'],
       },
     }),
   ],
