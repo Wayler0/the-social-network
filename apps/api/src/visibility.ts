@@ -59,8 +59,9 @@ export function visibleGroup(alias: string, v: ViewerSql): string {
 }
 
 /**
- * A post the viewer may read: own campus, not hidden or deleted, no block with the author,
- * and for a group post, the viewer is an active member of a group they may see.
+ * A post the viewer may read: own campus, not hidden or deleted, no block with the author, and
+ * for a group post, a group the viewer may see where they are an active member — or, for an
+ * announcement of a public club, anyone who may see the club (club pages, v0.2).
  */
 export function visiblePost(alias: string, v: ViewerSql): string {
   check(v, alias);
@@ -68,8 +69,16 @@ export function visiblePost(alias: string, v: ViewerSql): string {
            and ${alias}.hidden_at is null and ${alias}.deleted_at is null
            and ${notBlocked(`${alias}.author_user_id`, v)}
            and (${alias}.group_id is null
-                or (${isActiveMember(`${alias}.group_id`, v)}
-                    and exists (select 1 from groups vg where vg.id = ${alias}.group_id and ${visibleGroup('vg', v)}))))`;
+                or exists (select 1 from groups vg where vg.id = ${alias}.group_id and ${visibleGroup('vg', v)}
+                             and (${isActiveMember(`${alias}.group_id`, v)}
+                                  or (${alias}.announcement and vg.kind = 'club' and vg.visibility = 'public')))))`;
+}
+
+/** The viewer follows, or is an active member of, the club in `groupCol` (club announcements in the feed). */
+export function followsOrMemberOf(groupCol: string, v: ViewerSql): string {
+  check(v, groupCol);
+  return `(${isActiveMember(groupCol, v)}
+           or exists (select 1 from follows ff where ff.follower_id = ${v.id} and ff.target_type = 'group' and ff.target_id = ${groupCol}))`;
 }
 
 /** A comment the viewer may read. Its post must be checked with visiblePost as well. */
@@ -90,4 +99,60 @@ export function visibleQuestion(alias: string, v: ViewerSql): string {
 export function visibleAnswer(alias: string, v: ViewerSql): string {
   check(v, alias);
   return `(${alias}.hidden_at is null and ${alias}.deleted_at is null and ${notBlocked(`${alias}.user_id`, v)})`;
+}
+
+/**
+ * A story the viewer may see now (CLAUDE.md section 4, "Stories / status"): own campus, live
+ * (not expired, hidden or deleted), author not deleted, no block with the author, and
+ *   - the viewer's own story; or
+ *   - an office story (verified office): everyone on the campus; or
+ *   - a club story: the club's followers and active members, if the viewer may see the club; or
+ *   - a personal story: the viewer follows the author, the author has not hidden their stories
+ *     from the viewer, the viewer is a close friend when the audience is close friends, and
+ *       · an under-18 author follows the viewer back (child safety);
+ *       · a staff viewer of a student's story is followed by that student (student-first rule).
+ */
+export function visibleStory(alias: string, v: ViewerSql): string {
+  check(v, alias);
+  const a = `${alias}.author_user_id`;
+  const authorFollowsViewer = `exists (select 1 from follows sf where sf.follower_id = ${a} and sf.target_type = 'user' and sf.target_id = ${v.id})`;
+  return `(${alias}.campus_id = ${v.campusId}
+           and ${alias}.hidden_at is null and ${alias}.deleted_at is null and ${alias}.expires_at > clock_timestamp()
+           and exists (select 1 from users sa where sa.id = ${a} and sa.deleted_at is null)
+           and ${notBlocked(a, v)}
+           and (
+             (${a} = ${v.id} and ${alias}.author_office_id is null and ${alias}.author_group_id is null)
+             or (${alias}.author_office_id is not null
+                 and exists (select 1 from office_accounts so where so.id = ${alias}.author_office_id and so.verified))
+             or (${alias}.author_group_id is not null
+                 and exists (select 1 from groups sg where sg.id = ${alias}.author_group_id and sg.kind = 'club' and ${visibleGroup('sg', v)})
+                 and (${isActiveMember(`${alias}.author_group_id`, v)}
+                      or exists (select 1 from follows sf where sf.follower_id = ${v.id} and sf.target_type = 'group' and sf.target_id = ${alias}.author_group_id)))
+             or (${alias}.author_office_id is null and ${alias}.author_group_id is null
+                 and exists (select 1 from follows sf where sf.follower_id = ${v.id} and sf.target_type = 'user' and sf.target_id = ${a})
+                 and not exists (select 1 from story_hidden_from sh where sh.user_id = ${a} and sh.hidden_user_id = ${v.id})
+                 and (${alias}.audience = 'followers'
+                      or exists (select 1 from close_friends cf where cf.user_id = ${a} and cf.friend_id = ${v.id}))
+                 and (not exists (select 1 from users su where su.id = ${a} and su.is_under_18) or ${authorFollowsViewer})
+                 and (not (${viewerIsStaff(v)}
+                           and exists (select 1 from users su where su.id = ${a} and su.member_type in ('fresher', 'continuing')))
+                      or ${authorFollowsViewer}))
+           ))`;
+}
+
+/**
+ * An event the viewer may see: own campus, not hidden or deleted, no block with whoever created
+ * it, and for a group's event, an active member of a group they may see — or anyone who may see
+ * the group when it is a public club (like club announcements). Cancelled events stay visible
+ * (marked cancelled) so people who planned to go find out.
+ */
+export function visibleEvent(alias: string, v: ViewerSql): string {
+  check(v, alias);
+  return `(${alias}.campus_id = ${v.campusId}
+           and ${alias}.hidden_at is null and ${alias}.deleted_at is null
+           and ${notBlocked(`${alias}.created_by`, v)}
+           and (${alias}.group_id is null
+                or exists (select 1 from groups eg where eg.id = ${alias}.group_id and ${visibleGroup('eg', v)}
+                             and (${isActiveMember(`${alias}.group_id`, v)}
+                                  or (eg.kind = 'club' and eg.visibility = 'public')))))`;
 }
