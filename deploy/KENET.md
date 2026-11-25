@@ -13,8 +13,32 @@ stack in `/opt/nextup`, so Hatua is two services in it.
 | Photos | Docker volume `nextup_hatua_media` |
 | Settings | `/opt/nextup/env/hatua.env` (CODE_PEPPER, APP_URL, email) and `HATUA_DB_PASSWORD` in `/opt/nextup/.env`. Never in git |
 | Backups | nightly 02:00 (`/opt/nextup/backup.sh`): `hatua-<date>.dump` and `hatua-media-<date>.tar.gz` in `/srv/files/backups`, kept 14 days |
-| Deploy | `deploy/kenet.sh` (origin/main) or `deploy/kenet.sh <ref>`, with the KENET key `~/.ssh/kenet_rsa` |
+| Deploy | **Automatic:** every commit on `main` whose CI passes, within about 5 minutes (below). By hand: `deploy/kenet.sh` (origin/main) or `deploy/kenet.sh <ref>`, with the KENET key `~/.ssh/kenet_rsa` |
 | Logs | `ssh user@197.137.65.49 'cd /opt/nextup && docker compose logs --tail 100 hatua-api'` |
+
+## Automatic deploys (CI/CD)
+
+The server pulls; GitHub never connects to it. `/opt/nextup/hatua-autodeploy.sh` (this repo's
+`deploy/kenet-autodeploy.sh`) runs every 5 minutes from `user`'s crontab on vm-app. It asks GitHub's
+public API for `main`'s newest commit; once the **CI** workflow has passed on it, it does what
+`deploy/kenet.sh` does: the commit's files go to `/opt/nextup/src/the-social-network`, then
+`deploy-hatua.sh` builds, restarts, checks `/api/health` and puts the previous images back on failure.
+No keys or secrets on GitHub, no runner, nothing opened to the internet. Only reviewed code reaches
+`main` (pull requests need an approval).
+
+- A commit whose CI or deploy failed is skipped, not retried; the next commit on `main` is deployed.
+- Log: `/opt/nextup/hatua-autodeploy.log` (one line per decision); build output: `hatua-deploy.log`;
+  history: `deploys.log` (`(auto)` or `(laptop)`).
+- **Pause** (always before rolling back by hand, or the next run puts `main` back):
+  `touch /opt/nextup/.hatua-autodeploy/paused`. **Resume:** `rm /opt/nextup/.hatua-autodeploy/paused`.
+- **Roll back:** pause, then `deploy/kenet.sh <older commit>`. Resume once `main` has the fix.
+
+**Install or update the script** (from a laptop with the KENET key, in the repo):
+```sh
+scp -i ~/.ssh/kenet_rsa deploy/kenet-autodeploy.sh user@197.137.65.49:/opt/nextup/hatua-autodeploy.sh
+ssh -i ~/.ssh/kenet_rsa user@197.137.65.49 'chmod 755 /opt/nextup/hatua-autodeploy.sh
+  (crontab -l | grep -v hatua-autodeploy; echo "*/5 * * * * /opt/nextup/hatua-autodeploy.sh >> /opt/nextup/hatua-autodeploy.log 2>&1") | crontab -'
+```
 
 ## The sharp fix (why the API image has two steps)
 
