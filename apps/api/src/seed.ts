@@ -130,7 +130,9 @@ export async function seed(db: pg.Client, opts: { mediaDir: string; campusSlug?:
     };
   });
   const counts: Record<string, number> = {};
-  counts.users = await insert(db, 'users', userRows);
+  // Suspensions end relative to today, so refresh them on every run (or Ivy's quietly expires).
+  // Member numbers are refreshed too: student numbers must match the campus format (migration 017).
+  counts.users = await insert(db, 'users', userRows, ['suspended_at', 'suspended_until', 'member_number', 'member_number_normalised']);
 
   counts.roles = await insert(db, 'roles', [
     { id: seedId('role:felix'),   user_id: U('felix'),   role: 'staff',          title: 'Lecturer, Computer Science', granted_by: U('hassan') },
