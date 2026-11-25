@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # The GitHub runner on the KENET server (docs/deploy.md, Automatic deploys).
+  labels:
+    - hatua-deploy

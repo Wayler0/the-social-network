@@ -1,12 +1,12 @@
-# Continuous deployment: every commit on main that passes CI is deployed to the KENET server with
-# deploy/deploy.sh — the same script used by hand (docs/deploy.md, "Automatic deploys").
+# Continuous deployment: every commit on main that passes CI is deployed to the KENET server
+# (docs/deploy.md, "Automatic deploys"). KENET doesn't let GitHub reach the server, so the server runs
+# a GitHub runner that collects the work instead (it only makes outgoing HTTPS connections).
 #
-# Off until the team turns it on: set the repository variable DEPLOY_ENABLED=true and the secrets
-# below in the "production" environment (Settings → Environments → production).
-#   DEPLOY_HOST         ubuntu@197.137.65.49 (the deploy user on the server)
-#   DEPLOY_SSH_KEY      private key of a key pair made only for deploys (never someone's personal key)
-#   DEPLOY_KNOWN_HOSTS  output of `ssh-keyscan -t ed25519 197.137.65.49`, checked against the server
-# Optional repository variable: APP_URL (e.g. https://hatua.nextup.co.ke) for the check after deploying.
+#   build  (GitHub's machines)  checks the commit is on main, builds the web app, packs a release
+#   deploy (runner on the server, label hatua-deploy)  unpacks it and runs deploy/deploy.sh locally
+#
+# The server never runs npm or code from a pull request: it only receives a release built from main.
+# Off until the team turns it on: repository variable DEPLOY_ENABLED=true (and APP_URL for the check).
 name: Deploy
 
 on:
@@ -30,8 +30,8 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy to the KENET server
+  build:
+    name: Build the release
     # After CI: only a green run of a push to main (not a pull request that targets main).
     if: >-
       vars.DEPLOY_ENABLED == 'true' && (
@@ -39,36 +39,16 @@ jobs:
         (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment:
-      name: production
-      url: ${{ vars.APP_URL }}
+    timeout-minutes: 15
     env:
       REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+    outputs:
+      commit: ${{ steps.release.outputs.commit }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.REF }}
-          fetch-depth: 0   # deploy.sh resolves the ref and archives that exact commit
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22   # same as CI and deploy/api.Dockerfile
-          cache: npm
-
-      - name: SSH key and pinned server key
-        env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-        run: |
-          for v in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_HOST; do
-            [ -n "${!v}" ] || { echo "::error::Secret $v is not set (docs/deploy.md, Automatic deploys)"; exit 1; }
-          done
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          # Pinned host key: never accept an unknown server (no StrictHostKeyChecking=no).
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+          fetch-depth: 0
 
       - name: Only reviewed code (commits on main)
         run: |
@@ -77,13 +57,52 @@ jobs:
           git merge-base --is-ancestor "$COMMIT" origin/main \
             || { echo "::error::$REF ($COMMIT) is not on main. Only reviewed, merged code is deployed."; exit 1; }
 
-      - name: Deploy
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22   # same as CI and deploy/api.Dockerfile
+          cache: npm
+
+      - name: Build the web app and pack the release
+        id: release
         run: |
-          COMMIT=$(git rev-parse --verify "HEAD^{commit}")
-          echo "Deploying $COMMIT ($REF)"
-          DEPLOY_SSH_KEY="$HOME/.ssh/deploy_key" deploy/deploy.sh "$COMMIT"
+          COMMIT=$(git rev-parse HEAD)
+          mkdir -p "$RUNNER_TEMP/release"
+          git archive "$COMMIT" | tar -x -C "$RUNNER_TEMP/release"
+          echo "$COMMIT" > "$RUNNER_TEMP/release/REVISION"
+          (cd "$RUNNER_TEMP/release" && npm ci --no-audit --no-fund && npm run build -w apps/web)
+          rm -rf "$RUNNER_TEMP/release/node_modules" "$RUNNER_TEMP/release"/apps/*/node_modules
+          tar -czf release.tgz -C "$RUNNER_TEMP/release" .
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release.tgz
+          retention-days: 7
+
+  deploy:
+    name: Deploy on the KENET server
+    needs: build
+    runs-on: [self-hosted, hatua-deploy]
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    steps:
+      # No checkout: the server gets only the release that "build" made from main.
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: ${{ runner.temp }}
+
+      - name: Unpack
+        run: |
+          rm -rf "$RUNNER_TEMP/release" && mkdir -p "$RUNNER_TEMP/release"
+          tar -xzf "$RUNNER_TEMP/release.tgz" -C "$RUNNER_TEMP/release"
+          test "$(cat "$RUNNER_TEMP/release/REVISION")" = "${{ needs.build.outputs.commit }}"
+
+      - name: Deploy
+        run: DEPLOY_HOST=local RELEASE_DIR="$RUNNER_TEMP/release" bash "$RUNNER_TEMP/release/deploy/deploy.sh"
 
       - name: Site answers
         if: vars.APP_URL != ''
@@ -94,6 +113,6 @@ jobs:
           done
           echo "::error::${{ vars.APP_URL }}/api/health did not answer with the database up"; exit 1
 
-      - name: Remove the key
+      - name: Clean up
         if: always()
-        run: rm -f ~/.ssh/deploy_key
+        run: rm -rf "$RUNNER_TEMP/release" "$RUNNER_TEMP/release.tgz"

@@ -61,7 +61,9 @@ browser ──HTTPS──▶ nginx (host) ──┬─ /            → /var/www
 
 ## Every deploy
 
-Usually automatic (next section). By hand, from your own machine, in the repo. Only **committed and pushed** code is deployed:
+Usually automatic (next section), or Actions → Deploy → Run workflow. By hand, from a machine that can SSH to
+the server, in the repo. Only **committed and pushed** code is deployed. Once the runner is set up the folders
+belong to `hatua-runner`, so deploy as that user (`DEPLOY_HOST=hatua-runner@197.137.65.49`):
 
 ```sh
 DEPLOY_HOST=ubuntu@197.137.65.49 DEPLOY_SSH_KEY=~/.ssh/kenet_rsa deploy/deploy.sh            # origin/main
@@ -76,42 +78,74 @@ After each deploy: open the site, sign in, open the feed. `cat /srv/hatua/REVISI
 
 ## Automatic deploys (CI/CD)
 
-`.github/workflows/deploy.yml` deploys every commit on `main` that passes **CI**, with the same
-`deploy/deploy.sh` as above. Pull requests never deploy; only reviewed code that reached `main` does.
-One deploy runs at a time and is never cancelled halfway.
+`.github/workflows/deploy.yml` deploys every commit on `main` that passes **CI**. Pull requests never deploy;
+only reviewed code that reached `main` does. One deploy runs at a time and is never cancelled halfway.
 
-**Turn it on (once; Peter + a repo admin):**
+KENET doesn't let GitHub connect to the server, so the server runs a **GitHub runner**: a small service that
+connects *out* to GitHub over HTTPS (443) and collects deploy jobs. Nothing new is opened to the internet.
 
-1. **A deploy-only key pair** (not anyone's personal key). On your machine:
-   ```sh
-   ssh-keygen -t ed25519 -N '' -C hatua-github-deploy -f hatua_deploy
-   ```
-   On the server, append `hatua_deploy.pub` to `~/.ssh/authorized_keys` of the deploy user (the one that owns
-   `/srv/hatua` and `/var/www/hatua` and is in the `docker` group). Remove the key there to revoke CI's access.
-2. **The server's host key**, checked so CI never talks to an impostor:
-   ```sh
-   ssh-keyscan -t ed25519 197.137.65.49 > known_hosts
-   ssh-keygen -lf known_hosts            # compare with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server
-   ```
-3. **GitHub → Settings → Environments → New environment `production`:**
-   - Deployment branches: **Selected branches → `main`** only.
-   - Optional: **Required reviewers** (someone clicks Approve before each deploy).
-   - Environment secrets: `DEPLOY_HOST` = `ubuntu@197.137.65.49` (the deploy user), `DEPLOY_SSH_KEY` = the
-     contents of `hatua_deploy` (private key), `DEPLOY_KNOWN_HOSTS` = the contents of `known_hosts`.
-   Then delete the local `hatua_deploy` file.
-4. **Settings → Secrets and variables → Actions → Variables:** `DEPLOY_ENABLED` = `true`, and
-   `APP_URL` = `https://hatua.nextup.co.ke` (CI checks `/api/health` there after each deploy).
+```
+push to main ─▶ CI (GitHub's machines) ─▶ Deploy / build (GitHub's machines)       ─▶ Deploy / deploy (runner on the server)
+                tests                     commit is on main? build the web app,       unpack, deploy/deploy.sh with
+                                          pack release.tgz                            DEPLOY_HOST=local, /api/health
+```
 
-To pause automatic deploys, set `DEPLOY_ENABLED` to `false`.
+The server never runs `npm install` or a checkout: it only receives the release built from `main`.
 
-**Deploy or roll back by hand from GitHub:** Actions → Deploy → Run workflow, and enter a commit or tag. It
-must be on `main` (an older commit rolls back). Migrations only go forward, as above.
+### Turn it on (once; Peter + a repo admin)
 
-**If GitHub can't reach the server:** the job fails at "Deploy" with an SSH timeout. That means KENET's
-firewall blocks port 22 from GitHub's machines (their addresses change, so allow-listing them is impractical). In
-that case ask ICT to allow it, or install a [self-hosted runner](https://docs.github.com/actions/hosting-your-own-runners)
-on the server and change `runs-on: ubuntu-latest` to `runs-on: [self-hosted, hatua]` (the runner then deploys over
-SSH to itself; nothing else changes).
+**1. Keep pull requests off the runner (do this first).** The repo is public (and must stay open source,
+CLAUDE.md section 12), and GitHub warns that a pull request from a fork could try to run its own workflow on
+a self-hosted runner, that is, on our server. So:
+- **Settings → Actions → General → "Approval for running fork pull request workflows from contributors":
+  "Require approval for all external contributors".** Before approving a fork's workflow run, check
+  whether it changes anything in `.github/`; never approve one that adds `runs-on: self-hosted` or `hatua-deploy`.
+- Only people the team trusts get write access to the repo.
+
+**2. A user for the runner** on the server (not `ubuntu`, not root):
+```sh
+sudo adduser --system --group --home /home/hatua-runner --shell /bin/bash hatua-runner
+sudo usermod -aG docker hatua-runner     # docker compose up; note: docker group = root-level access to this VM
+sudo chown -R hatua-runner: /srv/hatua /var/www/hatua
+sudo chmod 755 /var/www/hatua            # nginx reads the web app
+```
+`.env` stays `chmod 600`, now owned by `hatua-runner`. People who deploy by hand over SSH log in as
+`hatua-runner` (add their key to `/home/hatua-runner/.ssh/authorized_keys`) or use `sudo -u hatua-runner`.
+
+**3. Install the runner.** On GitHub: **Settings → Actions → Runners → New self-hosted runner → Linux x64**.
+It shows the download commands and a one-time token (valid 1 hour). On the server, as `hatua-runner`:
+```sh
+sudo -iu hatua-runner
+mkdir actions-runner && cd actions-runner
+# curl + tar lines exactly as GitHub shows them (they check the download's sha256)
+./config.sh --url https://github.com/Wayler0/the-social-network --token <token from the page> \
+  --name kenet-vm-app --labels hatua-deploy --unattended
+exit
+cd /home/hatua-runner/actions-runner
+sudo ./svc.sh install hatua-runner && sudo ./svc.sh start    # a systemd service: starts again after a reboot
+```
+The runner should show as **Idle** under Settings → Actions → Runners. If the server reaches the internet
+through a proxy, put `https_proxy=http://<proxy>:<port>` in `/home/hatua-runner/actions-runner/.env`
+and restart: `sudo ./svc.sh stop && sudo ./svc.sh start`.
+
+**4. GitHub → Settings → Environments → New environment `production`:** Deployment branches: **Selected
+branches → `main`** only. Optional: **Required reviewers** (someone clicks Approve before each deploy).
+No secrets are needed: the runner already lives on the server.
+
+**5. Settings → Secrets and variables → Actions → Variables:** `DEPLOY_ENABLED` = `true`, and
+`APP_URL` = `https://hatua.nextup.co.ke` (checked at `/api/health` after each deploy).
+
+To pause automatic deploys, set `DEPLOY_ENABLED` to `false`. To cut the runner off completely:
+`sudo ./svc.sh stop`, or remove it under Settings → Actions → Runners.
+
+### Using it
+
+- **See a deploy:** Actions → Deploy. `cat /srv/hatua/REVISION` on the server shows the deployed commit.
+- **Deploy or roll back by hand:** Actions → Deploy → Run workflow, and enter a commit or tag. It must be on
+  `main` (an older commit rolls back). Migrations only go forward, as above.
+- **Runner offline** (server rebooted, service stopped): the deploy job waits in the queue, up to 24 hours, and
+  runs when the runner is back. Check with `sudo systemctl status 'actions.runner.*'`.
+- **Updates:** the runner updates itself. Patch the server as usual.
 
 ## Day to day
 
