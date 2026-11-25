@@ -563,3 +563,9 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .story-foot-end { gap: 10px; }
 .story-credit { width: 100%; font-size: 12px; opacity: 0.85; }
 .story-note { position: absolute; left: 16px; right: 16px; bottom: 90px; margin: 0; padding: 10px 14px; border-radius: var(--radius-m); background: rgba(255, 255, 255, 0.18); color: #fff; text-align: center; font-size: 14px; }
+/* ---------- Event shared as a post ---------- */
+.post-event { display: flex; gap: 12px; margin: 4px 16px 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-m); color: inherit; text-decoration: none; background: var(--surface-2); }
+.post-event-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.post-event-title { font-size: 15px; overflow-wrap: anywhere; }
+.post-event.cancelled .post-event-title { text-decoration: line-through; color: var(--text-3); }
+.share-event-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; }

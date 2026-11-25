@@ -216,7 +216,7 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 | Method & path | Body / query | Response |
 |---|---|---|
 | `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide posts plus announcements of clubs you follow or belong to (v0.2), newest first |
-| `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
+| `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement?, eventId? }` (`eventId` shares an event as the post: caption optional; only events everyone on the campus may see — campus-wide, an office's, or a public non-student-only club's — else `404`; migration 025) (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
 | `GET /api/posts/:id` | | Post |
 | `DELETE /api/posts/:id` | author or admin | `204` |
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
@@ -237,7 +237,8 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
   "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
   "likeCount": 12, "commentCount": 3, "likedByMe": false, "myReaction": null, "reactions": { "like": 9, "love": 3 },
-  "savedByMe": false, "followingAuthor": false, "createdAt": "…" }
+  "savedByMe": false, "followingAuthor": false,
+  "event": null /* or { id, title, location, startsAt, cancelled, goingCount, myRsvp } for a shared event */, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 

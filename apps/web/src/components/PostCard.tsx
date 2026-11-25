@@ -10,6 +10,7 @@ import { PhotoViewer } from './PhotoViewer';
 import { setFollowingAuthor } from '../lib/feed-store';
 import { sharePost } from '../lib/share';
 import { RichText } from './RichText';
+import { dateTile, whenText } from '../lib/events';
 
 /**
  * One post: author (or office), text, photo, like and comment counts, and the "…" menu.
@@ -134,10 +135,25 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
 
       {/* Tapping the text opens the post (the comments button is the keyboard and screen-reader way);
           links inside the text open themselves instead. A link can't sit inside another link. */}
-      <p className={`post-body${linkToPost ? ' tappable' : ''}`}
+      {post.body && <p className={`post-body${linkToPost ? ' tappable' : ''}`}
         onClick={linkToPost ? () => { if (!window.getSelection()?.toString()) navigate(href); } : undefined}>
         <RichText text={post.body} />
-      </p>
+      </p>}
+
+      {post.event && (() => {
+        const ev = post.event!;
+        const tile = dateTile(ev.startsAt);
+        return (
+          <Link to={`/events/${ev.id}`} className={`post-event${ev.cancelled ? ' cancelled' : ''}`}>
+            <span className="date-tile" aria-hidden="true"><span>{tile.month}</span><strong>{tile.day}</strong></span>
+            <span className="post-event-main">
+              <strong className="post-event-title">{ev.title}</strong>
+              <span className="post-meta">{ev.cancelled ? 'Cancelled' : whenText(ev.startsAt, null)}{ev.location ? ` · ${ev.location}` : ''}</span>
+              <span className="post-meta">{ev.goingCount} going{ev.myRsvp ? ` · You’re ${ev.myRsvp === 'going' ? 'going' : 'interested'}` : ''}</span>
+            </span>
+          </Link>
+        );
+      })()}
 
       {post.image && (
         <button type="button" className="post-image-btn" aria-label="Open photo full screen" onClick={() => setViewing(true)}>
