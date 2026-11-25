@@ -7,8 +7,8 @@ import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
-import { visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
-import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, type CommentRow, type PostRow } from './shape.js';
+import { followsOrMemberOf, notBlocked, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
+import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, REACTIONS, type CommentRow, type PostRow, type Reaction } from './shape.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
 const V: ViewerSql = { id: '$1', campusId: '$2' };
@@ -47,7 +47,7 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     return rows[0] ?? null;
   }
 
-  // ---- GET /api/feed   campus-wide posts, newest first
+  // ---- GET /api/feed   campus-wide posts plus announcements of clubs I follow or belong to, newest first
   app.get('/api/feed', async (req, reply) => {
     const q = parse(pageSchema, req.query, reply);
     if (!q) return;
@@ -55,7 +55,8 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.'); throw e; }
     const { rows } = await db.query<PostRow>(
       `${POST_SELECT}
-        where p.group_id is null and ${visiblePost('p', V)}
+        where (p.group_id is null or (p.announcement and ${followsOrMemberOf('p.group_id', V)}))
+          and ${visiblePost('p', V)}
           and ($3::timestamptz is null or (p.created_at, p.id) < ($3::timestamptz, $4::uuid))
         order by p.created_at desc, p.id desc
         limit $5`,
@@ -73,7 +74,9 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
       groupId: z.string().uuid().optional(),
       /** Post as an office the member currently belongs to (owner or editor). */
       officeId: z.string().uuid().optional(),
-    }).strict(), req.body, reply);
+      /** Club pages: an announcement (club admins only) instead of a discussion post. */
+      announcement: z.boolean().default(false),
+    }).strict().refine((b) => !b.announcement || b.groupId, { message: 'announcement: only in a club (send groupId)' }), req.body, reply);
     if (!body) return;
     if (!(await requireCompleteProfile(db, req, reply))) return;
     const viewer = req.auth!;
@@ -81,8 +84,8 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     type Outcome = { ok: true; id: string } | { ok: false; status: number; error: string; message: string } | { ok: false; wait: number };
     const outcome = await inTransaction(db, async (tx): Promise<Outcome> => {
       if (body.groupId) {
-        const { rows } = await tx.query<{ posting: string; role: string | null; status: string | null }>(
-          `select g.posting, m.role, m.status
+        const { rows } = await tx.query<{ posting: string; kind: string; role: string | null; status: string | null }>(
+          `select g.posting, g.kind, m.role, m.status
              from groups g left join group_members m on m.group_id = g.id and m.user_id = $1
             where g.id = $3 and ${visibleGroup('g', V)}`,
           [viewer.userId, viewer.campusId, body.groupId],
@@ -92,6 +95,12 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         if (g.status !== 'active') return { ok: false, status: 403, error: 'forbidden', message: 'Join the group to post in it.' };
         if (g.posting === 'admins_only' && g.role !== 'admin') {
           return { ok: false, status: 403, error: 'forbidden', message: 'Only the group’s admins post here.' };
+        }
+        if (body.announcement && g.kind !== 'club') {
+          return { ok: false, status: 400, error: 'invalid_input', message: 'announcement: only clubs have announcements.' };
+        }
+        if (body.announcement && g.role !== 'admin') {
+          return { ok: false, status: 403, error: 'forbidden', message: 'Only the club’s admins post announcements.' };
         }
       }
       if (body.officeId) {
@@ -113,9 +122,9 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         imageId = image.id;
       }
       const { rows } = await tx.query<{ id: string }>(
-        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id)
-         values ($1, $2, $3, $4, $5, $6) returning id`,
-        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId],
+        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id, announcement)
+         values ($1, $2, $3, $4, $5, $6, $7) returning id`,
+        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId, body.announcement],
       );
       return { ok: true, id: rows[0]!.id };
     });
@@ -227,25 +236,113 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     return reply.code(204).send();
   });
 
-  // ---- PUT / DELETE /api/posts/:id/like   idempotent
-  for (const liked of [true, false]) {
+  // ---- GET /api/users/:id/posts   a member's own posts (not as an office), newest first:
+  //      the campus feed ones and those in groups the viewer can see. 404 like GET /api/users/:id.
+  app.get('/api/users/:id/posts', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    const q = parse(pageSchema, req.query, reply);
+    if (!q) return;
+    const notFound = () => fail(reply, 404, 'not_found', 'Member not found.');
+    if (!params.success) return notFound();
+    let cursor;
+    try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.'); throw e; }
+    const member = await db.query(
+      `select 1 from users u where u.id = $3 and u.campus_id = $2 and u.deleted_at is null and ${notBlocked('u.id', V)}`,
+      [req.auth!.userId, req.auth!.campusId, params.data.id]);
+    if (member.rows.length === 0) return notFound();
+    const { rows } = await db.query<PostRow>(
+      `${POST_SELECT}
+        where p.author_user_id = $3 and p.author_office_id is null and ${visiblePost('p', V)}
+          and ($4::timestamptz is null or (p.created_at, p.id) < ($4::timestamptz, $5::uuid))
+        order by p.created_at desc, p.id desc
+        limit $6`,
+      [req.auth!.userId, req.auth!.campusId, params.data.id, cursor?.at ?? null, cursor?.id ?? null, q.limit + 1],
+    );
+    const p = page(rows, q.limit);
+    return { items: p.rows.map(postBody), nextCursor: p.nextCursor };
+  });
+
+  // ---- GET /api/me/saved   posts I saved, newest save first; ones I can no longer see are left out
+  app.get('/api/me/saved', async (req, reply) => {
+    const q = parse(pageSchema, req.query, reply);
+    if (!q) return;
+    let cursor;
+    try { cursor = decodeCursor(q.cursor); } catch (e) { if (e instanceof CursorError) return fail(reply, 400, 'invalid_input', 'cursor: not one we gave you.'); throw e; }
+    const { rows } = await db.query<PostRow>(
+      `${POST_SELECT.replace('p.created_at::text as cursor_at', 'sp.created_at::text as cursor_at')}
+        join saved_posts sp on sp.post_id = p.id and sp.user_id = $1
+        where ${visiblePost('p', V)}
+          and ($3::timestamptz is null or (sp.created_at, p.id) < ($3::timestamptz, $4::uuid))
+        order by sp.created_at desc, p.id desc
+        limit $5`,
+      [req.auth!.userId, req.auth!.campusId, cursor?.at ?? null, cursor?.id ?? null, q.limit + 1],
+    );
+    const p = page(rows, q.limit);
+    return { items: p.rows.map(postBody), nextCursor: p.nextCursor };
+  });
+
+  // ---- PUT / DELETE /api/posts/:id/save   idempotent; private to the member
+  for (const saved of [true, false]) {
     app.route({
-      method: liked ? 'PUT' : 'DELETE',
-      url: '/api/posts/:id/like',
+      method: saved ? 'PUT' : 'DELETE',
+      url: '/api/posts/:id/save',
       handler: async (req, reply) => {
         const params = idParam.safeParse(req.params);
-        if (!params.success || !(await loadPost(db, req.auth!, params.data.id))) return fail(reply, 404, 'not_found', 'Post not found.');
-        const userId = req.auth!.userId;
+        if (!params.success) return fail(reply, 404, 'not_found', 'Post not found.');
+        // Unsaving always works (even a post that is now hidden); saving needs a post you can see.
+        if (saved && !(await loadPost(db, req.auth!, params.data.id))) return fail(reply, 404, 'not_found', 'Post not found.');
         await db.query(
-          liked
-            ? 'insert into likes (user_id, post_id) values ($1, $2) on conflict do nothing'
-            : 'delete from likes where user_id = $1 and post_id = $2',
-          [userId, params.data.id],
+          saved
+            ? 'insert into saved_posts (user_id, post_id) values ($1, $2) on conflict do nothing'
+            : 'delete from saved_posts where user_id = $1 and post_id = $2',
+          [req.auth!.userId, params.data.id],
         );
-        const { rows } = await db.query<{ n: number }>('select count(*)::int as n from likes where post_id = $1', [params.data.id]);
-        return { liked, likeCount: rows[0]!.n };
+        return { saved };
       },
     });
+  }
+
+  /** Total reactions and the count of each, after a change. */
+  async function reactionSummary(postId: string) {
+    const { rows } = await db.query<{ reaction: Reaction; n: number }>(
+      'select reaction, count(*)::int as n from likes where post_id = $1 group by reaction', [postId]);
+    return { likeCount: rows.reduce((sum, r) => sum + r.n, 0), reactions: Object.fromEntries(rows.map((r) => [r.reaction, r.n])) };
+  }
+
+  // ---- PUT / DELETE /api/posts/:id/reaction   { reaction } — one per member per post; PUT replaces it
+  // ---- PUT / DELETE /api/posts/:id/like        v0.1: the same with reaction 'like'
+  for (const path of ['reaction', 'like'] as const) {
+    for (const on of [true, false]) {
+      app.route({
+        method: on ? 'PUT' : 'DELETE',
+        url: `/api/posts/:id/${path}`,
+        handler: async (req, reply) => {
+          let reaction: Reaction = 'like';
+          if (path === 'reaction' && on) {
+            const body = parse(z.object({ reaction: z.enum(REACTIONS) }).strict(), req.body, reply);
+            if (!body) return;
+            reaction = body.reaction;
+          }
+          const params = idParam.safeParse(req.params);
+          if (!params.success || !(await loadPost(db, req.auth!, params.data.id))) return fail(reply, 404, 'not_found', 'Post not found.');
+          const userId = req.auth!.userId;
+          if (!on) {
+            await db.query('delete from likes where user_id = $1 and post_id = $2', [userId, params.data.id]);
+          } else if (path === 'like') {
+            // A v0.1 like never overwrites a reaction already given.
+            await db.query('insert into likes (user_id, post_id) values ($1, $2) on conflict do nothing', [userId, params.data.id]);
+          } else {
+            await db.query(
+              `insert into likes (user_id, post_id, reaction) values ($1, $2, $3)
+               on conflict (user_id, post_id) do update set reaction = excluded.reaction, created_at = now()`,
+              [userId, params.data.id, reaction]);
+          }
+          const summary = await reactionSummary(params.data.id);
+          if (path === 'like') return { liked: on, likeCount: summary.likeCount };
+          return { myReaction: on ? reaction : null, ...summary };
+        },
+      });
+    }
   }
 }
 

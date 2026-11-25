@@ -10,7 +10,7 @@ import { fail, idParam, parse, useContractErrors } from '../http.js';
 import { notBlocked, type ViewerSql } from '../visibility.js';
 import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { exportMemberData } from './export.js';
-import { badgesFor, isStudent, loadMe, meBody, normaliseInterests, normaliseMemberNumber, profileComplete } from './profile.js';
+import { badgesFor, isStudent, loadMe, matchesRegFormat, meBody, normaliseInterests, normaliseMemberNumber, profileComplete } from './profile.js';
 
 const year = (min: number, max: number) => z.number().int().min(min).max(max);
 
@@ -58,7 +58,11 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         const cur = (await tx.query<{
           member_type: string; course: string | null; year_of_study: number | null; graduation_year: number | null;
           member_number_normalised: string | null; photo_image_id: string | null;
-        }>('select member_type, course, year_of_study, graduation_year, member_number_normalised, photo_image_id from users where id = $1 for update', [userId])).rows[0]!;
+          reg_number_pattern: string | null; reg_number_example: string | null;
+        }>(`select u.member_type, u.course, u.year_of_study, u.graduation_year, u.member_number_normalised, u.photo_image_id,
+                   c.reg_number_pattern, c.reg_number_example
+              from users u join campuses c on c.id = u.campus_id
+             where u.id = $1 for update of u`, [userId])).rows[0]!;
         const bad = (message: string): Outcome => ({ ok: false, status: 400, error: 'invalid_input', message });
 
         // Staff accounts come from staff emails and stay staff; students choose fresher, continuing or alumni.
@@ -100,10 +104,10 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
 
         if (body.memberNumber !== undefined) {
           const normalised = normaliseMemberNumber(body.memberNumber);
-          if (!normalised) {
+          if (!normalised || (memberType !== 'staff' && !matchesRegFormat(normalised, cur.reg_number_pattern))) {
             return bad(memberType === 'staff'
               ? 'memberNumber: that doesn’t look like a staff number.'
-              : 'memberNumber: that doesn’t look like a registration number, e.g. ABT5/09919/23.');
+              : `memberNumber: that doesn’t look like a registration number${cur.reg_number_example ? `, e.g. ${cur.reg_number_example}` : ''}.`);
           }
           if (normalised !== cur.member_number_normalised) {
             set('member_number', body.memberNumber.trim().replace(/\s+/g, ' ').slice(0, 40));
@@ -187,8 +191,14 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
     const { rows } = await db.query<{
       id: string; name: string | null; photo_url: string | null; member_type: string; course: string | null;
       year_of_study: number | null; graduation_year: number | null; interests: string[]; roles: string[];
+      is_following: boolean; follows_you: boolean; follower_count: number; following_count: number;
     }>(
       `select u.id, u.name, u.photo_url, u.member_type, u.course, u.year_of_study, u.graduation_year, u.interests,
+              exists (select 1 from follows f where f.follower_id = $1 and f.target_type = 'user' and f.target_id = u.id) as is_following,
+              exists (select 1 from follows f where f.follower_id = u.id and f.target_type = 'user' and f.target_id = $1) as follows_you,
+              (select count(*) from follows f join users fu on fu.id = f.follower_id
+                where f.target_type = 'user' and f.target_id = u.id and fu.deleted_at is null)::int as follower_count,
+              (select count(*) from follows f where f.follower_id = u.id)::int as following_count,
               coalesce(array(select distinct r.role from roles r
                               where r.user_id = u.id and r.starts_at <= clock_timestamp()
                                 and (r.ends_at is null or r.ends_at > clock_timestamp())
@@ -203,7 +213,8 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
     return {
       id: u.id, name: u.name, photoUrl: u.photo_url, memberType: u.member_type, course: u.course,
       yearOfStudy: u.year_of_study, graduationYear: u.graduation_year, interests: u.interests, badges: badgesFor(u.roles),
-      isFollowing: false,   // follows arrive in v0.2
+      isFollowing: u.is_following, followsYou: u.follows_you,
+      followerCount: u.follower_count, followingCount: u.following_count,
     };
   });
 
@@ -231,8 +242,8 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
   /**
    * DELETE /api/me   { confirm: "DELETE" }  (Data Protection Act: erasure)
    * Removed: email, name, photo, course, years, member number, under-18 answer, every uploaded
-   *   image (profile and post photos, files included), sessions, sign-in codes, likes, helpful
-   *   votes, blocks, group memberships (a group they ran alone gets a new admin). Roles and office
+   *   image (profile and post photos, files included), sessions, sign-in codes, likes, saved posts, helpful
+   *   votes, blocks, follows (both ways), group memberships (a group they ran alone gets a new admin). Roles and office
  *   memberships are ended (kept as history).
    * Kept, shown as "Deleted member": posts, comments, questions and answers; reports and the
    *   admin log, which moderation needs. The email is free to sign up again as a new member.
@@ -260,8 +271,16 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
         await tx.query(`delete from rate_limit_events where bucket = 'code_email' and key = $1`, [email]);
       }
       await tx.query('delete from likes where user_id = $1', [userId]);
+      await tx.query('delete from saved_posts where user_id = $1', [userId]);
       await tx.query('delete from answer_helpful where user_id = $1', [userId]);
       await tx.query('delete from blocks where blocker_id = $1 or blocked_id = $1', [userId]);
+      await tx.query(`delete from follows where follower_id = $1 or (target_type = 'user' and target_id = $1)`, [userId]);
+      // Stories end now (their photos are among the images deleted below); reported ones stay for moderators.
+      await tx.query(`update stories set image_id = null, deleted_at = coalesce(deleted_at, clock_timestamp()) where author_user_id = $1`, [userId]);
+      await tx.query('delete from story_views where viewer_id = $1', [userId]);
+      await tx.query('delete from event_rsvps where user_id = $1', [userId]);   // events they created stay, like posts
+      await tx.query('delete from close_friends where user_id = $1 or friend_id = $1', [userId]);
+      await tx.query('delete from story_hidden_from where user_id = $1 or hidden_user_id = $1', [userId]);
       const adminOf = (await tx.query<{ group_id: string; role: string }>(
         `delete from group_members where user_id = $1 returning group_id, role`, [userId])).rows
         .filter((r) => r.role === 'admin').map((r) => r.group_id);

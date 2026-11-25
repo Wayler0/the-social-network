@@ -22,15 +22,9 @@ export type Campus = {
   name: string;
   /** Email domain → member type. Exact match only. */
   emailDomains: Record<string, MemberType>;
+  /** Registration number format (regular expression on the normalised number) and an example; null = no check. */
+  regNumberPattern?: string | null;
+  regNumberExample?: string | null;
 };
 
-export const CAMPUSES: Campus[] = [
-  {
-    slug: 'tharaka',
-    name: 'Tharaka University',
-    emailDomains: {
-      'student.tharaka.ac.ke': 'student',
-      'tharaka.ac.ke': 'staff',
-    },
-  },
-];
+/* The campus list is loaded from the server (lib/campuses.ts); nothing here names a campus. */

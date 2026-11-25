@@ -89,7 +89,7 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
   // ---------------------------------------------------------------- feed
   describe('GET /api/feed', () => {
     it('pages through campus posts newest first, never hidden, deleted or group posts', async () => {
-      const ids = await wholeFeed('cynthia');
+      const ids = await wholeFeed('brian');                             // in no club, follows none
       expect(new Set(ids).size).toBe(ids.length);                       // no post twice across pages
       const expected = (await client.query<{ id: string }>(
         `select id from posts where campus_id = $1 and group_id is null and hidden_at is null and deleted_at is null
@@ -97,6 +97,43 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
       expect(ids).toEqual(expected);
       expect(ids.length).toBeGreaterThan(20);
       for (const key of ['spam', 'modhide', 'deleted', 'chess1', 'photo2', 'study1']) expect(ids, key).not.toContain(P(key));
+    });
+
+    it('adds announcements of clubs I follow or belong to, never their discussion', async () => {
+      expect(await wholeFeed('amina')).toContain(P('chess1'));         // chess club member
+      expect(await wholeFeed('amina')).not.toContain(P('chess2'));     // discussion stays in the club
+      expect(await wholeFeed('brian')).not.toContain(P('chess1'));
+      await as('brian', 'PUT', `/api/follows/group/${G('chess')}`);
+      const feed = await wholeFeed('brian');
+      expect(feed).toContain(P('chess1'));
+      expect(feed).not.toContain(P('chess2'));
+    });
+  });
+
+  describe('club pages (announcements and discussion)', () => {
+    it('only club admins post announcements, and only in clubs', async () => {
+      const res = await post('cynthia', { body: 'Training on Sunday.', groupId: G('chess'), announcement: true });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({ announcement: true, group: { id: G('chess'), kind: 'club' } });
+      await client.query(`update groups set posting = 'everyone' where id = $1`, [G('chess')]);
+      expect((await post('amina', { body: 'x', groupId: G('chess'), announcement: true })).statusCode).toBe(403);
+      expect((await post('amina', { body: 'Who is coming?', groupId: G('chess') })).json().announcement).toBe(false);
+      expect((await post('brian', { body: 'x', groupId: G('football'), announcement: true })).json().error).toBe('invalid_input');
+      expect((await post('brian', { body: 'x', announcement: true })).json().error).toBe('invalid_input');
+    });
+
+    it('the club page: anyone reads a public club\'s announcements; discussion is for members', async () => {
+      const tab = (who: string, channel: string) => as(who, 'GET', `/api/groups/${G('chess')}/posts?channel=${channel}`);
+      const ids = (res: { json: () => { items: Array<{ id: string }> } }) => res.json().items.map((p) => p.id);
+      expect(ids(await tab('brian', 'announcements'))).toEqual([P('chess1')]);
+      expect(ids(await tab('brian', 'all'))).toEqual([P('chess1')]);            // a non-member gets announcements only
+      expect((await tab('brian', 'discussion')).json().error).toBe('forbidden');
+      expect(ids(await tab('amina', 'discussion'))).toEqual([P('chess2')]);
+      expect(ids(await tab('amina', 'all')).sort()).toEqual([P('chess1'), P('chess2')].sort());
+      expect((await as('brian', 'GET', `/api/posts/${P('chess1')}`)).statusCode).toBe(200);
+      expect((await as('brian', 'PUT', `/api/posts/${P('chess1')}/like`)).statusCode).toBe(200);   // followers and readers can react
+      expect((await as('brian', 'GET', `/api/posts/${P('chess2')}`)).statusCode).toBe(404);
+      expect((await as('cynthia', 'GET', `/api/groups/${G('football')}/posts?channel=announcements`)).json().error).toBe('forbidden');
     });
 
     it('shows each post with author badges, office, image, counts and likedByMe', async () => {
@@ -163,7 +200,7 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
       expect([notMember.statusCode, notMember.json().error]).toEqual([403, 'forbidden']);
       const member = await post('david', { body: 'Kick-off at 9?', groupId: G('football') });
       expect(member.statusCode).toBe(201);
-      expect(member.json().group).toEqual({ id: G('football'), name: expect.any(String) });
+      expect(member.json().group).toEqual({ id: G('football'), name: expect.any(String), kind: 'group' });
       expect(await wholeFeed('david')).not.toContain(member.json().id);          // group posts stay in the group
 
       expect((await post('amina', { body: 'Me too', groupId: G('chess') })).statusCode).toBe(403);   // club: admins only
@@ -287,6 +324,100 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
     it('404 when liking a post the member cannot see', async () => {
       expect((await as('cynthia', 'PUT', `/api/posts/${P('spam')}/like`)).statusCode).toBe(404);
       expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/like`)).statusCode).toBe(404);
+    });
+  });
+
+  // ---------------------------------------------------------------- saved posts
+  describe('saved posts', () => {
+    it('save and unsave are idempotent, private, and listed newest save first', async () => {
+      expect((await as('felix', 'PUT', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: true });
+      expect((await as('felix', 'PUT', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: true });
+      expect((await as('felix', 'PUT', `/api/posts/${P('photo')}/save`)).json()).toEqual({ saved: true });
+      expect((await as('felix', 'GET', `/api/posts/${P('feed:2')}`)).json().savedByMe).toBe(true);
+      expect((await as('brian', 'GET', `/api/posts/${P('feed:2')}`)).json().savedByMe).toBe(false);
+
+      const list = (await as('felix', 'GET', '/api/me/saved')).json();
+      expect(list.items.map((p: { id: string }) => p.id)).toEqual([P('photo'), P('feed:2')]);
+      expect((await as('brian', 'GET', '/api/me/saved')).json().items).toEqual([]);
+
+      expect((await as('felix', 'DELETE', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: false });
+      expect((await as('felix', 'DELETE', `/api/posts/${P('feed:2')}/save`)).json()).toEqual({ saved: false });
+      expect((await as('felix', 'GET', '/api/me/saved')).json().items.map((p: { id: string }) => p.id)).toEqual([P('photo')]);
+    });
+
+    it('can’t save a post you can’t see; a saved post that gets hidden drops out of the list', async () => {
+      expect((await as('cynthia', 'PUT', `/api/posts/${P('spam')}/save`)).statusCode).toBe(404);
+      expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/save`)).statusCode).toBe(404);
+      await as('felix', 'PUT', `/api/posts/${P('feed:2')}/save`);
+      await client.query('update posts set hidden_at = now() where id = $1', [P('feed:2')]);
+      expect((await as('felix', 'GET', '/api/me/saved')).json().items).toEqual([]);
+      expect((await as('felix', 'DELETE', `/api/posts/${P('feed:2')}/save`)).statusCode).toBe(200);
+    });
+  });
+
+  // ---------------------------------------------------------------- a member's posts
+  describe('GET /api/users/:id/posts', () => {
+    it('lists the member’s own posts newest first, not office posts, hidden ones or groups the viewer can’t see', async () => {
+      const first = (await post('cynthia', { body: 'First' })).json().id;
+      const second = (await post('cynthia', { body: 'Second' })).json().id;
+      const ids = (await as('brian', 'GET', `/api/users/${U('cynthia')}/posts?limit=50`)).json().items.map((p: { id: string }) => p.id);
+      expect(ids.indexOf(second)).toBeLessThan(ids.indexOf(first));
+      expect(ids).toContain(P('photo'));
+      const expected = (await client.query<{ id: string }>(
+        `select id from posts where author_user_id = $1 and author_office_id is null and group_id is null
+            and hidden_at is null and deleted_at is null`, [U('cynthia')])).rows.map((r) => r.id);
+      for (const id of expected) expect(ids).toContain(id);
+      const officeOrHidden = (await client.query<{ id: string }>(
+        `select id from posts where author_user_id = $1 and (author_office_id is not null or hidden_at is not null or deleted_at is not null)`,
+        [U('cynthia')])).rows.map((r) => r.id);
+      for (const id of officeOrHidden) expect(ids).not.toContain(id);
+      // Group posts only for members of that group (study1 is in a group felix isn't in).
+      const studyAuthor = (await client.query('select author_user_id from posts where id = $1', [P('study1')])).rows[0].author_user_id;
+      const felixSees = (await as('felix', 'GET', `/api/users/${studyAuthor}/posts?limit=50`)).json().items.map((p: { id: string }) => p.id);
+      expect(felixSees).not.toContain(P('study1'));
+    });
+
+    it('404 for blocked, deleted or unknown members', async () => {
+      await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2)', [U('david'), U('cynthia')]);
+      expect((await as('david', 'GET', `/api/users/${U('cynthia')}/posts`)).statusCode).toBe(404);
+      expect((await as('cynthia', 'GET', `/api/users/${U('david')}/posts`)).statusCode).toBe(404);
+      expect((await as('brian', 'GET', `/api/users/${randomUUID()}/posts`)).statusCode).toBe(404);
+      expect((await as('brian', 'GET', '/api/users/nonsense/posts')).statusCode).toBe(404);
+    });
+  });
+
+  // ---------------------------------------------------------------- reactions
+  describe('reactions (v0.2)', () => {
+    const url = `/api/posts/${P('feed:3')}`;
+    const counts = async () => { await client.query('delete from likes where post_id = $1', [P('feed:3')]); };
+
+    it('one reaction per member: PUT sets or changes it, DELETE removes it; counts per reaction', async () => {
+      await counts();
+      expect((await as('felix', 'PUT', `${url}/reaction`, { reaction: 'love' })).json())
+        .toEqual({ myReaction: 'love', likeCount: 1, reactions: { love: 1 } });
+      expect((await as('brian', 'PUT', `${url}/reaction`, { reaction: 'support' })).json())
+        .toEqual({ myReaction: 'support', likeCount: 2, reactions: { love: 1, support: 1 } });
+      expect((await as('felix', 'PUT', `${url}/reaction`, { reaction: 'haha' })).json())
+        .toEqual({ myReaction: 'haha', likeCount: 2, reactions: { haha: 1, support: 1 } });
+      expect((await as('felix', 'GET', url)).json()).toMatchObject({ likedByMe: true, myReaction: 'haha', likeCount: 2, reactions: { haha: 1, support: 1 } });
+      expect((await as('felix', 'DELETE', `${url}/reaction`)).json()).toEqual({ myReaction: null, likeCount: 1, reactions: { support: 1 } });
+      expect((await as('felix', 'GET', url)).json()).toMatchObject({ likedByMe: false, myReaction: null });
+    });
+
+    it('a v0.1 like is the reaction "like" and never overwrites another reaction', async () => {
+      await counts();
+      await as('felix', 'PUT', `${url}/like`);
+      expect((await as('felix', 'GET', url)).json()).toMatchObject({ myReaction: 'like', reactions: { like: 1 } });
+      await as('felix', 'PUT', `${url}/reaction`, { reaction: 'wow' });
+      expect((await as('felix', 'PUT', `${url}/like`)).json()).toEqual({ liked: true, likeCount: 1 });
+      expect((await as('felix', 'GET', url)).json().myReaction).toBe('wow');
+    });
+
+    it('rejects unknown reactions and posts you cannot see', async () => {
+      for (const body of [{}, { reaction: 'angry' }, { reaction: 'love', extra: 1 }]) {
+        expect((await as('felix', 'PUT', `${url}/reaction`, body)).json().error, JSON.stringify(body)).toBe('invalid_input');
+      }
+      expect((await as('felix', 'PUT', `/api/posts/${P('study1')}/reaction`, { reaction: 'love' })).statusCode).toBe(404);
     });
   });
 });

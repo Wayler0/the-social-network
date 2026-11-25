@@ -131,7 +131,7 @@ Knowing a reg number exists is not enough. Reg numbers appear on exam lists, not
 - Match the domain exactly (the part after `@` must be `tharaka.ac.ke` or `student.tharaka.ac.ke`), so look-alikes such as `tharaka.ac.ke.evil.com` or `faketharaka.ac.ke` are rejected.
 - Reg number is still collected, format-checked and unique per account.
 - Re-verify periodically (e.g. yearly) so access ends when someone leaves.
-- **Open:** do alumni keep their student email after graduating? If not, alumni verify by reg number + graduation year + vouching/admin review, ideally verifying before their student email is closed (prompt final-year students to link a personal email).
+- **Answered 25 Nov 2026:** the university **closes the student email right after graduation** (the student's Drive files are deleted 3 years later). So alumni **cannot** sign in with their student email. Needed: (1) final-year students link a personal email while their student email still works, so they can keep signing in after graduating; (2) alumni who already graduated verify by reg number + graduation year + vouching/admin review.
 - **Fallback for edge cases** (no university email yet, e.g. a brand-new fresher): class-rep vouching or ID upload checked by a moderator.
 - **Alumni:** reg number + graduation year + vouching by verified members or admin review.
 - **Staff:** staff email or staff number + admin approval.
@@ -352,7 +352,7 @@ Mobile-first, one column, big tap targets. Bottom nav: Home, Discover, + (create
 
 - Final name ("Hatua" is a placeholder) and our own domain. ~~tharaka.ac.ke subdomain~~ ruled out 12 Nov: the app is independent of the university.
 - Final logo and app icon, designed by the team with the final name. Until then the placeholder is a white "h" with a sunshine dot on violet. To swap it in: replace the icon files in `apps/web/public/` (same names and sizes), or edit `MARK` in `apps/web/scripts/make-icons.mjs` and re-run it.
-- Alumni verification: do students keep their student.tharaka.ac.ke email after graduation? (See section 5.)
+- ~~Alumni verification: do students keep their student email after graduation?~~ **Answered 25 Nov:** no, it closes right after graduation. Alumni need a personal-email sign-in and an alumni verification route (section 5).
 - Server details: CPU, RAM, disk (SSD/HDD), OS, whole machine or VM, public IP/port forwarding, bandwidth, who has access, ICT approval.
 - Tech stack (section 12): challenge each row, then mark DECIDED. Build vs adopt (HumHub).
 - ~~Reels in MVP or second release~~ **DECIDED 12 Nov:** not built in v0.1. The Reels tab stays in the bottom nav and opens a "Coming soon" screen (short line on what Reels will be, no fake content, no upload).

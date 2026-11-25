@@ -14,6 +14,9 @@ import { createMailer, type Mailer } from './email/mailer.js';
 import { installSessionCheck } from './auth/session-check.js';
 import type { RequireUser } from './guard.js';
 import { imageRoutes } from './images/routes.js';
+import { followRoutes } from './follows/routes.js';
+import { storyRoutes } from './stories/routes.js';
+import { eventRoutes } from './events/routes.js';
 
 /**
  * Pieces tests can swap: `requireUser` replaces the session check (no cookie needed),
@@ -63,15 +66,18 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
 
   /** The campus list the sign-up screen needs (replaces the hard-coded list in apps/web/src/config.ts). */
   app.get('/api/campuses', { config: { public: true } }, async () => {
-    const { rows } = await db.query<{ slug: string; name: string; domain: string; member_type: string }>(
-      `select c.slug, c.name, d.domain, d.member_type
+    const { rows } = await db.query<{ slug: string; name: string; domain: string; member_type: string;
+      reg_number_pattern: string | null; reg_number_example: string | null }>(
+      `select c.slug, c.name, d.domain, d.member_type, c.reg_number_pattern, c.reg_number_example
          from campuses c join campus_email_domains d on d.campus_id = c.id
         where c.status = 'active'
         order by c.name, d.domain`,
     );
-    const bySlug = new Map<string, { slug: string; name: string; emailDomains: Record<string, string> }>();
+    const bySlug = new Map<string, { slug: string; name: string; emailDomains: Record<string, string>;
+      regNumberPattern: string | null; regNumberExample: string | null }>();
     for (const r of rows) {
-      const campus = bySlug.get(r.slug) ?? { slug: r.slug, name: r.name, emailDomains: {} };
+      const campus = bySlug.get(r.slug) ?? { slug: r.slug, name: r.name, emailDomains: {},
+        regNumberPattern: r.reg_number_pattern, regNumberExample: r.reg_number_example };
       campus.emailDomains[r.domain] = r.member_type;
       bySlug.set(r.slug, campus);
     }
@@ -86,6 +92,9 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   app.register(groupRoutes, { db });                     // Kim — issue #25
   app.register(announcementRoutes, { db });              // Kim — issue #26
   app.register(questionRoutes, { db });                  // Kim — issue #27
+  app.register(followRoutes, { db });                    // Kim — v0.2 follows
+  app.register(storyRoutes, { config, db });             // Kim — v0.2 stories
+  app.register(eventRoutes, { config, db });             // Kim — v0.2 events
   app.register(imageRoutes, { config, db, requireUser }); // Peter — issue #32
   app.register(adminRoutes, { db, requireUser });         // Peter — issue #37
 

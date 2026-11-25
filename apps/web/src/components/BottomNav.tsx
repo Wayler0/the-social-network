@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
+import { HOME_RESELECT } from '../screens/Home';
 import { Icon, type IconName } from './Icon';
 
 const items: { to: string; label: string; icon: IconName }[] = [
@@ -9,8 +10,11 @@ const items: { to: string; label: string; icon: IconName }[] = [
 ];
 
 function Item({ to, label, icon }: (typeof items)[number]) {
+  const { pathname } = useLocation();
+  // Home while on Home: scroll to the top and check for new posts (like other social apps).
+  const onClick = to === '/' && pathname === '/' ? () => window.dispatchEvent(new Event(HOME_RESELECT)) : undefined;
   return (
-    <NavLink to={to} end={to === '/'} className={({ isActive }) => `navlink${isActive ? ' active' : ''}`}>
+    <NavLink to={to} end={to === '/'} onClick={onClick} className={({ isActive }) => `navlink${isActive ? ' active' : ''}`}>
       <Icon name={icon} />
       <span>{label}</span>
     </NavLink>

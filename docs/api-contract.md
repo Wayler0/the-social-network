@@ -63,8 +63,10 @@ Status key: ✅ built · 🔨 in progress · ⬜ not started
 ### `GET /api/campuses` *(public)* ✅
 ```json
 { "campuses": [{ "slug": "tharaka", "name": "Tharaka University",
-  "emailDomains": { "student.tharaka.ac.ke": "student", "tharaka.ac.ke": "staff" } }] }
+  "emailDomains": { "student.tharaka.ac.ke": "student", "tharaka.ac.ke": "staff" },
+  "regNumberPattern": "^[A-Z]{2,4}[0-9]/[0-9]{5}/[0-9]{2}$", "regNumberExample": "ABT5/09919/23" }] }
 ```
+`regNumberPattern` (migration 017, columns on `campuses`) is a regular expression checked against the normalised registration number (upper-case, spaces and dashes removed) by `PATCH /api/me` for students and alumni; `null` means no format check. Staff numbers are never format-checked. A wrong format answers `400 invalid_input` with the example in the message.
 
 ---
 
@@ -117,9 +119,9 @@ New students start as `memberType: "continuing"` and pick fresher/continuing/alu
 3. Right code → mark it consumed (in the same transaction, so it can't be used twice).
 4. No user with that email → create one: `campus_id` and `member_type` from the domain, `verified = true`, `verified_method = 'email_code'`, profile fields empty. `newUser: true`.
    Existing user → `newUser: false`. If `deleted_at` is set, treat as new (the old account stays deleted).
-5. Create a session: random 32-byte token (`crypto.randomBytes(32).toString('base64url')`), store **only** `sha256(token)` as `token_hash`, expires in **30 days**.
+5. Create a session: random 32-byte token (`crypto.randomBytes(32).toString('base64url')`), store **only** `sha256(token)` as `token_hash`, expires in **180 days**, moved forward each day the session is used (members sign in once per device; changed 25 Nov 2026 from 30 days).
 6. Set the cookie:
-   `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`
+   `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=15552000`
    (`Secure` off only when `NODE_ENV=development`; read the cookie name from config, not the app name in code).
 7. Rate limit: 200 verify attempts per IP per 10 minutes → `429` (see above: shared addresses).
 
@@ -145,7 +147,7 @@ A Fastify `preHandler` that reads the cookie, looks up `sha256(token)`, and reje
   "profileComplete": false
 }
 ```
-`profileComplete` is true once `name`, `memberType`, `memberNumber` and (students) `yearOfStudy` or (alumni) `graduationYear` are set and `isUnder18` is answered. The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
+`profileComplete` is true once `name`, `memberType`, `memberNumber` and (students) `yearOfStudy` or (alumni) `graduationYear` are set and `isUnder18` is answered. It is also false while `memberNumberNeedsFix` is true: a student's or alumnus's saved reg number doesn't match the campus format (`regNumberPattern`, migration 017), e.g. one saved before the check existed. The web app then shows "Update your registration number". The web app sends incomplete profiles to the onboarding screen; other protected endpoints (posting, joining groups) return `403 profile_incomplete` until it is complete.
 
 ### Done when (#17–#19)
 - [ ] Tests (vitest + `app.inject`) for: allowed and look-alike domains, rate limits, wrong/expired/reused code, 5-attempt lockout, cookie flags, logout, logout-all, suspended user.
@@ -183,7 +185,7 @@ All fields optional; send only what changes. `200` with the same body as `GET /a
 `{ "memberNumber": "…", "details": "…" }` → `202 { received: true }`, the same whether or not anyone holds the number. Goes to the admin queue and marks an *unverified* holder `disputed`. `400` for your own number; 3 a day per member (`429`).
 
 ### `GET /api/users/:id` ✅ — someone's public profile
-`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. `isFollowing` is always `false` until follows (v0.2).
+`{ id, name, photoUrl, memberType, course, yearOfStudy, graduationYear, interests, badges, isFollowing, followsYou, followerCount, followingCount }` — **no** email or member number. `404` if blocked either way, deleted, or on another campus. Follows: section 12 (v0.2).
 
 ### `GET /api/me/export` ✅ — download my data (Data Protection Act)
 A JSON file (`Content-Disposition: attachment`) of everything held about the member: profile (with email and member number), account dates and suspension, roles and offices (history too), groups, posts, comments, questions and answers (also deleted or hidden ones, which we still keep), likes, helpful votes, announcements they posted, people they blocked, reports and disputes they made, sessions, and uploaded images. **Not** included: reports about them (protects reporters) and who blocked them. Works while suspended; 5 a day (`429`). Code: `apps/api/src/me/export.ts` — add any new table that holds personal data there.
@@ -200,22 +202,29 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 
 | Method & path | Body / query | Response |
 |---|---|---|
-| `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide, newest first |
-| `POST /api/posts` | `{ body, imageId?, groupId?, officeId? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to) | `201` Post |
+| `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide posts plus announcements of clubs you follow or belong to (v0.2), newest first |
+| `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
 | `GET /api/posts/:id` | | Post |
 | `DELETE /api/posts/:id` | author or admin | `204` |
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
 | `POST /api/posts/:id/comments` | `{ body }` (1–1000 chars) | `201` Comment |
 | `DELETE /api/comments/:id` | author, post author, or admin | `204` |
-| `PUT /api/posts/:id/like` | | `200 { liked: true, likeCount }` (idempotent) |
+| `PUT /api/posts/:id/like` | | `200 { liked: true, likeCount }` (idempotent; v0.1 — the reaction "like", never replaces another reaction) |
 | `DELETE /api/posts/:id/like` | | `200 { liked: false, likeCount }` |
+| `PUT /api/posts/:id/reaction` | `{ reaction: "like"\|"love"\|"haha"\|"wow"\|"sad"\|"support" }` (v0.2) | `200 { myReaction, likeCount, reactions: { love: 3, … } }` — one per member per post; PUT changes it |
+| `DELETE /api/posts/:id/reaction` | | `200 { myReaction: null, likeCount, reactions }` |
+| `PUT /api/posts/:id/save` | | `200 { saved: true }` (idempotent; private to the member) |
+| `DELETE /api/posts/:id/save` | | `200 { saved: false }` (works even if the post is now hidden) |
+| `GET /api/me/saved` | `?limit&cursor` | page of **Post** — posts I saved, newest save first; ones I can no longer see are left out |
+| `GET /api/users/:id/posts` | `?limit&cursor` | page of **Post** — that member's own posts (not office posts), newest first, including group posts only where the viewer is a member. `404` like `GET /api/users/:id` |
 
 **Post**
 ```json
 { "id": "…", "author": { "id": "…", "name": "…", "photoUrl": null, "badges": ["Staff"] },
-  "office": null, "group": null,
+  "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
-  "likeCount": 12, "commentCount": 3, "likedByMe": false, "createdAt": "…" }
+  "likeCount": 12, "commentCount": 3, "likedByMe": false, "myReaction": null, "reactions": { "like": 9, "love": 3 },
+  "savedByMe": false, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 
@@ -304,14 +313,14 @@ Rules (code: `apps/api/src/safety/`):
 | `DELETE /api/groups/:id/membership` | Leave |
 | `GET /api/groups/:id/requests` | Admins: pending requests |
 | `POST /api/groups/:id/requests/:userId` | Admins: `{ approve: true\|false }` |
-| `GET /api/groups/:id/posts?limit&cursor` | Members only |
+| `GET /api/groups/:id/posts?channel=all\|announcements\|discussion&limit&cursor` | Members see every post (`channel` picks the tab). Anyone who may see a **public club** reads its announcements (`channel=all` gives them announcements only; `discussion` is `403`). Other groups: members only |
 | `GET /api/groups/:id/members?limit&cursor` | Active members only: `{ items: [{ id, name, photoUrl, memberType, role, joinedAt }] }`, longest-standing first |
 | `PUT /api/groups/:id/members/:userId/role` | Admins: `{ role: "admin"\|"member" }` → `{ role }`. `409 last_admin` if it would leave no admin |
 | `DELETE /api/groups/:id/members/:userId` | Admins remove a member → `204`. Not other admins (demote first), not in class groups |
 
 Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
-**Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, isClassGroup, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null }`
+**Group** `{ id, name, description, visibility, studentOnly, kind: "group"|"club", clubVerified, posting, isClassGroup, memberCount, myStatus: "none"|"pending"|"active", myRole: "member"|"admin"|null, canFollow, following, followerCount }` — `canFollow` only for public clubs (v0.2, section 12); `followerCount` is `null` otherwise
 
 Rules (code: `apps/api/src/groups/routes.ts`):
 - `memberCount` is `null` for a private group you are not in. `isClassGroup` is true for the automatic course/year groups.
@@ -414,5 +423,75 @@ Every action is written to `admin_log` (who, what, on what, when, and the reason
 
 ---
 
-## Not in v0.1
-Chat, push notifications, reels, map, ads, emergency button, follows (v0.2 with stories). Don't build endpoints for them yet.
+## 12. Follows (v0.2) ✅
+
+Follow people, verified office accounts and public clubs. No approval step: privacy rules live on what followers get (stories, v0.2).
+
+| Endpoint | Answer |
+|---|---|
+| `PUT /api/follows/:type/:id` | `type`: `user\|office\|group`. → `{ following: true, followerCount }`; idempotent; 200 an hour |
+| `DELETE /api/follows/:type/:id` | → `{ following: false, followerCount }`; idempotent |
+| `GET /api/me/following?type&limit&cursor` | `{ items: [{ type, id, name, photoUrl, since }] }`, newest first |
+| `GET /api/me/followers?limit&cursor` | Members who follow me: `{ items: [{ id, name, photoUrl, followsBack, since }] }`, newest first |
+
+Rules (code: `apps/api/src/follows/routes.ts`, table `follows`, migration 011):
+- `404` unless the target is: another live member of your campus with no block either way; a **verified** office of your campus; a **public club** you may see (staff never see student-only groups). Ordinary and private groups are joined, not followed.
+- Blocking ends follows both ways; deleting an account removes its follows (both ways). The hourly housekeeping removes follows whose target is gone or no longer followable (`target_id` is polymorphic: no foreign key).
+- Counts leave out deleted accounts. Profiles (section 4) show `isFollowing`, `followsYou`, `followerCount`, `followingCount`; groups (section 8) show `canFollow`, `following`, `followerCount`.
+
+---
+
+## 13. Stories (v0.2) ✅
+
+Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").
+
+| Endpoint | Answer |
+|---|---|
+| `GET /api/stories` | The stories row: `{ items: [{ author: { type: "user"\|"office"\|"group", id, name, photoUrl, badges }, isMine, allSeen, stories: [Story] }] }` — your own first, then official accounts, then clubs, then people; within each, unseen before seen, then newest. Stories oldest first |
+| `POST /api/stories` | `{ body?, imageId?, audience?: "followers"\|"close_friends", officeId? \| groupId? }` → `201` Story. Photo or text needed (body up to 500). Finished profile; 30 a day |
+| `POST /api/stories/:id/view` | Mark seen → `204` (idempotent; your own views are not counted) |
+| `GET /api/stories/:id/viewers` | `{ count, items: [{ id, name, photoUrl, viewedAt }] }` — only whoever manages the story (author, office members, club admins); `403` otherwise |
+| `DELETE /api/stories/:id` | Author, the office or club managing it, or an admin → `204` |
+| `GET /api/me/close-friends` · `PUT\|DELETE …/:userId` | Close friends list (up to 200; `409 list_full`) |
+| `GET /api/me/story-hidden` · `PUT\|DELETE …/:userId` | "Hide my stories from" list (up to 200) |
+
+**Story** `{ id, body, image: { url, thumbUrl, width, height } | null, audience, createdAt, expiresAt, seen, viewCount? }` — `viewCount` only on stories you posted.
+
+Who sees a story (`visibleStory` in `apps/api/src/visibility.ts`; anything else is `404`):
+- **Personal:** your followers (section 12), except people you hide your stories from; close-friends stories only to your close friends. An **under-18** author's stories only reach people they follow back. **Staff** see a student's (fresher/continuing) story only if the student follows them.
+- **Office** (posted by a current member of a **verified** office with `officeId`): everyone on the campus.
+- **Club** (posted by a club admin with `groupId`; `kind = club`): the club's active members and followers.
+- Never across a block, never once hidden, deleted or expired.
+
+Reports: `POST /api/reports` takes `targetType: "story"`; three open reports hide it; moderators hide/unhide it like other content (`/api/admin/content/story/:id/hide`). Hourly housekeeping deletes expired or deleted stories with their views and photos, **except** stories with an open report, which stay for moderators until the report is closed. Replies to stories come with chat. Migration 012.
+
+---
+
+## 14. Events (v0.2) ✅
+
+Events with Going / Interested. Places on the map come with v0.3; until then `location` is text.
+
+| Endpoint | Answer |
+|---|---|
+| `GET /api/events?when=upcoming\|past&groupId&limit&cursor` | Upcoming (not yet ended) soonest first; past latest first |
+| `GET /api/me/events?limit&cursor` | Upcoming events I am going to or interested in |
+| `POST /api/events` | `{ title, description?, location?, startsAt, endsAt?, imageId?, officeId? \| groupId? }` → `201` Event. Not in the past, at most a year ahead. Finished profile; 10 a day |
+| `GET /api/events/:id` | Event |
+| `PATCH /api/events/:id` | Host only: `{ title?, description?, location?, startsAt?, endsAt?, cancelled? }` → Event |
+| `DELETE /api/events/:id` | Host or admin → `204` |
+| `PUT /api/events/:id/rsvp` | `{ status: "going"\|"interested" }` → `{ myRsvp, goingCount, interestedCount }`; `409 event_cancelled` / `event_over` |
+| `DELETE /api/events/:id/rsvp` | → the same with `myRsvp: null` |
+| `GET /api/events/:id/attendees?status=going\|interested&limit&cursor` | `{ items: [{ id, name, photoUrl, since }] }`, first to answer first |
+
+**Event** `{ id, title, description, location, startsAt, endsAt, cancelled, createdBy, office, group: { id, name, kind } | null, image, goingCount, interestedCount, myRsvp, canManage, createdAt }`
+
+Rules (code: `apps/api/src/events/routes.ts`, `visibleEvent` in `visibility.ts`, migration 015):
+- **Hosts:** the creator, current members of the hosting office, or the group's admins (`canManage`). Anyone with a finished profile creates campus events; `officeId` needs current office membership; `groupId` needs active membership, and admin for clubs and "only admins post" groups.
+- **Who sees:** campus events everyone on the campus; group events members only, except a **public club's** events, which anyone who may see the club sees. Never across a block with the creator; staff never see student-only groups.
+- Cancelled events stay listed (`cancelled: true`) so people who planned to go find out.
+- Reports take `targetType: "event"` (3 hide it; moderators see title and description). Deleting an account removes its RSVPs; events it created stay, like posts.
+
+---
+
+## Not built yet
+Chat, push notifications, reels, map, ads, emergency button. Order for v0.2 (backend): follows ✅ → stories ✅ → club announcements ✅ → reactions ✅ → events ✅ → push → chat (end-to-end encrypted, after the library choice and an external review).

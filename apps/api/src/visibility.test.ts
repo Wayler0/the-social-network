@@ -86,14 +86,23 @@ describe.skipIf(!url)('visibility rules (real database, seed data)', () => {
   });
 
   it('shows group posts only to active members', async () => {
-    expect(await seesPost('cynthia', P('chess1'))).toBe(true);                 // club admin
+    expect(await seesPost('cynthia', P('chess2'))).toBe(true);                 // club admin
     const outsider = (await db.query(`select 1 from group_members where group_id = $1 and user_id = $2`, [G('chess'), U('felix')])).rows.length === 0;
     expect(outsider).toBe(true);
-    expect(await seesPost('felix', P('chess1'))).toBe(false);
+    expect(await seesPost('felix', P('chess2'))).toBe(false);
     await db.query(`insert into group_members (group_id, user_id, status) values ($1, $2, 'pending')`, [G('chess'), U('felix')]);
-    expect(await seesPost('felix', P('chess1'))).toBe(false);                 // pending is not enough
+    expect(await seesPost('felix', P('chess2'))).toBe(false);                 // pending is not enough
     await db.query(`update group_members set status = 'active' where group_id = $1 and user_id = $2`, [G('chess'), U('felix')]);
-    expect(await seesPost('felix', P('chess1'))).toBe(true);
+    expect(await seesPost('felix', P('chess2'))).toBe(true);
+  });
+
+  it('a public club\'s announcements are for everyone who may see the club; a private club\'s for members only', async () => {
+    expect(await seesPost('felix', P('chess1'))).toBe(true);                  // announcement, not a member
+    await db.query(`update groups set visibility = 'private' where id = $1`, [G('chess')]);
+    expect(await seesPost('felix', P('chess1'))).toBe(false);
+    await db.query(`update groups set visibility = 'public', student_only = true where id = $1`, [G('chess')]);
+    expect(await seesPost('felix', P('chess1'))).toBe(false);                 // staff never see student-only clubs
+    expect(await seesPost('brian', P('chess1'))).toBe(true);
   });
 
   it('never shows a student-only group or its posts to staff, even a staff member added by mistake', async () => {

@@ -1,7 +1,9 @@
+import { useLayoutEffect } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
+import { rememberReturnTo } from './lib/return-to';
 import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
 import { Admin } from './screens/Admin';
@@ -13,9 +15,12 @@ import { GroupNew, Groups } from './screens/Groups';
 import { Today } from './screens/Today';
 import { Onboarding } from './screens/Onboarding';
 import { PostDetail } from './screens/PostDetail';
+import { FollowList } from './screens/FollowList';
 import { Profile } from './screens/Profile';
+import { UserProfile } from './screens/UserProfile';
 import { ReelsComingSoon } from './screens/ReelsComingSoon';
 import { Settings } from './screens/Settings';
+import { StoryNew } from './screens/StoryNew';
 import { SignUp } from './screens/SignUp';
 import { VerifyCode } from './screens/VerifyCode';
 
@@ -26,9 +31,12 @@ function Splash() {
 /** Signed in with a finished profile; otherwise send to sign-in or onboarding. */
 function RequireAuth() {
   const { status, me } = useAuth();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   if (status === 'loading') return <Splash />;
-  if (status === 'signedOut' || !me) return <Navigate to="/welcome" replace />;
+  if (status === 'signedOut' || !me) {
+    rememberReturnTo(pathname + search); // e.g. a shared post link: go there after sign-in
+    return <Navigate to="/welcome" replace />;
+  }
   if (!me.profileComplete && pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
   return <Outlet />;
 }
@@ -39,8 +47,17 @@ function GuestOnly() {
   return status === 'signedIn' ? <Navigate to="/" replace /> : <Outlet />;
 }
 
+/** Each screen opens at the top. Home is the exception: it puts you back where you were in the feed. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useLayoutEffect(() => { if (pathname !== '/') window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 export function App() {
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       <Route element={<GuestOnly />}>
         <Route path="/welcome" element={<SignUp />} />
@@ -54,6 +71,7 @@ export function App() {
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/create" element={<Compose />} />
+          <Route path="/story/new" element={<StoryNew />} />
           <Route path="/post/:id" element={<PostDetail />} />
           <Route path="/groups/new" element={<GroupNew />} />
           <Route path="/groups/:id" element={<GroupPage />} />
@@ -68,6 +86,9 @@ export function App() {
           <Route path="today" element={<Today />} />
           <Route path="reels" element={<ReelsComingSoon />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="profile/followers" element={<FollowList which="followers" />} />
+          <Route path="profile/following" element={<FollowList which="following" />} />
+          <Route path="u/:id" element={<UserProfile />} />
           <Route path="notifications" element={<Placeholder title="Notifications" text="Likes, comments and replies will show here." />} />
           <Route path="messages" element={<Placeholder title="Messages" text="End-to-end encrypted chat arrives in v0.2." />} />
         </Route>
@@ -75,5 +96,6 @@ export function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
