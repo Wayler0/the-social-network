@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { InstallHelp } from '../components/InstallHelp';
 import { ApiError, deleteMe } from '../lib/api';
 import { isModerator } from '../lib/admin';
 import { useAuth } from '../lib/auth';
 import { promptInstall, useInstallState } from '../lib/install';
+import { forgetLastEmail } from '../lib/last-email';
 import { APP_NAME } from '../config';
 
 /** Settings and account: log out and delete account (CLAUDE.md sections 4.1 and 10). */
@@ -23,6 +25,7 @@ export function Settings() {
     setError(null);
     try {
       await deleteMe();
+      forgetLastEmail();
       await signOut().catch(() => undefined);
       setMe(null);
       navigate('/welcome', { replace: true });
@@ -46,16 +49,12 @@ export function Settings() {
         {install === 'available' && (
           <button className="settings-row" onClick={() => void promptInstall()}>Install {APP_NAME} on this device</button>
         )}
-        {install === 'ios' && (
+        {(install === 'ios' || install === 'android-menu' || install === 'in-app') && (
           <>
             <button className="settings-row" onClick={() => setShowIosHelp((v) => !v)} aria-expanded={showIosHelp}>
-              Add {APP_NAME} to your Home Screen
+              {install === 'in-app' ? `Open ${APP_NAME} in your browser` : `Add ${APP_NAME} to your home screen`}
             </button>
-            {showIosHelp && (
-              <p className="muted install-help">
-                In Safari, tap <strong>Share</strong> (the square with an arrow), then <strong>Add to Home Screen</strong>.
-              </p>
-            )}
+            {showIosHelp && <p className="muted install-help"><InstallHelp state={install} /></p>}
           </>
         )}
         <a href="/privacy" className="settings-row">Privacy policy</a>

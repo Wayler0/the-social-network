@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { APP_SLUG } from '../config';
 import { Icon } from './Icon';
 
 const MAX_SCALE = 4;
@@ -13,7 +14,27 @@ const RESET: View = { scale: 1, x: 0, y: 0 };
  * Pinch or double-tap to zoom, drag to move a zoomed photo, wheel to zoom on desktop.
  * Close with the X, Escape, or the phone's Back button.
  */
-export function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
+/** Saves the photo to the device (Downloads on Android and desktop, Files/Photos on iPhone). */
+async function downloadPhoto(src: string, name: string): Promise<boolean> {
+  try {
+    const res = await fetch(src, { credentials: 'same-origin' });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${APP_SLUG}-${name}.${EXT[blob.type] ?? 'jpg'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return true;
+  } catch { return false; }
+}
+
+export function PhotoViewer({ src, alt, name = 'photo', onClose }: { src: string; alt: string; name?: string; onClose: () => void }) {
   const [view, setView] = useState<View>(RESET);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -21,6 +42,7 @@ export function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; o
   const pinch = useRef<{ dist: number; scale: number } | null>(null);
   const lastTap = useRef(0);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [saving, setSaving] = useState<'idle' | 'busy' | 'failed'>('idle');
 
   // Back button closes the viewer instead of leaving the page.
   useEffect(() => {
@@ -99,6 +121,11 @@ export function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; o
       <button ref={closeRef} type="button" className="photo-viewer-close" aria-label="Close photo" onClick={close}>
         <Icon name="close" />
       </button>
+      <button type="button" className="photo-viewer-save" aria-label="Download photo" disabled={saving === 'busy'}
+        onClick={async () => { setSaving('busy'); setSaving((await downloadPhoto(src, name)) ? 'idle' : 'failed'); }}>
+        <Icon name="download" />
+      </button>
+      {saving === 'failed' && <p className="photo-viewer-note" role="alert">Couldn’t download. Check your connection and try again.</p>}
       <div className="photo-viewer-stage"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
         onWheel={(e) => setView((v) => clamp({ ...v, scale: v.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15) }))}>

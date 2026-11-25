@@ -117,9 +117,9 @@ New students start as `memberType: "continuing"` and pick fresher/continuing/alu
 3. Right code → mark it consumed (in the same transaction, so it can't be used twice).
 4. No user with that email → create one: `campus_id` and `member_type` from the domain, `verified = true`, `verified_method = 'email_code'`, profile fields empty. `newUser: true`.
    Existing user → `newUser: false`. If `deleted_at` is set, treat as new (the old account stays deleted).
-5. Create a session: random 32-byte token (`crypto.randomBytes(32).toString('base64url')`), store **only** `sha256(token)` as `token_hash`, expires in **30 days**.
+5. Create a session: random 32-byte token (`crypto.randomBytes(32).toString('base64url')`), store **only** `sha256(token)` as `token_hash`, expires in **180 days**, moved forward each day the session is used (members sign in once per device; changed 25 Nov 2026 from 30 days).
 6. Set the cookie:
-   `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`
+   `hatua_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=15552000`
    (`Secure` off only when `NODE_ENV=development`; read the cookie name from config, not the app name in code).
 7. Rate limit: 200 verify attempts per IP per 10 minutes → `429` (see above: shared addresses).
 

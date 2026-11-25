@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { APP_SLUG, CAMPUSES } from '../config';
 import { allowedDomains, checkCampusEmail, emailErrorText } from '../lib/email';
 import { requestCode, ApiError } from '../lib/api';
+import { getLastEmail } from '../lib/last-email';
 
 /** Issue #1 — sign-up / sign-in: campus email only. Design: canvas screen 1. */
 export function SignUp() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(getLastEmail);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -36,7 +37,7 @@ export function SignUp() {
       <div className="auth-hero">
         <span className="wordmark">{APP_SLUG}<span>.</span></span>
         <h1 className="screen-title">Your campus, in one place.</h1>
-        <p>For the {CAMPUSES.map((c) => c.name).join(', ')} community: students, staff and alumni. Join with your campus email.</p>
+        <p>For the {CAMPUSES.map((c) => c.name).join(', ')} community: students, staff and alumni. Sign in or join with your campus email.</p>
       </div>
 
       <form className="auth-form" onSubmit={onSubmit} noValidate>

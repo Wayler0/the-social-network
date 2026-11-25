@@ -86,7 +86,7 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
             alt="" loading="lazy" decoding="async" />
         </button>
       )}
-      {viewing && post.image && <PhotoViewer src={post.image.url} alt="" onClose={() => setViewing(false)} />}
+      {viewing && post.image && <PhotoViewer src={post.image.url} alt="" name={post.id.slice(0, 8)} onClose={() => setViewing(false)} />}
 
       <footer className="post-actions">
         <button type="button" className={`action${post.likedByMe ? ' liked' : ''}`} aria-pressed={post.likedByMe}

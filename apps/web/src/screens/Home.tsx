@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { InstallBanner } from '../components/InstallBanner';
 import { PostCard } from '../components/PostCard';
 import { TodayBoard } from '../components/TodayBoard';
 import { TopBar } from '../components/TopBar';
@@ -81,6 +82,7 @@ export function Home() {
     <>
       <TopBar />
       <TodayBoard />
+      <InstallBanner />
       {status === 'loading' && <FeedSkeleton />}
       {status === 'refreshing' && <p className="feed-refreshing" role="status">Checking for new posts…</p>}
 

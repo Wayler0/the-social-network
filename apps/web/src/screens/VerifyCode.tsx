@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { requestCode, verifyCode, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { setLastEmail } from '../lib/last-email';
 import { takeReturnTo } from '../lib/return-to';
 
 const LENGTH = 6;
@@ -36,6 +37,7 @@ export function VerifyCode() {
     setError(null);
     try {
       await verifyCode(email!, code);
+      setLastEmail(email!);
       const me = await signIn();
       navigate(me && !me.profileComplete ? '/onboarding' : (takeReturnTo() ?? '/'), { replace: true });
     } catch (err) {

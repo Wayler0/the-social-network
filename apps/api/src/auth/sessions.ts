@@ -7,7 +7,12 @@ import type { Queryable } from '../images/store.js';
  * Sessions (docs/api-contract.md section 3). The cookie holds a random 32-byte token;
  * the database holds only sha256(token), so a copy of the database cannot sign anyone in.
  */
-export const SESSION_DAYS = 30;
+/**
+ * Members sign in once per device: a session lasts 180 days and moves forward each day it is
+ * used (session-check.ts), so only a device left unused for 180 days asks for a code again.
+ * "Log out", "log out everywhere", suspension and account deletion still end it at once.
+ */
+export const SESSION_DAYS = 180;
 const SESSION_SECONDS = SESSION_DAYS * 24 * 60 * 60;
 
 export const tokenHash = (token: string): Buffer => createHash('sha256').update(token).digest();

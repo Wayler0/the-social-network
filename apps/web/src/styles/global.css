@@ -328,4 +328,16 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .photo-viewer { position: fixed; inset: 0; z-index: 60; background: #000; }
 .photo-viewer-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .photo-viewer-stage img { max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; will-change: transform; -webkit-user-drag: none; }
+.photo-viewer-save { position: absolute; z-index: 1; top: max(12px, env(safe-area-inset-top)); right: 64px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+.photo-viewer-note { position: absolute; z-index: 1; left: 12px; right: 12px; bottom: max(16px, env(safe-area-inset-bottom)); margin: 0; padding: 10px 12px; border-radius: var(--radius-m); background: rgba(255, 255, 255, 0.16); color: #fff; font-size: 14px; text-align: center; }
 .photo-viewer-close { position: absolute; z-index: 1; top: max(12px, env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ---------- Install banner (Home) ---------- */
+.install-banner { margin: 8px 12px; padding: 10px 8px 10px 12px; border-radius: var(--radius-m); background: var(--violet-soft); }
+.install-banner-main { display: flex; align-items: center; gap: 10px; }
+.install-banner-main img { border-radius: 10px; flex: none; }
+.install-banner-main > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.install-banner-main strong { font-size: 14px; color: var(--ink); }
+.install-banner-main .muted { font-size: 12px; }
+.install-banner-btn { width: auto; height: 36px; padding: 0 14px; font-size: 14px; flex: none; }
+.install-banner-help { margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
