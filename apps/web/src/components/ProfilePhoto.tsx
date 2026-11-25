@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import { IMAGE_MAX_BYTES, IMAGE_TYPES, uploadImage } from '../lib/feed';
 import type { Me } from '../lib/profile';
 import { initials } from './Avatar';
+import { PhotoCropper } from './PhotoCropper';
 import { Sheet } from './Sheet';
 
 /** PATCH /api/me { photoImageId }: an id from POST /api/images sets the photo; null removes it. */
@@ -32,10 +33,22 @@ function usePhotoUpload() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
+  // A chosen photo opens the editor first (crop, zoom, rotate); only the edited square is uploaded.
+  const [editing, setEditing] = useState<File | null>(null);
+  const afterUpload = useRef<((ok: boolean) => void) | undefined>(undefined);
+
+  function choose(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    if (!IMAGE_TYPES.split(',').includes(file.type)) { setError('Choose a JPEG, PNG or WebP photo.'); return; }
+    // The editor shrinks it to 800 × 800, so big camera photos are fine here.
+    if (file.size > 4 * IMAGE_MAX_BYTES) { setError('That photo is too big. Choose a smaller one.'); return; }
+    setEditing(file);
+  }
+
   async function pick(file: File | undefined): Promise<boolean> {
     if (!file) return false;
     setError(null);
-    if (!IMAGE_TYPES.split(',').includes(file.type)) { setError('Choose a JPEG, PNG or WebP photo.'); return false; }
     if (file.size > IMAGE_MAX_BYTES) { setError('That photo is over 8 MB. Choose a smaller one.'); return false; }
     setPreview(URL.createObjectURL(file));
     setBusy(true);
@@ -61,8 +74,14 @@ function usePhotoUpload() {
   }
 
   const input = (onDone?: (ok: boolean) => void) => (
-    <input ref={fileRef} type="file" accept={IMAGE_TYPES} hidden
-      onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void pick(f).then((ok) => onDone?.(ok)); }} />
+    <>
+      <input ref={fileRef} type="file" accept={IMAGE_TYPES} hidden
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; afterUpload.current = onDone; choose(f); }} />
+      {editing && (
+        <PhotoCropper file={editing} onCancel={() => setEditing(null)}
+          onDone={(cropped) => { setEditing(null); void pick(cropped).then((ok) => afterUpload.current?.(ok)); }} />
+      )}
+    </>
   );
   return { me, fileRef, preview, busy, error, remove, input, choose: () => fileRef.current?.click() };
 }

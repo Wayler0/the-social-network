@@ -308,6 +308,7 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
       // Stories end now (their photos are among the images deleted below); reported ones stay for moderators.
       await tx.query(`update stories set image_id = null, deleted_at = coalesce(deleted_at, clock_timestamp()) where author_user_id = $1`, [userId]);
       await tx.query('delete from story_views where viewer_id = $1', [userId]);
+      await tx.query('delete from story_likes where user_id = $1', [userId]);
       await tx.query('delete from event_rsvps where user_id = $1', [userId]);   // events they created stay, like posts
       for (const table of ['notifications', 'push_subscriptions', 'push_outbox']) await tx.query(`delete from ${table} where user_id = $1`, [userId]);
       await tx.query('update notifications set actor_user_id = null where actor_user_id = $1', [userId]);

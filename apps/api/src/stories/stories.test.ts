@@ -56,7 +56,7 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     expect(res.statusCode).toBe(201);
     const story = res.json();
     expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers',
-      createdAt: expect.any(String), expiresAt: expect.any(String), seen: false, viewCount: 0 });
+      createdAt: expect.any(String), expiresAt: expect.any(String), seen: false, likedByMe: false, viewCount: 0, likeCount: 0 });
     expect(new Date(story.expiresAt).getTime() - new Date(story.createdAt).getTime()).toBe(24 * 3600 * 1000);
 
     await follows('brian', 'cynthia');
@@ -170,6 +170,29 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     expect((await as('cynthia', 'GET', '/api/stories')).json().items[0].stories[0].viewCount).toBe(2);
     expect((await as('brian', 'GET', `/api/stories/${id}/viewers`)).statusCode).toBe(403);
     expect((await as('esther', 'POST', `/api/stories/${id}/view`)).statusCode).toBe(404);   // cannot see it
+  });
+
+  it('likes: followers like and unlike (idempotent); not your own or ones you cannot see; only the author sees who', async () => {
+    const id = await post('cynthia', {});
+    await follows('brian', 'cynthia');
+    await follows('david', 'cynthia');
+    for (let i = 0; i < 2; i++) expect((await as('brian', 'PUT', `/api/stories/${id}/like`)).json()).toEqual({ liked: true });
+    await as('david', 'POST', `/api/stories/${id}/view`);
+    const brianRow = (await as('brian', 'GET', '/api/stories')).json().items.find((g: { isMine: boolean }) => !g.isMine);
+    expect(brianRow.stories[0]).toMatchObject({ likedByMe: true, seen: true });   // liking counts as a view
+    expect(brianRow.stories[0]).not.toHaveProperty('likeCount');                   // only the author gets counts
+
+    const viewers = (await as('cynthia', 'GET', `/api/stories/${id}/viewers`)).json();
+    expect(viewers).toMatchObject({ count: 2, likeCount: 1 });
+    expect(viewers.items[0]).toMatchObject({ id: U('brian'), liked: true });      // likers first
+    expect(viewers.items[1]).toMatchObject({ id: U('david'), liked: false });
+    expect((await as('cynthia', 'GET', '/api/stories')).json().items[0].stories[0]).toMatchObject({ likeCount: 1, viewCount: 2 });
+
+    expect((await as('brian', 'DELETE', `/api/stories/${id}/like`)).json()).toEqual({ liked: false });
+    expect((await as('brian', 'DELETE', `/api/stories/${id}/like`)).json()).toEqual({ liked: false });
+    expect((await as('cynthia', 'GET', `/api/stories/${id}/viewers`)).json().likeCount).toBe(0);
+    expect((await as('cynthia', 'PUT', `/api/stories/${id}/like`)).statusCode).toBe(400);   // your own
+    expect((await as('esther', 'PUT', `/api/stories/${id}/like`)).statusCode).toBe(404);    // cannot see it
   });
 
   it('delete: the author or an admin; others get 403', async () => {
