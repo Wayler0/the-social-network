@@ -9,6 +9,7 @@ import { badgesFor } from '../me/profile.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { activeRoles } from '../posts/shape.js';
 import { notBlocked, visibleGroup, visibleStory, type ViewerSql } from '../visibility.js';
+import { notify } from '../notifications/notify.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
 const V: ViewerSql = { id: '$1', campusId: '$2' };
@@ -120,6 +121,51 @@ const userParam = z.object({ userId: uuid });
  *   GET|PUT|DELETE /api/me/close-friends[/:userId]
  *   GET|PUT|DELETE /api/me/story-hidden[/:userId]
  */
+/**
+ * Who hears about a new story (same rules as visibleStory, written per follower so one query covers
+ * them all; stories.test.ts checks the two agree):
+ *   - a person's story: their followers who may see it — not hidden from it, close friends only for a
+ *     close-friends story, followed back when the author is under 18, followed by the student when the
+ *     follower is staff, and no block either way;
+ *   - an official (verified office) story: everyone on the campus who can use the app;
+ *   - club stories: nobody yet (their members see them in the row).
+ * One unread notification per author collects their later stories (notify collapses on target).
+ */
+export async function storyRecipients(db: Queryable, storyId: string): Promise<{ type: 'story' | 'office_story'; targetId: string; userIds: string[] } | null> {
+  const s = (await db.query<{ campus_id: string; author_user_id: string; author_office_id: string | null; author_group_id: string | null; audience: string; office_verified: boolean | null }>(
+    `select s.campus_id, s.author_user_id, s.author_office_id, s.author_group_id, s.audience, o.verified as office_verified
+       from stories s left join office_accounts o on o.id = s.author_office_id where s.id = $1`, [storyId])).rows[0];
+  if (!s || s.author_group_id) return null;
+  if (s.author_office_id) {
+    if (!s.office_verified) return null;
+    const { rows } = await db.query<{ id: string }>(
+      `select u.id from users u
+        where u.campus_id = $1 and u.deleted_at is null and u.verified and u.id <> $2
+          and not (u.suspended_at is not null and (u.suspended_until is null or u.suspended_until > clock_timestamp()))`,
+      [s.campus_id, s.author_user_id]);
+    return { type: 'office_story', targetId: s.author_office_id, userIds: rows.map((r) => r.id) };
+  }
+  const { rows } = await db.query<{ id: string }>(
+    `select v.id
+       from follows f join users v on v.id = f.follower_id
+       join users a on a.id = $2
+      where f.target_type = 'user' and f.target_id = $2 and v.campus_id = $1 and v.deleted_at is null
+        and not exists (select 1 from blocks b where (b.blocker_id = v.id and b.blocked_id = a.id) or (b.blocker_id = a.id and b.blocked_id = v.id))
+        and not exists (select 1 from story_hidden_from sh where sh.user_id = a.id and sh.hidden_user_id = v.id)
+        and ($3 = 'followers' or exists (select 1 from close_friends cf where cf.user_id = a.id and cf.friend_id = v.id))
+        and (a.is_under_18 is not true
+             or exists (select 1 from follows fb where fb.follower_id = a.id and fb.target_type = 'user' and fb.target_id = v.id))
+        and not (v.member_type = 'staff' and a.member_type in ('fresher', 'continuing')
+                 and not exists (select 1 from follows fb where fb.follower_id = a.id and fb.target_type = 'user' and fb.target_id = v.id))`,
+    [s.campus_id, s.author_user_id, s.audience]);
+  return { type: 'story', targetId: s.author_user_id, userIds: rows.map((r) => r.id) };
+}
+
+async function notifyNewStory(db: Queryable, appName: string, storyId: string, actorId: string): Promise<void> {
+  const r = await storyRecipients(db, storyId);
+  if (r && r.userIds.length) await notify(db, appName, { type: r.type, userIds: r.userIds, actorId, targetId: r.targetId });
+}
+
 export async function storyRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
   const notFound = (reply: FastifyReply) => fail(reply, 404, 'not_found', 'Story not found.');
@@ -179,6 +225,7 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
         `insert into stories (campus_id, author_user_id, author_office_id, author_group_id, body, image_id, audience, background, created_at, expires_at)
          values ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp() + make_interval(hours => $9)) returning id`,
         [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body ?? null, imageId, body.audience, body.background, STORY_HOURS]);
+      await notifyNewStory(tx, config.APP_NAME, rows[0]!.id, viewer.userId);
       return { ok: true, id: rows[0]!.id };
     });
     if (!outcome.ok) {

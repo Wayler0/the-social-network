@@ -3,7 +3,7 @@
  */
 import { call } from './api';
 
-export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled';
+export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled' | 'story' | 'office_story';
 export type Notification = {
   id: string; type: NotificationType; text: string; count: number;
   actor: { id: string; name: string; photoUrl: string | null } | null;
@@ -12,7 +12,7 @@ export type Notification = {
 };
 export type Inbox = { items: Notification[]; unreadCount: number; nextCursor: string | null };
 
-export const PUSH_KINDS = ['comments', 'answers', 'follows', 'groups', 'events', 'urgent'] as const;
+export const PUSH_KINDS = ['comments', 'answers', 'follows', 'groups', 'events', 'urgent', 'stories'] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];
 export type PushSettings = Record<PushKind, boolean>;
 

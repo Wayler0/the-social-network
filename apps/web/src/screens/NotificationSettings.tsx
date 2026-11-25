@@ -13,6 +13,7 @@ const LABELS: Record<PushKind, [string, string]> = {
   groups: ['Groups', 'Join requests for groups you run, and when you’re let in'],
   events: ['Events', 'When an event you’re going to is cancelled'],
   urgent: ['Urgent campus news', 'Urgent announcements from official offices'],
+  stories: ['New stories', 'From people you follow and official accounts'],
 };
 
 const DEVICE_TEXT: Record<Exclude<PushState, 'on' | 'off'>, string> = {

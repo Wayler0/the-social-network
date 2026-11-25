@@ -10,7 +10,7 @@ import { createSession } from '../auth/sessions.js';
 import { loadConfig } from '../config.js';
 import { seed, seedId } from '../seed.js';
 import { rollbackPool } from '../testing/rollback-pool.js';
-import { cleanupStories } from './routes.js';
+import { cleanupStories, storyRecipients } from './routes.js';
 
 /** Stories against the seed data (npm run test:db -w apps/api); each test rolled back. */
 const url = process.env.TEST_DATABASE_URL;
@@ -202,6 +202,60 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     expect((await as('cynthia', 'GET', `/api/stories/${id}/viewers`)).json().likeCount).toBe(0);
     expect((await as('cynthia', 'PUT', `/api/stories/${id}/like`)).statusCode).toBe(400);   // your own
     expect((await as('esther', 'PUT', `/api/stories/${id}/like`)).statusCode).toBe(404);    // cannot see it
+  });
+
+  // ---------------------------------------------------------------- notifications for new stories
+  const storyNotes = async (who: string) => (await client.query<{ type: string; count: number; target_id: string }>(
+    `select type, count, target_id from notifications where user_id = $1 and type in ('story', 'office_story') and read_at is null`, [U(who)])).rows;
+
+  it('new stories notify followers who can see them; more stories from the same person add to one notification', async () => {
+    await follows('brian', 'cynthia');
+    await follows('david', 'cynthia');
+    await client.query('delete from notifications');
+    await post('cynthia', {});
+    expect(await storyNotes('brian')).toEqual([{ type: 'story', count: 1, target_id: U('cynthia') }]);
+    await post('cynthia', { body: 'Second' });
+    expect(await storyNotes('brian')).toEqual([{ type: 'story', count: 2, target_id: U('cynthia') }]);
+    expect(await storyNotes('esther')).toEqual([]);     // does not follow
+    expect(await storyNotes('cynthia')).toEqual([]);    // not about your own story
+    const inbox = (await as('brian', 'GET', '/api/notifications')).json().items;
+    expect(inbox[0]).toMatchObject({ type: 'story', text: 'New story from someone you follow', url: '/', actor: { id: U('cynthia') } });
+  });
+
+  it('close-friends and hidden-from stories notify only who can see them; official stories notify everyone, without the poster', async () => {
+    await follows('brian', 'cynthia');
+    await follows('david', 'cynthia');
+    await as('cynthia', 'PUT', `/api/me/close-friends/${U('brian')}`);
+    await client.query('delete from notifications');
+    await post('cynthia', { audience: 'close_friends' });
+    expect((await storyNotes('brian')).length).toBe(1);
+    expect(await storyNotes('david')).toEqual([]);
+
+    await client.query('delete from notifications');
+    await as('cynthia', 'PUT', `/api/me/story-hidden/${U('david')}`);
+    await post('cynthia', {});
+    expect(await storyNotes('david')).toEqual([]);
+
+    await client.query('delete from notifications');
+    await post('felix', { officeId: O('dean') });
+    for (const who of ['amina', 'brian', 'esther']) expect(await storyNotes(who), who).toEqual([{ type: 'office_story', count: 1, target_id: O('dean') }]);
+    expect(await storyNotes('felix')).toEqual([]);
+    const inbox = (await as('amina', 'GET', '/api/notifications')).json().items;
+    expect(inbox[0]).toMatchObject({ type: 'office_story', text: 'New story from an official account', actor: null });
+  });
+
+  it('the people notified are exactly the people who can see the story (under-18, staff, blocks, close friends)', async () => {
+    const everyone = ['amina', 'brian', 'cynthia', 'david', 'esther', 'felix', 'grace', 'hassan'];
+    for (const a of everyone) for (const b of everyone) if (a !== b && (a.length + b.length) % 3 !== 0) await follows(a, b);
+    await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2) on conflict do nothing', [U('esther'), U('grace')]);
+    await as('grace', 'PUT', `/api/me/close-friends/${U('hassan')}`);
+    for (const [author, payload] of [['amina', {}], ['grace', {}], ['grace', { audience: 'close_friends' }], ['cynthia', {}]] as const) {
+      const id = await post(author, payload);
+      const r = await storyRecipients(client, id);
+      const canSee: string[] = [];
+      for (const who of everyone) if (who !== author && (await seen(who)).includes(id)) canSee.push(U(who));
+      expect(r!.userIds.slice().sort(), `${author} ${JSON.stringify(payload)}`).toEqual(canSee.sort());
+    }
   });
 
   it('delete: the author or an admin; others get 403', async () => {
