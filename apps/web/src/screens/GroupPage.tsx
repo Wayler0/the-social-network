@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { ContentMenu } from '../components/ContentMenu';
 import { EventCard } from '../components/EventCard';
@@ -27,7 +27,12 @@ export function GroupPage() {
   const navigate = useNavigate();
   const [group, setGroup] = useState<Group | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
-  const [tab, setTab] = useState<'posts' | 'announcements' | 'discussion' | 'events' | 'members' | 'requests'>('posts');
+  // ?tab=discussion (after posting there) opens that tab; otherwise the first tab.
+  const [search] = useSearchParams();
+  const startTab = search.get('tab');
+  const [tab, setTab] = useState<'posts' | 'announcements' | 'discussion' | 'events' | 'members' | 'requests'>(
+    startTab === 'discussion' || startTab === 'announcements' ? startTab : 'posts');
+  const [followBusy, setFollowBusy] = useState(false); // a follow request is in flight
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -62,9 +67,14 @@ export function GroupPage() {
   const admin = group.myRole === 'admin';
   const canPost = member && (group.posting === 'everyone' || admin);
   const club = group.kind === 'club';
-  const clubTab = tab === 'posts' ? 'announcements' : tab;
+  // An admins-only club has announcements but no member discussion.
+  const hasDiscussion = club && group.posting === 'everyone';
+  const clubTab = tab === 'posts' || (tab === 'discussion' && !hasDiscussion) ? 'announcements' : tab;
 
   async function toggleFollow() {
+    if (followBusy) return; // ignore taps while a request is in flight, so the button can't end up wrong
+    setFollowBusy(true);
+    setError(null);
     const before = group!;
     const on = !before.following;
     // Show it straight away; put it back if the server says no.
@@ -75,6 +85,8 @@ export function GroupPage() {
     } catch (err) {
       setGroup(before);
       setError(err instanceof ApiError ? err.message : 'Couldn’t update. Try again.');
+    } finally {
+      setFollowBusy(false);
     }
   }
 
@@ -112,8 +124,8 @@ export function GroupPage() {
           </p>
         )}
         {group.description && <p className="group-desc">{group.description}</p>}
-        {!club && group.posting === 'admins_only' && <p className="hint">Only admins post here.</p>}
-        {club && <p className="hint">Follow to get its announcements in your feed.{group.visibility === 'public' ? ' Join to take part in the discussion.' : ''}</p>}
+        {group.posting === 'admins_only' && <p className="hint">Only admins post here.</p>}
+        {club && group.canFollow && !group.following && <p className="hint">Follow to get its announcements in your feed.</p>}
 
         <div className="group-actions">
           {group.myStatus === 'none' && !group.isClassGroup && (
@@ -122,8 +134,9 @@ export function GroupPage() {
             </button>
           )}
           {group.myStatus === 'pending' && <button type="button" className="btn secondary" disabled>Request sent</button>}
-          {group.canFollow && (
-            <button type="button" className={`btn${group.following ? ' secondary' : ''}`} aria-pressed={group.following} onClick={() => void toggleFollow()}>
+          {(group.canFollow || group.following) && (
+            <button type="button" className={`btn${group.following ? ' secondary' : ''}`} aria-pressed={group.following}
+              disabled={followBusy} onClick={() => void toggleFollow()}>
               {group.following ? 'Following' : 'Follow'}
             </button>
           )}
@@ -139,7 +152,9 @@ export function GroupPage() {
         <>
           <div className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={clubTab === 'announcements'} className={clubTab === 'announcements' ? 'active' : ''} onClick={() => setTab('announcements')}>Announcements</button>
-            <button type="button" role="tab" aria-selected={clubTab === 'discussion'} className={clubTab === 'discussion' ? 'active' : ''} onClick={() => setTab('discussion')}>Discussion</button>
+            {hasDiscussion && (
+              <button type="button" role="tab" aria-selected={clubTab === 'discussion'} className={clubTab === 'discussion' ? 'active' : ''} onClick={() => setTab('discussion')}>Discussion</button>
+            )}
             <button type="button" role="tab" aria-selected={tab === 'events'} className={tab === 'events' ? 'active' : ''} onClick={() => setTab('events')}>Events</button>
             <button type="button" role="tab" aria-selected={tab === 'members'} className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Members</button>
             {admin && group.visibility === 'private' && (
@@ -147,7 +162,7 @@ export function GroupPage() {
             )}
           </div>
           {clubTab === 'announcements' && <GroupPosts key="ann" groupId={group.id} channel="announcements" empty="No announcements yet." />}
-          {clubTab === 'discussion' && <GroupPosts key="disc" groupId={group.id} channel="discussion" empty="No discussion yet. Start one." />}
+          {clubTab === 'discussion' && hasDiscussion && <GroupPosts key="disc" groupId={group.id} channel="discussion" empty="No discussion yet. Start one." />}
           {tab === 'events' && <GroupEvents groupId={group.id} canCreate={canPost} />}
           {tab === 'members' && <Members groupId={group.id} />}
           {tab === 'requests' && <Requests groupId={group.id} onApproved={() => setGroup((g) => (g && g.memberCount !== null ? { ...g, memberCount: g.memberCount + 1 } : g))} />}

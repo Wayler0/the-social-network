@@ -51,7 +51,9 @@ export function Compose() {
     try {
       const created = await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}), ...(announcement ? { announcement: true } : {}) });
       addPostToTop(created);
-      navigate(groupId ? `/groups/${groupId}` : '/', { replace: true });
+      // Back to the club tab the post went to (Discussion posts aren't on the Announcements tab).
+      const clubTab = created.group?.kind === 'club' ? (created.announcement ? '?tab=announcements' : '?tab=discussion') : '';
+      navigate(groupId ? `/groups/${groupId}${clubTab}` : '/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Your post didn’t send. Try again.');
       setPosting(false);

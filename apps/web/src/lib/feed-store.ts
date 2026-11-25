@@ -54,7 +54,8 @@ export function patchPost(post: Post) {
 }
 
 export function addPostToTop(post: Post) {
-  if (post.group) return; // group posts live in their group, not the campus feed
+  // Group posts live in their group; club announcements also reach the feed of members and followers.
+  if (post.group && !post.announcement) return;
   set({ ...state, posts: [post, ...state.posts.filter((p) => p.id !== post.id)] });
 }
 
