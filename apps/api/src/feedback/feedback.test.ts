@@ -72,6 +72,8 @@ describe.skipIf(!url)('Feedback (real database, seed data)', () => {
   it('admins read feedback without names; others get 403; it goes with the account', async () => {
     await as('brian', 'POST', '/api/feedback', { rating: 4, body: 'More clubs please' });
     await as('cynthia', 'POST', '/api/feedback', { rating: 2 });
+    // One test transaction = one now(): make Brian's older so 'newest first' has a fixed order.
+    await client.query(`update feedback set created_at = created_at - interval '1 minute' where user_id = $1`, [U('brian')]);
     const admin = await client.query<{ user_id: string }>(`select user_id from roles where role = 'admin' limit 1`);
     const adminKey = Object.entries({ hassan: U('hassan'), grace: U('grace') }).find(([, id]) => id === admin.rows[0]?.user_id)?.[0] ?? 'hassan';
     const res = (await as(adminKey, 'GET', '/api/admin/feedback')).json();
