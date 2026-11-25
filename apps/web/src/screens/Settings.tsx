@@ -86,8 +86,8 @@ export function Settings() {
         </button>
         {exporting === 'done' && <p className="muted install-help" role="status">Downloaded: a file with everything {APP_NAME} holds about you.</p>}
         {exporting !== 'idle' && exporting !== 'busy' && exporting !== 'done' && <p className="error install-help" role="alert">{exporting}</p>}
-        <a href="/privacy" className="settings-row">Privacy policy</a>
-        <a href="/terms" className="settings-row">Terms and community guidelines</a>
+        <Link to="/privacy" className="settings-row">Privacy policy</Link>
+        <Link to="/terms" className="settings-row">Terms and community guidelines</Link>
         <button className="settings-row" onClick={() => void signOut().then(() => navigate('/welcome', { replace: true }))}>Log out</button>
 
         <div className="danger-zone">
