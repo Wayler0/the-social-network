@@ -486,6 +486,11 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .announce-pill { margin-right: 6px; padding: 1px 7px; font-size: 10px; vertical-align: 1px; }
 .post-group-link { color: inherit; font-weight: 600; text-decoration: none; }
 
+/* ---------- Story likes ---------- */
+.story-foot-end { display: flex; justify-content: flex-end; }
+.story-like { width: 52px; height: 52px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+.story-like.liked { color: var(--coral); }
+.viewer-liked { color: var(--coral); display: inline-flex; flex: none; }
 /* ---------- Profile photo ---------- */
 .photo-edit { display: flex; align-items: center; gap: 16px; padding: 4px 0 20px; }
 .photo-edit-avatar { padding: 0; border: 0; background: none; border-radius: 50%; flex: none; }
