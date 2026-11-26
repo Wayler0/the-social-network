@@ -26,7 +26,7 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   { q: 'How do I find people and groups?',
     a: <>Tap the search icon on Home, or the search box in Discover. Search finds names, groups, posts and questions, never emails or registration numbers.</> },
   { q: 'Where are messages?',
-    a: <>Private chat is coming in the next version. It will be end-to-end encrypted, so only you and the person you’re talking to can read it.</> },
+    a: <>Private chat is coming in January. It will be end-to-end encrypted, so only you and the person you’re talking to can read it.</> },
   { q: 'How do I install the app?',
     a: <>On Android, tap <strong>Install</strong> when the banner appears, or use the browser menu and choose <em>Install app</em> or <em>Add to Home screen</em>. On iPhone, tap Share, then <em>Add to Home Screen</em>.</> },
   { q: 'What happens to my account when I graduate?',
