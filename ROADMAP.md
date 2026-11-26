@@ -34,6 +34,8 @@
 - **Clearer error messages.**
 - **Help page:** a short FAQ, linked from Settings.
 
+**Chat: January 2027** (DECIDED 26 Nov). Until then there's no Messages icon; the Help page says chat is coming.
+
 **Emergency button** (migration 028): Settings → Emergency help, or the Discover tile.
 - **Numbers:** tap-to-call, stored on the campus row (999 and 112 until the real campus numbers are added; see `docs/HANDOVER.md`).
 - **Alert campus safety:** an optional message, a confirm step, then an alert to moderators, admins and safety offices (notification and push). They handle it in Admin → Alerts.

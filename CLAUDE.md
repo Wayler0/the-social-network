@@ -51,7 +51,7 @@ Expected size: ~20,000 members at launch, growing with each intake and as alumni
 1. **Accounts, verification & profiles** — sign up, prove Tharaka membership (section 5), member type, course, year, profile photo, delete account (in app and on the web), data export.
 2. **Feed & posts** — text, images, likes, comments. Report and block on everything. Anyone verified can post; all members see feed posts (including staff posts).
 3. **Groups** — any member can create one: public (any member can join) or private (approval/invite). Students can make **student-only** groups that staff cannot see or join. Auto-created groups per course and year. Group admins moderate their group.
-4. **One-to-one chat** — direct messages, message requests from strangers, block, report a conversation.
+4. **One-to-one chat** — direct messages, message requests from strangers, block, report a conversation. **DECIDED 26 Nov 2026: ships in January 2027** (end-to-end encrypted, after the library choice and a security review); until then the app shows no Messages icon.
 5. **Ask a Senior** — freshers ask anything (hostels, offices, lecturers, where things are); continuing students and alumni answer; answers stay searchable. Askers may hide their name from other students (moderators can still see who asked). No fully anonymous posting anywhere else.
 6. **Campus map & places search** — see section 7.
 7. **Today board & official announcements** — when a member opens the app for the first time each day, they see pinned announcements from verified office accounts (departments, offices, student council). Each has an expiry date; limit on how many can be pinned at once; urgent vs normal (urgent always shows, normal can be collapsed).
