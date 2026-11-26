@@ -34,6 +34,11 @@
 - **Clearer error messages.**
 - **Help page:** a short FAQ, linked from Settings.
 
+**Emergency button** (migration 028): Settings → Emergency help, or the Discover tile.
+- **Numbers:** tap-to-call, stored on the campus row (999 and 112 until the real campus numbers are added; see `docs/HANDOVER.md`).
+- **Alert campus safety:** an optional message, a confirm step, then an alert to moderators, admins and safety offices (notification and push). They handle it in Admin → Alerts.
+- **No location is sent.**
+
 **Keep access after graduating** (`feat/dark-mode` branch, migration 027): Settings → "Keep access after graduating" links a personal email (with a code). After graduating, the sign-in screen offers "Graduated? Sign in with your linked personal email".
 - It never creates accounts.
 - Students who answer "I've graduated" in the year check are sent to link one.

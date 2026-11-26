@@ -12,7 +12,7 @@ import { APP_SLUG } from '../config';
 
 const ICONS: Record<NotificationType, IconName> = {
   comment: 'comment', answer: 'question', follow: 'profile', group_request: 'people', group_approved: 'people', event_cancelled: 'calendar',
-  story: 'plus', office_story: 'megaphone',
+  story: 'plus', office_story: 'megaphone', emergency: 'alert',
 };
 const DISMISS_KEY = `${APP_SLUG}.pushPromptDismissed`;
 

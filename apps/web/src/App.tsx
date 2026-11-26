@@ -16,6 +16,7 @@ import { Events } from './screens/Events';
 import { Discover } from './screens/Discover';
 import { Search } from './screens/Search';
 import { Help } from './screens/Help';
+import { Emergency } from './screens/Emergency';
 import { PersonalEmail } from './screens/PersonalEmail';
 import { GroupPage } from './screens/GroupPage';
 import { GroupNew, Groups } from './screens/Groups';
@@ -107,6 +108,7 @@ export function App() {
           <Route path="/story/:id" element={<StoryPage />} />
           <Route path="/people" element={<FollowSuggestions />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/emergency" element={<Emergency />} />
           <Route path="/settings/personal-email" element={<PersonalEmail />} />
           <Route path="/post/:id" element={<PostDetail />} />
           <Route path="/groups/new" element={<GroupNew />} />

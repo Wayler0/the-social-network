@@ -70,6 +70,7 @@ export function Settings() {
       </header>
       <div className="screen settings">
         <p className="muted">Signed in as <strong style={{ color: 'var(--text)' }}>{me?.email}</strong></p>
+        <Link to="/emergency" className="settings-row emergency-row">Emergency help</Link>
         <Link to="/profile/edit" className="settings-row">Edit profile</Link>
         <Link to="/settings/notifications" className="settings-row">Notifications</Link>
         <Appearance />

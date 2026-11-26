@@ -71,7 +71,16 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 
 - **Manual settings still empty:**
   - `CONTACT_EMAIL` in `apps/web/src/config.ts`: the team address, shown in the privacy policy.
-  - Emergency numbers: they go on the campus row once the emergency button is built.
+  - **Emergency numbers** (built 25 Nov, migration 028): they live on the campus row and start as 999 and 112. On the server (vm-app, in `/opt/nextup`), replace the list with the real numbers:
+    ```sh
+    docker compose exec hatua-api node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query(\`update campuses set emergency_contacts = '[{\"label\":\"Campus security\",\"phone\":\"+2547XXXXXXXX\"},{\"label\":\"Health centre\",\"phone\":\"+2547XXXXXXXX\"},{\"label\":\"Police, fire and ambulance\",\"phone\":\"999\"},{\"label\":\"Emergency (any network)\",\"phone\":\"112\"}]'\`)).then(()=>c.end())"
+    ```
+    Or in `psql` on vm-db:
+    ```sql
+    update campuses set emergency_contacts = '[{"label":"Campus security","phone":"+2547XXXXXXXX"},{"label":"Health centre","phone":"+2547XXXXXXXX"},{"label":"Police, fire and ambulance","phone":"999"},{"label":"Emergency (any network)","phone":"112"}]';
+    ```
+    The order is the order shown in the app.
+  - **Who gets emergency alerts:** moderators and admins always. To add a safety office (security, health centre, Dean of Students), create it in Admin → Offices, add its members, then mark it: `update office_accounts set safety = true where name = 'Security office';`.
 - **Alumni:** linking a personal email is built (migration 027). Alumni who already graduated without one still need the reg number plus vouching or admin route.
 
 0. **Cloudflare (decided 25 Nov): keep the proxy** for attack protection, and fix what it breaks (Kim; details in `deploy/KENET.md`, To do 1).

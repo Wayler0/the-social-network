@@ -3,11 +3,11 @@
  */
 import { call } from './api';
 
-export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled' | 'story' | 'office_story';
+export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled' | 'story' | 'office_story' | 'emergency';
 export type Notification = {
   id: string; type: NotificationType; text: string; count: number;
   actor: { id: string; name: string; photoUrl: string | null } | null;
-  target: { type: 'post' | 'question' | 'user' | 'group' | 'event'; id: string };
+  target: { type: 'post' | 'question' | 'user' | 'group' | 'event' | 'office' | 'emergency'; id: string };
   url: string; read: boolean; createdAt: string;
 };
 export type Inbox = { items: Notification[]; unreadCount: number; nextCursor: string | null };
@@ -47,7 +47,7 @@ export function describe(n: Pick<Notification, 'type' | 'count' | 'actor' | 'tex
 }
 
 /** Paths this app has a screen for; a notification pointing elsewhere is not a link. */
-const SCREENS = [/^\/post\/[^/]+$/, /^\/ask\/[^/]+$/, /^\/groups\/[^/]+$/, /^\/events\/[^/]+$/, /^\/today$/, /^\/notifications$/];
+const SCREENS = [/^\/post\/[^/]+$/, /^\/ask\/[^/]+$/, /^\/groups\/[^/]+$/, /^\/events\/[^/]+$/, /^\/today$/, /^\/notifications$/, /^\/admin\?tab=alerts$/];
 export const hasScreen = (url: string) => SCREENS.some((r) => r.test(url));
 
 // ---------------------------------------------------------------- Web Push in this browser

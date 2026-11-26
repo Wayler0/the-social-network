@@ -555,6 +555,20 @@ Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipi
 - **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
 - **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
 
+## 18. Emergency button (MVP item 8) ✅
+
+| Call | Who | Response |
+|---|---|---|
+| `GET /api/emergency` | any member | `{ contacts: [{ label, phone }] }` from `campuses.emergency_contacts` |
+| `POST /api/emergency` `{ message? }` (≤ 500) | any member; 3 per hour | `201 { id, contacts }` |
+| `GET /api/admin/emergencies?status=open\|handled` | moderators, admins | `{ items: [{ id, message, status, createdAt, handledAt, handledBy, member }] }` |
+| `POST /api/admin/emergencies/:id/handled` | moderators, admins | `204` (written to the admin log) |
+
+**Who is alerted:** moderators, admins, and current members of offices with `safety = true`.
+- They get an `emergency` notification.
+- They also get a push, even if they turned urgent pushes off.
+- They see who sent the alert. No location is sent (migration 028).
+
 ## 17. Keep access after graduating ✅
 
 The student email closes right after graduation, so a member links a personal email while the campus one still works.
