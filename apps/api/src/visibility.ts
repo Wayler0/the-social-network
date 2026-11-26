@@ -112,7 +112,12 @@ export function visibleAnswer(alias: string, v: ViewerSql): string {
  *       · an under-18 author follows the viewer back (child safety);
  *       · a staff viewer of a student's story is followed by that student (student-first rule).
  */
-export function visibleStory(alias: string, v: ViewerSql): string {
+/** The original of a reshared story: visible by the same rules. Originals are never reshares, so one level. */
+function visibleOriginal(alias: string, v: ViewerSql): string {
+  return visibleStory(alias, v, false);
+}
+
+export function visibleStory(alias: string, v: ViewerSql, followReshare = true): string {
   check(v, alias);
   const a = `${alias}.author_user_id`;
   const authorFollowsViewer = `exists (select 1 from follows sf where sf.follower_id = ${a} and sf.target_type = 'user' and sf.target_id = ${v.id})`;
@@ -137,7 +142,11 @@ export function visibleStory(alias: string, v: ViewerSql): string {
                  and (not (${viewerIsStaff(v)}
                            and exists (select 1 from users su where su.id = ${a} and su.member_type in ('fresher', 'continuing')))
                       or ${authorFollowsViewer}))
-           ))`;
+           )
+           and ${followReshare
+             ? `(${alias}.reshared_from_story_id is null
+                or exists (select 1 from stories rs where rs.id = ${alias}.reshared_from_story_id and ${visibleOriginal('rs', v)}))`
+             : `${alias}.reshared_from_story_id is null`})`;
 }
 
 /**

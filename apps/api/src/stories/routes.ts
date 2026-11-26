@@ -9,6 +9,7 @@ import { badgesFor } from '../me/profile.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { activeRoles } from '../posts/shape.js';
 import { notBlocked, visibleGroup, visibleStory, type ViewerSql } from '../visibility.js';
+import { notify } from '../notifications/notify.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
 const V: ViewerSql = { id: '$1', campusId: '$2' };
@@ -25,6 +26,7 @@ const ROW_LIMIT = 500;
 
 type StoryRow = {
   id: string; body: string | null; audience: 'followers' | 'close_friends'; background: string; created_at: Date; expires_at: Date;
+  reshared_from_name: string | null;
   author_user_id: string; author_name: string | null; author_photo: string | null; author_roles: string[];
   office_id: string | null; office_name: string | null; office_photo: string | null;
   group_id: string | null; group_name: string | null; group_verified: boolean | null;
@@ -33,7 +35,8 @@ type StoryRow = {
 };
 
 const STORY_SELECT = `
-  select s.id, s.body, s.audience, s.background, s.created_at, s.expires_at,
+  select s.id, coalesce(rs.body, s.body) as body, s.audience, coalesce(rs.background, s.background) as background, s.created_at, s.expires_at,
+         case when rs.id is not null then coalesce(ro.name, rg.name, ru.name) end as reshared_from_name,
          s.author_user_id, au.name as author_name, au.photo_url as author_photo, ${activeRoles('au.id')} as author_roles,
          o.id as office_id, o.name as office_name, o.photo_url as office_photo,
          g.id as group_id, g.name as group_name, (g.club_verified_at is not null) as group_verified,
@@ -46,7 +49,11 @@ const STORY_SELECT = `
     join users au on au.id = s.author_user_id
     left join office_accounts o on o.id = s.author_office_id
     left join groups g on g.id = s.author_group_id
-    left join images i on i.id = s.image_id`;
+    left join stories rs on rs.id = s.reshared_from_story_id            -- a reshare shows the original
+    left join users ru on ru.id = rs.author_user_id
+    left join office_accounts ro on ro.id = rs.author_office_id
+    left join groups rg on rg.id = rs.author_group_id
+    left join images i on i.id = coalesce(rs.image_id, s.image_id)`;
 
 type Kind = 'me' | 'office' | 'club' | 'user';
 const KIND_ORDER: Record<Kind, number> = { me: 0, office: 1, club: 2, user: 3 };
@@ -65,7 +72,10 @@ function storyBody(s: StoryRow) {
   return {
     id: s.id, body: s.body,
     image: s.image_path ? { ...imageUrls(s.image_path), width: s.image_width, height: s.image_height } : null,
-    audience: s.audience, background: s.background, createdAt: iso(s.created_at), expiresAt: iso(s.expires_at), seen: s.seen,
+    audience: s.audience, background: s.background,
+    /** Shared from someone else's story: who it is from (credit). */
+    resharedFrom: s.reshared_from_name !== null ? { name: s.reshared_from_name } : null,
+    createdAt: iso(s.created_at), expiresAt: iso(s.expires_at), seen: s.seen,
     likedByMe: s.liked_by_me,
     ...(s.view_count !== null ? { viewCount: s.view_count } : {}),
     ...(s.like_count !== null ? { likeCount: s.like_count } : {}),
@@ -120,6 +130,51 @@ const userParam = z.object({ userId: uuid });
  *   GET|PUT|DELETE /api/me/close-friends[/:userId]
  *   GET|PUT|DELETE /api/me/story-hidden[/:userId]
  */
+/**
+ * Who hears about a new story (same rules as visibleStory, written per follower so one query covers
+ * them all; stories.test.ts checks the two agree):
+ *   - a person's story: their followers who may see it — not hidden from it, close friends only for a
+ *     close-friends story, followed back when the author is under 18, followed by the student when the
+ *     follower is staff, and no block either way;
+ *   - an official (verified office) story: everyone on the campus who can use the app;
+ *   - club stories: nobody yet (their members see them in the row).
+ * One unread notification per author collects their later stories (notify collapses on target).
+ */
+export async function storyRecipients(db: Queryable, storyId: string): Promise<{ type: 'story' | 'office_story'; targetId: string; userIds: string[] } | null> {
+  const s = (await db.query<{ campus_id: string; author_user_id: string; author_office_id: string | null; author_group_id: string | null; audience: string; office_verified: boolean | null }>(
+    `select s.campus_id, s.author_user_id, s.author_office_id, s.author_group_id, s.audience, o.verified as office_verified
+       from stories s left join office_accounts o on o.id = s.author_office_id where s.id = $1`, [storyId])).rows[0];
+  if (!s || s.author_group_id) return null;
+  if (s.author_office_id) {
+    if (!s.office_verified) return null;
+    const { rows } = await db.query<{ id: string }>(
+      `select u.id from users u
+        where u.campus_id = $1 and u.deleted_at is null and u.verified and u.id <> $2
+          and not (u.suspended_at is not null and (u.suspended_until is null or u.suspended_until > clock_timestamp()))`,
+      [s.campus_id, s.author_user_id]);
+    return { type: 'office_story', targetId: s.author_office_id, userIds: rows.map((r) => r.id) };
+  }
+  const { rows } = await db.query<{ id: string }>(
+    `select v.id
+       from follows f join users v on v.id = f.follower_id
+       join users a on a.id = $2
+      where f.target_type = 'user' and f.target_id = $2 and v.campus_id = $1 and v.deleted_at is null
+        and not exists (select 1 from blocks b where (b.blocker_id = v.id and b.blocked_id = a.id) or (b.blocker_id = a.id and b.blocked_id = v.id))
+        and not exists (select 1 from story_hidden_from sh where sh.user_id = a.id and sh.hidden_user_id = v.id)
+        and ($3 = 'followers' or exists (select 1 from close_friends cf where cf.user_id = a.id and cf.friend_id = v.id))
+        and (a.is_under_18 is not true
+             or exists (select 1 from follows fb where fb.follower_id = a.id and fb.target_type = 'user' and fb.target_id = v.id))
+        and not (v.member_type = 'staff' and a.member_type in ('fresher', 'continuing')
+                 and not exists (select 1 from follows fb where fb.follower_id = a.id and fb.target_type = 'user' and fb.target_id = v.id))`,
+    [s.campus_id, s.author_user_id, s.audience]);
+  return { type: 'story', targetId: s.author_user_id, userIds: rows.map((r) => r.id) };
+}
+
+async function notifyNewStory(db: Queryable, appName: string, storyId: string, actorId: string): Promise<void> {
+  const r = await storyRecipients(db, storyId);
+  if (r && r.userIds.length) await notify(db, appName, { type: r.type, userIds: r.userIds, actorId, targetId: r.targetId });
+}
+
 export async function storyRoutes(app: FastifyInstance, { config, db }: { config: Config; db: Db }) {
   useContractErrors(app);
   const notFound = (reply: FastifyReply) => fail(reply, 404, 'not_found', 'Story not found.');
@@ -179,6 +234,7 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
         `insert into stories (campus_id, author_user_id, author_office_id, author_group_id, body, image_id, audience, background, created_at, expires_at)
          values ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp() + make_interval(hours => $9)) returning id`,
         [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body ?? null, imageId, body.audience, body.background, STORY_HOURS]);
+      await notifyNewStory(tx, config.APP_NAME, rows[0]!.id, viewer.userId);
       return { ok: true, id: rows[0]!.id };
     });
     if (!outcome.ok) {
@@ -187,6 +243,55 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
         return fail(reply, 429, 'rate_limited', `You have posted a lot of stories today. Try again in ${waitText(outcome.wait)}.`, { retryAfterSeconds: outcome.wait });
       }
       return fail(reply, outcome.status, outcome.error, outcome.message);
+    }
+    const { rows } = await db.query<StoryRow>(`${STORY_SELECT} where s.id = $3 and s.campus_id = $2`, [viewer.userId, viewer.campusId, outcome.id]);
+    return reply.code(201).send(storyBody(rows[0]!));
+  });
+
+  // ---- GET /api/stories/:id   one story, for a shared link: { author, isMine, story }; 404 if you may not see it
+  app.get('/api/stories/:id', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    const { userId, campusId } = req.auth!;
+    const { rows } = await db.query<StoryRow>(`${STORY_SELECT} where s.id = $3 and ${visibleStory('s', V)}`, [userId, campusId, params.data.id]);
+    const s = rows[0];
+    if (!s) return notFound(reply);
+    const o = owner(s, userId);
+    return { author: o.author, isMine: o.kind === 'me', story: storyBody(s) };
+  });
+
+  // ---- POST /api/stories/:id/reshare   add someone's story to your own, with credit. Not your own, not a
+  //      close-friends story. The reshare reaches your followers who may ALSO see the original, and goes
+  //      when the original goes. Resharing a reshare reshares the original.
+  app.post('/api/stories/:id/reshare', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    if (!(await requireCompleteProfile(db, req, reply))) return;
+    const viewer = req.auth!;
+    const outcome = await inTransaction(db, async (tx) => {
+      const original = (await tx.query<{ id: string; author_user_id: string; audience: string; root: string }>(
+        `select s.id, s.author_user_id, s.audience, coalesce(s.reshared_from_story_id, s.id) as root
+           from stories s where s.id = $3 and ${visibleStory('s', V)}`,
+        [viewer.userId, viewer.campusId, params.data.id])).rows[0];
+      if (!original) return 'missing' as const;
+      const root = (await tx.query<{ author_user_id: string; audience: string; author_office_id: string | null; author_group_id: string | null }>(
+        'select author_user_id, audience, author_office_id, author_group_id from stories where id = $1', [original.root])).rows[0]!;
+      if (root.author_user_id === viewer.userId && !root.author_office_id && !root.author_group_id) return 'own' as const;
+      if (root.audience !== 'followers') return 'private' as const;
+      const wait = await takeRateLimits(tx, [{ bucket: 'story_user', key: viewer.userId, max: STORIES_PER_DAY, windowSeconds: 86_400 }]);
+      if (wait) return { wait, id: null };
+      const { rows } = await tx.query<{ id: string }>(
+        `insert into stories (campus_id, author_user_id, reshared_from_story_id, audience, created_at, expires_at)
+         values ($1, $2, $3, 'followers', clock_timestamp(), clock_timestamp() + make_interval(hours => $4)) returning id`,
+        [viewer.campusId, viewer.userId, original.root, STORY_HOURS]);
+      return { wait: 0, id: rows[0]!.id };
+    });
+    if (outcome === 'missing') return notFound(reply);
+    if (outcome === 'own') return fail(reply, 400, 'invalid_input', 'That’s your own story.');
+    if (outcome === 'private') return fail(reply, 403, 'forbidden', 'Close-friends stories can’t be shared.');
+    if (outcome.wait || !outcome.id) {
+      reply.header('Retry-After', String(outcome.wait));
+      return fail(reply, 429, 'rate_limited', `You have posted a lot of stories today. Try again in ${waitText(outcome.wait)}.`, { retryAfterSeconds: outcome.wait });
     }
     const { rows } = await db.query<StoryRow>(`${STORY_SELECT} where s.id = $3 and s.campus_id = $2`, [viewer.userId, viewer.campusId, outcome.id]);
     return reply.code(201).send(storyBody(rows[0]!));

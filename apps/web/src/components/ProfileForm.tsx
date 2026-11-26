@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, disputeMemberNumber, updateMe } from '../lib/api';
 import { useCampuses } from '../lib/campuses';
+import { getCourses, suggestCourses, type Course } from '../lib/community';
 import {
   MAX_YEAR_OF_STUDY, toPatch, validateProfile,
   type Me, type MemberTypeFull, type ProfileErrors, type ProfileInput, type StudentType,
@@ -31,6 +32,10 @@ function initial(me: Me): ProfileInput {
 export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel: string; onSaved: (me: Me) => void }) {
   // The campus's registration number format, from GET /api/campuses (the server checks it too).
   const campuses = useCampuses();
+  // Courses classmates already use: picking one puts you in the same class group (spelling must match).
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseFocus, setCourseFocus] = useState(false);
+  useEffect(() => { getCourses().then((r) => setCourses(r.items)).catch(() => { /* suggestions are a help, not required */ }); }, []);
   const campus = campuses?.find((c) => c.slug === me.campus.slug);
   const regFormat = campus ? { pattern: campus.regNumberPattern ?? null, example: campus.regNumberExample ?? null } : null;
   const example = regFormat?.example;
@@ -41,6 +46,7 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
   }, [me.memberNumberNeedsFix, example]);
   const staff = me.memberType === 'staff';
   const [p, setP] = useState<ProfileInput>(() => initial(me));
+  const courseMatches = suggestCourses(courses, p.course);
   // An old reg number in the wrong format: point at the field straight away.
   const [errors, setErrors] = useState<ProfileErrors>(() => (me.memberNumberNeedsFix
     ? { memberNumber: 'This registration number isn’t in the right format. Correct it, or leave it empty.' } : {}));
@@ -118,9 +124,22 @@ export function ProfileForm({ me, submitLabel, onSaved }: { me: Me; submitLabel:
         <div className="field">
           <label htmlFor="course">Course</label>
           <input id="course" className="input" value={p.course} maxLength={120} placeholder="e.g. BSc Computer Science"
+            autoComplete="off" onFocus={() => setCourseFocus(true)} onBlur={() => setTimeout(() => setCourseFocus(false), 150)}
             onChange={(e) => set('course', e.target.value)} aria-invalid={errors.course ? 'true' : 'false'} aria-describedby="course-msg" />
+          {courseFocus && courseMatches.length > 0 && (
+            <ul className="course-suggest" role="listbox" aria-label="Courses classmates use">
+              {courseMatches.map((c) => (
+                <li key={c.name}>
+                  <button type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { set('course', c.name); setCourseFocus(false); }}>
+                    <span>{c.name}</span><span className="muted">{c.members} member{c.members === 1 ? '' : 's'}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {errors.course ? <span id="course-msg" className="error">{errors.course}</span>
-            : <span id="course-msg" className="hint">We use it to add you to your class group.</span>}
+            : <span id="course-msg" className="hint">Pick your course from the list if it’s there, so you join the same class group as your classmates.</span>}
         </div>
       )}
 

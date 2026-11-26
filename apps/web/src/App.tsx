@@ -29,6 +29,7 @@ import { ReelsComingSoon } from './screens/ReelsComingSoon';
 import { Settings } from './screens/Settings';
 import { PrivacyPolicy, Terms } from './screens/Legal';
 import { StoryNew } from './screens/StoryNew';
+import { StoryPage } from './screens/StoryPage';
 import { SignUp } from './screens/SignUp';
 import { VerifyCode } from './screens/VerifyCode';
 
@@ -99,6 +100,7 @@ export function App() {
           <Route path="/settings/notifications" element={<NotificationSettings />} />
           <Route path="/create" element={<Compose />} />
           <Route path="/story/new" element={<StoryNew />} />
+          <Route path="/story/:id" element={<StoryPage />} />
           <Route path="/people" element={<FollowSuggestions />} />
           <Route path="/post/:id" element={<PostDetail />} />
           <Route path="/groups/new" element={<GroupNew />} />

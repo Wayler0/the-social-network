@@ -10,7 +10,7 @@ import { createSession } from '../auth/sessions.js';
 import { loadConfig } from '../config.js';
 import { seed, seedId } from '../seed.js';
 import { rollbackPool } from '../testing/rollback-pool.js';
-import { cleanupStories } from './routes.js';
+import { cleanupStories, storyRecipients } from './routes.js';
 
 /** Stories against the seed data (npm run test:db -w apps/api); each test rolled back. */
 const url = process.env.TEST_DATABASE_URL;
@@ -55,7 +55,7 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     const res = await as('cynthia', 'POST', '/api/stories', { body: '  Exam week, good luck!  ' });
     expect(res.statusCode).toBe(201);
     const story = res.json();
-    expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers', background: 'black',
+    expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers', background: 'black', resharedFrom: null,
       createdAt: expect.any(String), expiresAt: expect.any(String), seen: false, likedByMe: false, viewCount: 0, likeCount: 0 });
     expect(new Date(story.expiresAt).getTime() - new Date(story.createdAt).getTime()).toBe(24 * 3600 * 1000);
 
@@ -202,6 +202,103 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     expect((await as('cynthia', 'GET', `/api/stories/${id}/viewers`)).json().likeCount).toBe(0);
     expect((await as('cynthia', 'PUT', `/api/stories/${id}/like`)).statusCode).toBe(400);   // your own
     expect((await as('esther', 'PUT', `/api/stories/${id}/like`)).statusCode).toBe(404);    // cannot see it
+  });
+
+  // ---------------------------------------------------------------- notifications for new stories
+  const storyNotes = async (who: string) => (await client.query<{ type: string; count: number; target_id: string }>(
+    `select type, count, target_id from notifications where user_id = $1 and type in ('story', 'office_story') and read_at is null`, [U(who)])).rows;
+
+  it('new stories notify followers who can see them; more stories from the same person add to one notification', async () => {
+    await follows('brian', 'cynthia');
+    await follows('david', 'cynthia');
+    await client.query('delete from notifications');
+    await post('cynthia', {});
+    expect(await storyNotes('brian')).toEqual([{ type: 'story', count: 1, target_id: U('cynthia') }]);
+    await post('cynthia', { body: 'Second' });
+    expect(await storyNotes('brian')).toEqual([{ type: 'story', count: 2, target_id: U('cynthia') }]);
+    expect(await storyNotes('esther')).toEqual([]);     // does not follow
+    expect(await storyNotes('cynthia')).toEqual([]);    // not about your own story
+    const inbox = (await as('brian', 'GET', '/api/notifications')).json().items;
+    expect(inbox[0]).toMatchObject({ type: 'story', text: 'New story from someone you follow', url: '/', actor: { id: U('cynthia') } });
+  });
+
+  it('close-friends and hidden-from stories notify only who can see them; official stories notify everyone, without the poster', async () => {
+    await follows('brian', 'cynthia');
+    await follows('david', 'cynthia');
+    await as('cynthia', 'PUT', `/api/me/close-friends/${U('brian')}`);
+    await client.query('delete from notifications');
+    await post('cynthia', { audience: 'close_friends' });
+    expect((await storyNotes('brian')).length).toBe(1);
+    expect(await storyNotes('david')).toEqual([]);
+
+    await client.query('delete from notifications');
+    await as('cynthia', 'PUT', `/api/me/story-hidden/${U('david')}`);
+    await post('cynthia', {});
+    expect(await storyNotes('david')).toEqual([]);
+
+    await client.query('delete from notifications');
+    await post('felix', { officeId: O('dean') });
+    for (const who of ['amina', 'brian', 'esther']) expect(await storyNotes(who), who).toEqual([{ type: 'office_story', count: 1, target_id: O('dean') }]);
+    expect(await storyNotes('felix')).toEqual([]);
+    const inbox = (await as('amina', 'GET', '/api/notifications')).json().items;
+    expect(inbox[0]).toMatchObject({ type: 'office_story', text: 'New story from an official account', actor: null });
+  });
+
+  it('the people notified are exactly the people who can see the story (under-18, staff, blocks, close friends)', async () => {
+    const everyone = ['amina', 'brian', 'cynthia', 'david', 'esther', 'felix', 'grace', 'hassan'];
+    for (const a of everyone) for (const b of everyone) if (a !== b && (a.length + b.length) % 3 !== 0) await follows(a, b);
+    await client.query('insert into blocks (blocker_id, blocked_id) values ($1, $2) on conflict do nothing', [U('esther'), U('grace')]);
+    await as('grace', 'PUT', `/api/me/close-friends/${U('hassan')}`);
+    for (const [author, payload] of [['amina', {}], ['grace', {}], ['grace', { audience: 'close_friends' }], ['cynthia', {}]] as const) {
+      const id = await post(author, payload);
+      const r = await storyRecipients(client, id);
+      const canSee: string[] = [];
+      for (const who of everyone) if (who !== author && (await seen(who)).includes(id)) canSee.push(U(who));
+      expect(r!.userIds.slice().sort(), `${author} ${JSON.stringify(payload)}`).toEqual(canSee.sort());
+    }
+  });
+
+  // ---------------------------------------------------------------- sharing a story
+  it('reshare: credit and the original content; seen only by your followers who may also see the original', async () => {
+    const original = await post('cynthia', { body: 'Hackathon this weekend', background: 'violet' });
+    await follows('brian', 'cynthia');                 // brian sees cynthia's stories
+    await follows('david', 'brian');                   // david follows brian, but not cynthia
+    await follows('esther', 'brian');
+    await follows('esther', 'cynthia');                // esther follows both
+    const res = await as('brian', 'POST', `/api/stories/${original}/reshare`);
+    expect(res.statusCode, res.body).toBe(201);
+    const reshare = res.json();
+    expect(reshare).toMatchObject({ body: 'Hackathon this weekend', background: 'violet', resharedFrom: { name: expect.stringContaining('Cynthia') } });
+    expect(await seen('esther')).toContain(reshare.id);          // may see the original too
+    expect(await seen('david')).not.toContain(reshare.id);       // may not see cynthia's story: neither the reshare
+    expect((await as('esther', 'GET', `/api/stories/${reshare.id}`)).json()).toMatchObject({ author: { id: U('brian') }, story: { resharedFrom: expect.any(Object) } });
+    expect((await as('david', 'GET', `/api/stories/${reshare.id}`)).statusCode).toBe(404);
+
+    // Gone with the original (deleted, hidden or expired).
+    await as('cynthia', 'DELETE', `/api/stories/${original}`);
+    expect(await seen('esther')).not.toContain(reshare.id);
+    expect((await as('esther', 'GET', `/api/stories/${reshare.id}`)).statusCode).toBe(404);
+  });
+
+  it('reshare: not your own, not close friends, not what you cannot see; a reshare of a reshare points at the original', async () => {
+    const own = await post('cynthia', {});
+    expect((await as('cynthia', 'POST', `/api/stories/${own}/reshare`)).statusCode).toBe(400);
+    await follows('brian', 'cynthia');
+    await as('cynthia', 'PUT', `/api/me/close-friends/${U('brian')}`);
+    const close = await post('cynthia', { audience: 'close_friends' });
+    expect((await as('brian', 'POST', `/api/stories/${close}/reshare`)).statusCode).toBe(403);
+    expect((await as('david', 'POST', `/api/stories/${own}/reshare`)).statusCode).toBe(404);   // cannot see it
+
+    const first = (await as('brian', 'POST', `/api/stories/${own}/reshare`)).json().id;
+    await follows('esther', 'brian');
+    await follows('esther', 'cynthia');
+    const second = await as('esther', 'POST', `/api/stories/${first}/reshare`);
+    expect(second.statusCode).toBe(201);
+    const root = (await client.query('select reshared_from_story_id as r from stories where id = $1', [second.json().id])).rows[0].r;
+    expect(root).toBe(own);
+    // Official stories can be shared by anyone who sees them.
+    const official = await post('felix', { officeId: O('dean') });
+    expect((await as('amina', 'POST', `/api/stories/${official}/reshare`)).json()).toMatchObject({ resharedFrom: { name: expect.any(String) } });
   });
 
   it('delete: the author or an admin; others get 403', async () => {

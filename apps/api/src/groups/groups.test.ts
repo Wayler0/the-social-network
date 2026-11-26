@@ -45,6 +45,20 @@ describe.skipIf(!url)('groups (real database, seed data)', () => {
     (await client.query('select role, status from group_members where group_id = $1 and user_id = $2', [group, U(who)])).rows[0] ?? null;
 
   describe('listing and reading', () => {
+    it('suggests courses already in use, most used first, spellings that differ in capitals or spaces as one', async () => {
+      await client.query(`update users set course = '  bsc   computer science ' where id = $1`, [U('hassan')]);
+      const { items } = (await as('brian', 'GET', '/api/courses')).json() as { items: Array<{ name: string; members: number }> };
+      const cs = items.filter((c) => c.name.toLowerCase() === 'bsc computer science');
+      expect(cs).toHaveLength(1);                                   // one entry, not two spellings
+      expect(cs[0]!.name).toBe('BSc Computer Science');             // the most common spelling
+      const seedCs = (await client.query<{ n: number }>(
+        `select count(*)::int as n from users where lower(regexp_replace(btrim(course), '\\s+', ' ', 'g')) = 'bsc computer science'
+            and deleted_at is null and member_type in ('fresher', 'continuing', 'alumni')`)).rows[0]!.n;
+      expect(cs[0]!.members).toBe(seedCs);
+      expect(items[0]!.members).toBeGreaterThanOrEqual(items[items.length - 1]!.members);
+      expect(JSON.stringify(items)).not.toMatch(/@|seed/i);
+    });
+
     it('Discover lists groups newest first, without other people\'s class groups or groups hidden from the viewer', async () => {
       const found = ids(await as('felix', 'GET', '/api/groups?limit=50'));
       expect(found).toEqual(expect.arrayContaining([G('chess'), G('football'), G('roommates')]));

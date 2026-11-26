@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ApiError } from '../lib/api';
 import { timeAgo } from '../lib/feed';
-import { deleteStory, getStoryViewers, likeStory, markStorySeen, type StoryGroup, type StoryViewer as Viewer } from '../lib/stories';
+import { shareStory } from '../lib/share';
+import { deleteStory, getStoryViewers, likeStory, markStorySeen, reshareStory, type StoryGroup, type StoryViewer as Viewer } from '../lib/stories';
 import { closeLayer, useBackCloses } from '../lib/back-closes';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
@@ -28,7 +29,8 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
   const [si, setSi] = useState(() => (groups[start]!.isMine ? 0 : firstUnseen(start)));
   const [progress, setProgress] = useState(0);
   const [held, setHeld] = useState(false);
-  const [sheet, setSheet] = useState<'none' | 'viewers' | 'menu' | 'report' | 'delete'>('none');
+  const [sheet, setSheet] = useState<'none' | 'viewers' | 'menu' | 'report' | 'delete' | 'share'>('none');
+  const [note, setNote] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   // Likes made while the viewer is open (the stories list itself is not refetched).
   const [liked, setLiked] = useState<Record<string, boolean>>({});
@@ -132,6 +134,7 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
           <strong>{group.isMine ? 'Your story' : a.name}</strong>
           {a.type === 'office' && <span className="badge-pill strong">Official</span>}
           <span className="story-time">{timeAgo(story.createdAt)}{story.audience === 'close_friends' ? ' · Close friends' : ''}</span>
+          {story.resharedFrom && <span className="story-credit">Shared from {story.resharedFrom.name}</span>}
         </div>
         <button type="button" className="story-icon" aria-label="Story options" onClick={() => setSheet('menu')}><Icon name="more" /></button>
         <button type="button" className="story-icon" aria-label="Close stories" onClick={close}><Icon name="close" /></button>
@@ -169,7 +172,32 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
               </button>
             );
           })()}
+          <button type="button" className="story-like" aria-label="Share story" onClick={() => setSheet('share')}>
+            <Icon name="share" size={26} />
+          </button>
         </footer>
+      )}
+
+      {note && <p className="story-note" role="status">{note}</p>}
+      {sheet === 'share' && (
+        <Sheet title="Share story" onClose={() => setSheet('none')}>
+          {story.audience !== 'close_friends' && (
+            <button type="button" className="sheet-row" onClick={async () => {
+              try { await reshareStory(story.id); setNote('Added to your story'); } catch (err) {
+                setNote(err instanceof ApiError ? err.message : 'Couldn’t share. Try again.');
+              }
+              setSheet('none');
+              window.setTimeout(() => setNote(null), 2500);
+            }}>Add to my story</button>
+          )}
+          <button type="button" className="sheet-row" onClick={async () => {
+            const r = await shareStory(story.id);
+            setSheet('none');
+            if (r === 'copied') { setNote('Link copied. Only members who can see this story can open it.'); window.setTimeout(() => setNote(null), 2500); }
+          }}>Share link</button>
+          <p className="sheet-text muted">Only members who can already see this story will see it.</p>
+          <button type="button" className="sheet-row muted" onClick={() => setSheet('none')}>Cancel</button>
+        </Sheet>
       )}
 
       {sheet === 'menu' && (

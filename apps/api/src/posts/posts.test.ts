@@ -363,6 +363,38 @@ describe.skipIf(!url)('feed, posts, comments and likes (real database, seed data
     for (const p of feed.filter((x) => x.author.id === U('cynthia'))) expect(p.followingAuthor).toBe(true);
   });
 
+  // ---------------------------------------------------------------- sharing an event as a post
+  describe('event posts', () => {
+    const makeEvent = async (groupKey: string | null, title = 'Career fair') => (await client.query<{ id: string }>(
+      `insert into events (campus_id, created_by, group_id, title, location, starts_at)
+       values ($1, $2, $3, $4, 'Main hall', now() + interval '3 days') returning id`,
+      [campusId, U('felix'), groupKey ? G(groupKey) : null, title])).rows[0]!.id;
+
+    it('shares a campus event with or without a caption; the post carries the event card', async () => {
+      const ev = await makeEvent(null);
+      const res = await post('cynthia', { eventId: ev });
+      expect(res.statusCode, res.body).toBe(201);
+      expect(res.json()).toMatchObject({ body: '', event: { id: ev, title: 'Career fair', location: 'Main hall', cancelled: false, goingCount: 0, myRsvp: null } });
+      const withCaption = await post('cynthia', { eventId: ev, body: 'See you there!' });
+      expect(withCaption.json()).toMatchObject({ body: 'See you there!', event: { id: ev } });
+      expect((await wholeFeed('brian'))).toContain(res.json().id);
+      await client.query(`insert into event_rsvps (event_id, user_id, status) values ($1, $2, 'going')`, [ev, U('brian')]);
+      expect((await as('brian', 'GET', `/api/posts/${res.json().id}`)).json().event).toMatchObject({ goingCount: 1, myRsvp: 'going' });
+      // Deleted or hidden later: the post stays, the card goes.
+      await client.query('update events set deleted_at = now() where id = $1', [ev]);
+      expect((await as('brian', 'GET', `/api/posts/${res.json().id}`)).json().event).toBeNull();
+    });
+
+    it('only events open to the whole campus can be shared; normal posts still need text', async () => {
+      expect((await post('cynthia', { eventId: await makeEvent('football') })).statusCode).toBe(404);   // an ordinary group's event
+      await client.query(`update groups set kind = 'club', visibility = 'public', student_only = true where id = $1`, [G('study')]);
+      expect((await post('cynthia', { eventId: await makeEvent('study') })).statusCode).toBe(404);      // student-only club
+      expect((await post('cynthia', { eventId: randomUUID() })).statusCode).toBe(404);
+      expect((await post('cynthia', { body: '   ' })).json().error).toBe('invalid_input');
+      expect((await post('cynthia', {})).json().error).toBe('invalid_input');
+    });
+  });
+
   // ---------------------------------------------------------------- a member's posts
   describe('GET /api/users/:id/posts', () => {
     it('lists the member’s own posts newest first, not office posts, hidden ones or groups the viewer can’t see', async () => {

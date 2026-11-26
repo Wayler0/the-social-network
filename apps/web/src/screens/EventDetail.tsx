@@ -12,9 +12,10 @@ import {
   deleteEvent, getAttendees, getEvent, isOver, setRsvp, updateEvent, whenText,
   type Attendee, type CampusEvent, type Rsvp,
 } from '../lib/events';
-import { plural } from '../lib/feed';
+import { createPost, plural } from '../lib/feed';
+import { addPostToTop } from '../lib/feed-store';
 
-type Open = null | 'menu' | 'cancel' | 'delete' | Rsvp;
+type Open = null | 'menu' | 'cancel' | 'delete' | 'share' | Rsvp;
 
 /** One event: details, Going / Interested, who's coming, and the host's edit / cancel / delete. */
 export function EventDetail() {
@@ -24,6 +25,8 @@ export function EventDetail() {
   const [event, setEvent] = useState<CampusEvent | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
   const [open, setOpen] = useState<Open>(null);
+  const [caption, setCaption] = useState('');
+  const [shared, setShared] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,11 +119,35 @@ export function EventDetail() {
             </button>
           </div>
         )}
+        {!e.cancelled && !over && (
+          <button type="button" className="btn secondary share-event-btn" onClick={() => setOpen('share')}>
+            <Icon name="share" size={18} /> Share to feed
+          </button>
+        )}
+        {shared && <p className="notice" role="status">Shared to the campus feed.</p>}
         {over && !e.cancelled && <p className="hint">This event has ended.</p>}
         {error && <p className="error" role="alert">{error}</p>}
       </section>
 
       {e.description && <div className="event-desc"><h3>About</h3><p><RichText text={e.description} /></p></div>}
+
+      {open === 'share' && (
+        <Sheet title="Share to feed" onClose={() => setOpen(null)}>
+          <label htmlFor="event-caption" className="visually-hidden">Say something (optional)</label>
+          <textarea id="event-caption" className="input textarea" rows={3} maxLength={2000}
+            placeholder="Say something about it (optional)" value={caption} onChange={(ev) => setCaption(ev.target.value)} />
+          {error && <p className="error" role="alert">{error}</p>}
+          <button type="button" className="btn" disabled={busy} onClick={async () => {
+            setBusy(true); setError(null);
+            try {
+              addPostToTop(await createPost({ eventId: e.id, body: caption.trim() }));
+              setShared(true); setCaption(''); setOpen(null);
+            } catch (err) { setError(err instanceof ApiError ? err.message : 'Couldn’t share. Try again.'); }
+            finally { setBusy(false); }
+          }}>{busy ? 'Sharing…' : 'Share'}</button>
+          <button type="button" className="sheet-row muted" onClick={() => setOpen(null)}>Cancel</button>
+        </Sheet>
+      )}
 
       {open === 'menu' && (e.canManage ? (
         <Sheet title="Event options" onClose={() => setOpen(null)}>

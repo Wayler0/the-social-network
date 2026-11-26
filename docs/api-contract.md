@@ -216,7 +216,7 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 | Method & path | Body / query | Response |
 |---|---|---|
 | `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide posts plus announcements of clubs you follow or belong to (v0.2), newest first |
-| `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement? }` (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
+| `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement?, eventId? }` (`eventId` shares an event as the post: caption optional; only events everyone on the campus may see — campus-wide, an office's, or a public non-student-only club's — else `404`; migration 025) (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
 | `GET /api/posts/:id` | | Post |
 | `DELETE /api/posts/:id` | author or admin | `204` |
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
@@ -237,7 +237,8 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
   "office": null, "group": { "id": "…", "name": "Chess Club", "kind": "club" }, "announcement": false,
   "body": "…", "image": { "url": "/media/…/1080.webp", "width": 1080, "height": 1350 } ,
   "likeCount": 12, "commentCount": 3, "likedByMe": false, "myReaction": null, "reactions": { "like": 9, "love": 3 },
-  "savedByMe": false, "followingAuthor": false, "createdAt": "…" }
+  "savedByMe": false, "followingAuthor": false,
+  "event": null /* or { id, title, location, startsAt, cancelled, goingCount, myRsvp } for a shared event */, "createdAt": "…" }
 ```
 **Comment** `{ id, author, body, createdAt }`
 
@@ -330,6 +331,8 @@ Rules (code: `apps/api/src/safety/`):
 | `GET /api/groups/:id/members?limit&cursor` | Active members only: `{ items: [{ id, name, photoUrl, memberType, role, joinedAt }] }`, longest-standing first |
 | `PUT /api/groups/:id/members/:userId/role` | Admins: `{ role: "admin"\|"member" }` → `{ role }`. `409 last_admin` if it would leave no admin |
 | `DELETE /api/groups/:id/members/:userId` | Admins remove a member → `204`. Not other admins (demote first), not in class groups |
+
+`GET /api/courses` → `{ items: [{ name, members }] }`: courses members of your campus already use (students and alumni), most used first, at most 300. Spellings that differ only in capitals or spaces count as one, shown in the most common spelling. The profile form suggests them as you type, so classmates pick the same name and land in the same class group (fixes "we chose the same year but the class group has one member", 25 Nov).
 
 Posting into a group uses `POST /api/posts` with `groupId`; if the group's `posting` is `admins_only` (clubs), non-admins get `403`. Course/year groups are created and joined automatically from the profile (`syncClassGroup`, section 4): one private group per course and year per campus, named `<course> — Year <n>`. Course names match ignoring case and extra spaces, but "BSc CS" and "BSc Computer Science" are different courses — the profile screen should offer a fixed list.
 
@@ -472,6 +475,8 @@ Photo or text, gone after 24 hours (CLAUDE.md section 4, "Stories / status").
 | `POST /api/stories` | `{ body?, imageId?, audience?: "followers"\|"close_friends", background?: "black"\|"violet"\|"coral"\|"mint"\|"sunshine"\|"white" (default black; migration 022), officeId? \| groupId? }` → `201` Story. Photo or text needed (body up to 500). Finished profile; 30 a day |
 | `POST /api/stories/:id/view` | Mark seen → `204` (idempotent; your own views are not counted) |
 | `PUT /api/stories/:id/like` · `DELETE …` | Like or unlike a story you can see (not your own; `400`) → `{ liked }`, idempotent. Liking also counts as viewing. Only the author sees likes: `likeCount` on their own stories and `liked` on each viewer |
+| `GET /api/stories/:id` | One story for a shared link → `{ author, isMine, story }`; `404` if you may not see it or it has gone |
+| `POST /api/stories/:id/reshare` | Add someone's story to your own → `201` Story with `resharedFrom: { name }`. Not your own (`400`), not a close-friends story (`403`). The reshare copies nothing: it shows the original, reaches **only your followers who may also see the original**, and disappears with it. Resharing a reshare reshares the original. Counts toward 30 stories a day. Migration 024 |
 | `GET /api/stories/:id/viewers` | `{ count, items: [{ id, name, photoUrl, viewedAt }] }` — only whoever manages the story (author, office members, club admins); `403` otherwise |
 | `DELETE /api/stories/:id` | Author, the office or club managing it, or an admin → `204` |
 | `GET /api/me/close-friends` · `PUT\|DELETE …/:userId` | Close friends list (up to 200; `409 list_full`) |
@@ -524,7 +529,7 @@ An in-app inbox plus Web Push (VAPID). The inbox always records; push follows ea
 | `GET /api/push/key` | `{ publicKey }`, or `null` when push is off on this server |
 | `PUT /api/push/subscriptions` | The browser's `PushSubscription.toJSON()` (`https://` endpoint only) → `204`; `503 push_unavailable` when push is off |
 | `DELETE /api/push/subscriptions` | `{ endpoint }` → `204` (idempotent) |
-| `GET /api/me/notification-settings` | `{ comments, answers, follows, groups, events, urgent }` (all `true` by default) |
+| `GET /api/me/notification-settings` | `{ comments, answers, follows, groups, events, urgent, stories }` (all `true` by default) |
 | `PATCH /api/me/notification-settings` | Any of those booleans → the full settings |
 
 **Notification** `{ id, type, text, count, actor: { id, name, photoUrl } | null, target: { type, id }, url, read, createdAt }`
@@ -537,8 +542,10 @@ An in-app inbox plus Web Push (VAPID). The inbox always records; push follows ea
 | `group_request` | the group's admins | someone asks to join a private group | `/groups/:id` |
 | `group_approved` | the member | their request is approved (a refusal sends nothing) | `/groups/:id` |
 | `event_cancelled` | everyone Going or Interested | the host cancels | `/events/:id` |
+| `story` | followers who may see it (same rules as the stories row: hidden-from, close friends, under-18, staff) | someone you follow posts a story; more stories from them collapse into one | `/` |
+| `office_story` | everyone on the campus | a verified office posts a story; `actor` is always `null` (who typed it isn't shown) | `/` |
 
-Rules (code: `apps/api/src/notifications/`, migration 018):
+Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipients: `storyRecipients` in `apps/api/src/stories/routes.ts`):
 - **Never** about your own action, to deleted members, or across a block. An actor who is deleted or blocked later shows as `actor: null`.
 - **Collapsing:** one unread notification per member, type and thing; more of the same raise `count` and set the latest actor. After it is read, the next one starts fresh. Admins' `group_request` is marked read once nobody is waiting.
 - **Push:** one per *new* unread notification (a burst of comments is one push), only to members with a subscription who did not turn that kind off. Text is generic ("New comment on your post"): no names or content, because it shows on lock screens.

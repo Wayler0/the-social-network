@@ -207,7 +207,7 @@ describe.skipIf(!url)('Notifications and push (real database, seed data)', () =>
     });
 
     it('settings default to all on; PATCH changes only what it names', async () => {
-      const all = { comments: true, answers: true, follows: true, groups: true, events: true, urgent: true };
+      const all = { comments: true, answers: true, follows: true, groups: true, events: true, urgent: true, stories: true };
       expect((await as('amina', 'GET', '/api/me/notification-settings')).json()).toEqual(all);
       expect((await as('amina', 'PATCH', '/api/me/notification-settings', { comments: false })).json()).toEqual({ ...all, comments: false });
       expect((await as('amina', 'GET', '/api/me/notification-settings')).json()).toEqual({ ...all, comments: false });

@@ -26,6 +26,8 @@ export type Post = {
   reactions: Partial<Record<Reaction, number>>;
   /** Saved by the viewer (private: nobody else is told). */
   savedByMe: boolean;
+  /** A shared event's card (null when the event was deleted or hidden). */
+  event?: { id: string; title: string; location: string | null; startsAt: string; cancelled: boolean; goingCount: number; myRsvp: 'going' | 'interested' | null } | null;
   /** Whether you follow the author: a Follow button shows next to the name when you don't. */
   followingAuthor: boolean;
   createdAt: string;
@@ -42,7 +44,7 @@ const page = (path: string, cursor?: string | null, limit = 20) =>
 
 export const getFeed = (cursor?: string | null) => call<Page<Post>>('GET', page('/api/feed', cursor));
 export const getPost = (id: string) => call<Post>('GET', `/api/posts/${encodeURIComponent(id)}`);
-export const createPost = (input: { body: string; imageId?: string; groupId?: string; announcement?: boolean }) => call<Post>('POST', '/api/posts', input);
+export const createPost = (input: { body: string; imageId?: string; groupId?: string; announcement?: boolean; eventId?: string }) => call<Post>('POST', '/api/posts', input);
 export const deletePost = (id: string) => call<void>('DELETE', `/api/posts/${encodeURIComponent(id)}`);
 
 export const likePost = (id: string, like: boolean) =>

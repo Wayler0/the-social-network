@@ -8,7 +8,7 @@ import { attachImage, deleteImage, type Queryable } from '../images/store.js';
 import { requireCompleteProfile } from '../me/routes.js';
 import { notify } from '../notifications/notify.js';
 import { CursorError, decodeCursor, page, pageQuery } from '../paging.js';
-import { followsOrMemberOf, notBlocked, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
+import { followsOrMemberOf, notBlocked, visibleEvent, visibleComment, visibleGroup, visiblePost, type ViewerSql } from '../visibility.js';
 import { COMMENT_SELECT, commentBody, POST_SELECT, postBody, REACTIONS, type CommentRow, type PostRow, type Reaction } from './shape.js';
 
 /** In every query here, $1 is the viewer's id and $2 their campus. */
@@ -70,14 +70,18 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
   // ---- POST /api/posts   { body, imageId?, groupId?, officeId? }
   app.post('/api/posts', async (req, reply) => {
     const body = parse(z.object({
-      body: text(2000),
+      /** Required, except when sharing an event (then a caption is optional). */
+      body: z.string().transform((s) => s.trim()).pipe(z.string().max(2000)).default(''),
+      /** Share an event as this post: it shows the event's card. */
+      eventId: z.string().uuid().optional(),
       imageId: z.string().uuid().optional(),
       groupId: z.string().uuid().optional(),
       /** Post as an office the member currently belongs to (owner or editor). */
       officeId: z.string().uuid().optional(),
       /** Club pages: an announcement (club admins only) instead of a discussion post. */
       announcement: z.boolean().default(false),
-    }).strict().refine((b) => !b.announcement || b.groupId, { message: 'announcement: only in a club (send groupId)' }), req.body, reply);
+    }).strict().refine((b) => !b.announcement || b.groupId, { message: 'announcement: only in a club (send groupId)' })
+      .refine((b) => b.body.length > 0 || b.eventId, { message: 'body: cannot be empty' }), req.body, reply);
     if (!body) return;
     if (!(await requireCompleteProfile(db, req, reply))) return;
     const viewer = req.auth!;
@@ -113,6 +117,15 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         );
         if (rows.length === 0) return { ok: false, status: 403, error: 'forbidden', message: 'You can only post as an office you belong to.' };
       }
+      if (body.eventId) {
+        // Only events everyone on the campus may see: campus-wide, an office's, or a public club's (not student-only).
+        const { rows } = await tx.query(
+          `select 1 from events e left join groups eg on eg.id = e.group_id
+            where e.id = $3 and ${visibleEvent('e', V)}
+              and (e.group_id is null or (eg.kind = 'club' and eg.visibility = 'public' and not eg.student_only))`,
+          [viewer.userId, viewer.campusId, body.eventId]);
+        if (rows.length === 0) return { ok: false, status: 404, error: 'not_found', message: 'That event can’t be shared: only events open to the whole campus can.' };
+      }
       const wait = await takeRateLimits(tx, [{ bucket: 'post_user', key: viewer.userId, max: POSTS_PER_HOUR, windowSeconds: 3600 }]);
       if (wait) return { ok: false, wait };
 
@@ -123,9 +136,9 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         imageId = image.id;
       }
       const { rows } = await tx.query<{ id: string }>(
-        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id, announcement)
-         values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId, body.announcement],
+        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id, announcement, event_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId, body.announcement, body.eventId ?? null],
       );
       return { ok: true, id: rows[0]!.id };
     });
