@@ -77,6 +77,15 @@ async function loadTargets(db: Db, campusId: string, wanted: Array<{ type: strin
         hiddenAt: iso(r.hidden_at), autoHidden: r.hidden_at !== null && r.hidden_by === null,
       });
     }
+    // Posts: the earlier text too, so editing a post can't hide what was reported.
+    if (type === 'post') {
+      const { rows: edits } = await db.query<{ post_id: string; body: string; edited_at: Date }>(
+        'select post_id, body, edited_at from post_edits where post_id = any($1::uuid[]) order by edited_at', [list]);
+      for (const e of edits) {
+        const t = found.get(`post:${e.post_id}`) as { earlierVersions?: unknown[] } | undefined;
+        if (t) (t.earlierVersions ??= []).push({ body: e.body, editedAt: iso(e.edited_at) });
+      }
+    }
   }
 
   const users = ids('user');

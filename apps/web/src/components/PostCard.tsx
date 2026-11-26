@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth';
 import { follow, deletePost, REACTION_EMOJI, REACTION_LABEL, REACTIONS, reactToPost, savePost, type Reaction, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
+import { EditPostSheet } from './EditPostSheet';
 import { Icon } from './Icon';
 import { PhotoViewer } from './PhotoViewer';
 import { setFollowingAuthor } from '../lib/feed-store';
@@ -26,6 +27,7 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
   const { me } = useAuth();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
@@ -126,6 +128,7 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
             {post.announcement && <span className="pill announce-pill">Announcement</span>}
             {post.group && <span>{post.announcement ? 'from' : 'in'} <Link to={`/groups/${post.group.id}`} className="post-group-link">{post.group.name}</Link> · </span>}
             <time dateTime={post.createdAt} title={new Date(post.createdAt).toLocaleString()}>{timeAgo(post.createdAt)}</time>
+            {post.editedAt && <span title={`Edited ${new Date(post.editedAt).toLocaleString()}`}> · Edited</span>}
           </div>
         </div>
         <button type="button" className="icon-btn" aria-label="Post options" onClick={() => setMenu(true)}>
@@ -205,8 +208,10 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
         <ContentMenu kind="post" targetId={post.id} author={post.author} isOwn={isOwn}
           canDelete={isOwn || !!me?.isAdmin}
           onDelete={async () => { await deletePost(post.id); onRemoved(post.id); }}
+          onEdit={() => { setMenu(false); setEditing(true); }}
           onBlocked={onBlocked} onClose={() => setMenu(false)} />
       )}
+      {editing && <EditPostSheet post={post} onSaved={onChange} onClose={() => setEditing(false)} />}
     </article>
   );
 }

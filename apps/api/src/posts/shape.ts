@@ -22,7 +22,7 @@ export const authorColumns = (alias: string) => `
 
 /** Select list and joins for posts aliased `p`; add WHERE, ORDER BY and LIMIT. */
 export const POST_SELECT = `
-  select p.id, p.body, p.announcement, p.created_at, p.created_at::text as cursor_at, ${authorColumns('au')},
+  select p.id, p.body, p.announcement, p.created_at, p.edited_at, p.created_at::text as cursor_at, ${authorColumns('au')},
          o.id as office_id, o.name as office_name, o.photo_url as office_photo, o.verified as office_verified,
          g.id as group_id, g.name as group_name, g.kind as group_kind,
          i.path as image_path, i.width as image_width, i.height as image_height,
@@ -46,7 +46,7 @@ export const POST_SELECT = `
 export type AuthorRow = { author_id: string | null; author_name: string | null; author_photo: string | null; author_roles: string[] };
 
 export type PostRow = AuthorRow & {
-  id: string; body: string; announcement: boolean; created_at: Date; cursor_at: string;
+  id: string; body: string; announcement: boolean; created_at: Date; edited_at: Date | null; cursor_at: string;
   office_id: string | null; office_name: string | null; office_photo: string | null; office_verified: boolean | null;
   group_id: string | null; group_name: string | null; group_kind: string | null;
   image_path: string | null; image_width: number | null; image_height: number | null;
@@ -83,6 +83,8 @@ export function postBody(r: PostRow) {
     /** Whether the viewer follows the author (for the Follow button next to the name). */
     followingAuthor: r.following_author,
     createdAt: r.created_at.toISOString(),
+    /** When the author last changed the text (shown as "Edited"), or null. */
+    editedAt: r.edited_at ? r.edited_at.toISOString() : null,
   };
 }
 

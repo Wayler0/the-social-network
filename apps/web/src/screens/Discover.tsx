@@ -10,7 +10,6 @@ const tiles: { to: string | null; title: string; text: string; icon: IconName; t
   { to: '/ask', title: 'Ask a Senior', text: 'Questions about campus life, answered', icon: 'question', tone: 'mint' },
   { to: '/today', title: 'Today board', text: 'Official news from offices', icon: 'megaphone', tone: 'sunshine' },
   { to: '/events', title: 'Events', text: 'What’s on, and who’s going', icon: 'calendar', tone: 'coral' },
-  { to: null, title: 'Market', text: 'Coming later', icon: 'tag', tone: 'muted' },
 ];
 
 /** Discover: the way into groups, Ask a Senior, the Today board and events (CLAUDE.md section 14). */
@@ -18,6 +17,7 @@ export function Discover() {
   return (
     <>
       <header className="topbar"><h1 className="topbar-title">Discover</h1></header>
+      <Link to="/search" className="search-entry"><Icon name="discover" size={18} /> Search people, groups, posts</Link>
       <PeopleCards />
       <div className="tiles">
         {tiles.map((t) => {

@@ -218,7 +218,8 @@ A JSON file (`Content-Disposition: attachment`) of everything held about the mem
 | `GET /api/feed` | `?limit&cursor` | page of **Post** — campus-wide posts plus announcements of clubs you follow or belong to (v0.2), newest first |
 | `POST /api/posts` | `{ body, imageId?, groupId?, officeId?, announcement?, eventId? }` (`eventId` shares an event as the post: caption optional; only events everyone on the campus may see — campus-wide, an office's, or a public non-student-only club's — else `404`; migration 025) (body 1–2000 chars after trimming; image from §6; `officeId` posts as an office you currently belong to; `announcement: true` only in a club, by its admins — `400` outside clubs, `403` for non-admins) | `201` Post |
 | `GET /api/posts/:id` | | Post |
-| `DELETE /api/posts/:id` | author or admin | `204` |
+| `PATCH /api/posts/:id` | author; `{ body }` (text only, ≤ 2000; empty only for event posts); not hidden or deleted posts; 30 edits/hour | `200 Post` with `editedAt` (unchanged text: no edit) |
+| `DELETE /api/posts/:id` | author or admin; earlier versions are deleted too unless a report is open | `204` |
 | `GET /api/posts/:id/comments` | `?limit&cursor` (oldest first) | page of Comment |
 | `POST /api/posts/:id/comments` | `{ body }` (1–1000 chars) | `201` Comment |
 | `DELETE /api/comments/:id` | author, post author, or admin | `204` |
@@ -553,6 +554,30 @@ Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipi
 - **Worker:** the API sends due pushes every 5 s (`push_outbox`, `SKIP LOCKED`). It retries with back-off (1, 2, 4, 8 min, at most 5 tries) only when no device got the push. Subscriptions the browser dropped (`404`/`410`) are deleted; one that fails 10 times is dropped. Each member keeps at most their 10 newest subscriptions.
 - **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
 - **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
+
+## 16. Search (MVP item 10) ✅
+
+`GET /api/search?q=&type=all|people|groups|posts|questions`. `q`: 2–80 characters (spaces collapsed).
+Up to 8 of each kind for `all`, 30 for one kind.
+
+```
+200 { q, people: [{ id, name, photoUrl, memberType, course, yearOfStudy, badges }],
+      groups: [{ id, name, description, kind, visibility, clubVerified, memberCount }],
+      posts: [Post], questions: [{ id, body, answerCount, createdAt }] }
+```
+
+Same privacy rules as the rest of the API (`src/visibility.ts`):
+- Matches names, group names and descriptions, post text, and question and answer text. Never emails or registration numbers.
+- Own campus only. Blocked, hidden, deleted and suspended content and people are left out.
+- Staff never see student-only groups. Other people's class groups are left out.
+- An under-18 member appears only to classmates (students on the same course and year) and to people they follow back.
+- Questions never say who asked.
+
+Plain `ILIKE` for now; move to full-text search or Meilisearch if it gets slow.
+
+**Post edits:** every `Post` has `editedAt` (null if never edited). Earlier text is kept in `post_edits` (migration 026):
+- Moderators see it as `target.earlierVersions` in `GET /api/admin/reports`.
+- Authors get it in their data export.
 
 ---
 
