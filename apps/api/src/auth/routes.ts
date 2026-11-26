@@ -181,5 +181,8 @@ export async function cleanupAuth(db: Queryable): Promise<number> {
   const sessions = await db.query(
     `delete from sessions where coalesce(revoked_at, expires_at) < now() - interval '30 days'`,
   );
-  return (codes.rowCount ?? 0) + (counts.rowCount ?? 0) + (sessions.rowCount ?? 0);
+  // Catch-all: no limit looks back more than a day, so any count older than two days is dead
+  // weight, whatever its bucket (covers buckets added later without their own cleanup).
+  const stale = await db.query(`delete from rate_limit_events where created_at < now() - interval '2 days'`);
+  return (codes.rowCount ?? 0) + (counts.rowCount ?? 0) + (sessions.rowCount ?? 0) + (stale.rowCount ?? 0);
 }

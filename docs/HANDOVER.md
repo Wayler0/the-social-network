@@ -1,5 +1,43 @@
 # Handover — where the app stands (updated 25 Nov 2026; first written 15 Nov)
 
+## ⏸ Paused 26 Nov → building resumes Thu 18 Dec → launch Sun 20 Dec
+
+**Murphy's law review (26 Nov):** what can go wrong while nobody is coding, and on launch day.
+
+**Checked and fine:**
+- The site and database are up.
+- **Certificates:** the Cloudflare certificate runs to 24 Jan 2027 and the server's Let's Encrypt certificate to 19 Feb 2027. Caddy renews automatically.
+- **Domain:** `nextup.co.ke` is paid until 20 Aug 2027.
+- **Dependencies:** `npm audit` finds 0 vulnerabilities.
+- **CI:** every CI step passes locally. No test depends on today's date, so CI will still pass on the 18th.
+- **Merge:** `feat/dark-mode` merges cleanly into `main`.
+
+### Before you leave (today or this week)
+| # | What can go wrong | Fix | Who |
+|---|---|---|---|
+| 1 | The site goes down during exams and **nobody notices** for weeks (#39) | A free uptime monitor on `https://hatua.nextup.co.ke/api/health` (Uptime Kuma or UptimeRobot), alerting two people | Kim |
+| 2 | The server or disk dies and **everything is lost**: backups sit on the same machine, and a restore has never been tested (#36) | Copy the nightly dumps off the server (restic, `deploy/backup/`), and do one test restore | Kim |
+| 3 | **Only Kim** can reach the server. If he's unreachable, nobody can restart it | Give a second person server access, and keep the KENET key backed up (one passphrase was already lost) | Kim + Solomon |
+| 4 | Something merged to `main` **deploys by itself** while nobody is watching | Merge nothing to `main` until 18 Dec, except today's PR with a backup and a 10-minute check after (below) | everyone |
+| 5 | Today's PR (migrations 027–029) deploys and breaks, with **nobody around** | Merge it today only if someone can check after the deploy (sign in, post, repost, the Emergency screen). Otherwise merge it first thing on the 18th | Solomon + Kim |
+| 6 | Testers on the live site report abuse or press Emergency, and **nobody sees it** | At least two moderators with the role on the live site. Someone checks Admin → Reports and Alerts every few days during exams | team |
+
+### On 18 Dec, in this order (each item stops launch if it fails)
+1. **Back up the database**, then merge and deploy anything waiting. Check the site the same day.
+2. **Email limits:** Resend's daily cap is shared with the other site. Launch day means thousands of sign-in codes, and once the cap is hit **nobody can sign in**. Move to a paid plan, or a plan with no low daily cap, and send a test to a student inbox (`docs/email.md`).
+3. **Cloudflare real addresses** (`deploy/KENET.md`, To do 1): today, sign-in limits per address count Cloudflare's addresses. On launch day most of campus would share one limit (300 codes an hour) and **get locked out**. Fix (a), (b) and (c) before the 20th.
+4. **Manual settings:** the emergency numbers on the campus row, safety offices (`safety = true`), and `CONTACT_EMAIL`. Commands are under "Manual settings" below.
+5. **Push notifications:** check that the VAPID keys are set in `/opt/nextup/env/hatua.env`. Without them, the emergency push and urgent pushes never arrive.
+6. **Phone test results** (#44): if code emails land in spam or students get signed out, fix that before anything else.
+7. `npm audit --omit=dev`, then a final restore test (#40).
+
+### Launch day (20 Dec)
+- One person watches the API log (`docker compose logs -f hatua-api`) for `EMAIL IS NOT WORKING` and for `rate_limited`.
+- One person handles Reports and Alerts.
+- Server restart, if needed: `cd /opt/nextup && docker compose restart hatua-api`. Roll back with `deploy/kenet.sh <older commit>` after pausing auto-deploy (see `deploy/KENET.md`).
+- **Approvals:** university written approval (hosting and email verification) and ODPC registration need checking with the university and ODPC. This is not legal advice.
+
+
 Written at the end of the Claude sprint (Claude Pro ends 16 Nov), so the team can continue without it.
 Plan and dates: `ROADMAP.md`. Every endpoint: `docs/api-contract.md`. Screens: `apps/web/README.md`.
 
