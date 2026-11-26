@@ -226,7 +226,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* ---------- Bottom sheet ---------- */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(17, 16, 24, 0.45); display: flex; align-items: flex-end; justify-content: center; }
-.sheet { width: 100%; max-width: var(--max-w); max-height: 90dvh; overflow-y: auto; background: var(--surface); border-radius: var(--radius-l) var(--radius-l) 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.sheet { color: var(--text); width: 100%; max-width: var(--max-w); max-height: 90dvh; overflow-y: auto; background: var(--surface); border-radius: var(--radius-l) var(--radius-l) 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; }
 .sheet-title { font-size: 18px; text-align: center; }
 .sheet-text { margin: 0; color: var(--text-2); text-align: center; }

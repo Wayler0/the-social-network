@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { Placeholder } from './components/Placeholder';
 import { useAuth } from './lib/auth';
+import { APP_NAME } from './config';
 import { rememberReturnTo } from './lib/return-to';
 import { EditProfile } from './screens/EditProfile';
 import { Home } from './screens/Home';
@@ -36,10 +37,23 @@ function Splash() {
 }
 
 /** Signed in with a finished profile; otherwise send to sign-in or onboarding. */
+/** The server couldn't be reached. You are NOT signed out: keep the session and try again. */
+function Unreachable() {
+  const { retryNow } = useAuth();
+  return (
+    <main className="empty" style={{ minHeight: '100dvh' }}>
+      <h1>Can’t reach {APP_NAME}</h1>
+      <p>Check your data or Wi-Fi. You’re still signed in; we’ll keep trying.</p>
+      <button type="button" className="btn" style={{ maxWidth: 220 }} onClick={retryNow}>Try again</button>
+    </main>
+  );
+}
+
 function RequireAuth() {
   const { status, me } = useAuth();
   const { pathname, search } = useLocation();
   if (status === 'loading') return <Splash />;
+  if (status === 'unreachable') return <Unreachable />;
   if (status === 'signedOut' || !me) {
     rememberReturnTo(pathname + search); // e.g. a shared post link: go there after sign-in
     return <Navigate to="/welcome" replace />;
@@ -51,6 +65,7 @@ function RequireAuth() {
 function GuestOnly() {
   const { status } = useAuth();
   if (status === 'loading') return <Splash />;
+  if (status === 'unreachable') return <Unreachable />;
   return status === 'signedIn' ? <Navigate to="/" replace /> : <Outlet />;
 }
 
