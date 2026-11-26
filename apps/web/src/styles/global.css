@@ -226,12 +226,12 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* ---------- Bottom sheet ---------- */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(17, 16, 24, 0.45); display: flex; align-items: flex-end; justify-content: center; }
-.sheet { color: var(--text); width: 100%; max-width: var(--max-w); max-height: 90dvh; overflow-y: auto; background: var(--surface); border-radius: var(--radius-l) var(--radius-l) 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.sheet { color: var(--text); width: 100%; max-width: var(--max-w); max-height: 90dvh; overflow-y: auto; background: var(--raised); border-radius: var(--radius-l) var(--radius-l) 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; }
 .sheet-title { font-size: 18px; text-align: center; }
 .sheet-text { margin: 0; color: var(--text-2); text-align: center; }
 .sheet-actions { display: flex; flex-direction: column; gap: 4px; }
-.sheet-row { min-height: 52px; border: 0; border-radius: var(--radius-m); background: var(--surface-2); font-size: 16px; font-weight: 600; color: var(--text); }
+.sheet-row { min-height: 52px; border: 0; border-radius: var(--radius-m); background: var(--raised-row); font-size: 16px; font-weight: 600; color: var(--text); }
 .sheet-row:hover { background: var(--fill); }
 .sheet-row.danger { color: var(--danger); }
 .sheet-row.muted { background: none; color: var(--text-2); }
@@ -365,7 +365,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .react-emoji { font-size: 20px; line-height: 1; }
 .react-top { font-size: 13px; letter-spacing: -2px; }
 .react-backdrop { position: fixed; inset: 0; z-index: 19; }
-.react-picker { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20; display: flex; gap: 2px; padding: 6px; border-radius: var(--radius-pill); background: var(--surface); box-shadow: 0 6px 24px rgba(17, 16, 24, 0.18); }
+.react-picker { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20; display: flex; gap: 2px; padding: 6px; border-radius: var(--radius-pill); background: var(--raised); box-shadow: 0 6px 24px rgba(17, 16, 24, 0.18); }
 .react-picker button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; font-size: 24px; line-height: 1; }
 .react-picker button.chosen { background: var(--violet-soft); }
 
@@ -556,7 +556,7 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .cropper .hint { color: rgba(255, 255, 255, 0.7); margin: 0; }
 
 /* ---------- Course suggestions (same spelling = same class group) ---------- */
-.course-suggest { list-style: none; margin: 4px 0 0; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); box-shadow: 0 6px 20px rgba(17, 16, 24, 0.08); }
+.course-suggest { list-style: none; margin: 4px 0 0; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--raised); box-shadow: 0 6px 20px rgba(17, 16, 24, 0.08); }
 .course-suggest button { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; text-align: left; }
 .course-suggest button:hover, .course-suggest button:focus-visible { background: var(--fill); }
 .course-suggest .muted { font-size: 12px; flex: none; }

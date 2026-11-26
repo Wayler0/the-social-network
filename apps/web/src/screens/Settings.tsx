@@ -120,10 +120,10 @@ export function Settings() {
 }
 
 const THEMES: { value: ThemeChoice; label: string }[] = [
-  { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' },
+  { value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'system', label: 'System' },
 ];
 
-/** Light, dark, or follow the phone (remembered on this phone). */
+/** Dark (the default), light, or follow the phone (remembered on this phone). */
 function Appearance() {
   const theme = useTheme();
   return (

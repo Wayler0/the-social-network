@@ -28,6 +28,8 @@ export const CONTACT_EMAIL = '';
 export const LEGAL_UPDATED = '25 November 2026';
 /** Browser and phone status-bar colour (violet, same as --violet in styles/tokens.css). */
 export const THEME_COLOR = '#6A3DF5';
+/** Background of the dark theme, the default look (DECIDED 25 Nov 2026): status bar and launch screen. */
+export const DARK_SURFACE = '#121119';
 
 export type Campus = {
   slug: string;

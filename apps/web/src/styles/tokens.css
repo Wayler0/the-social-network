@@ -32,6 +32,8 @@
   --inverse: var(--ink);             /* toasts, banners: dark on light, light on dark */
   --on-inverse: #ffffff;
   --shadow: rgba(17, 16, 24, 0.25);
+  --raised: var(--surface);         /* sheets, pop-ups: a step above the page in dark */
+  --raised-row: var(--surface-2);   /* rows inside them */
   color-scheme: light;
 
   --font-heading: 'Space Grotesk', Inter, system-ui, sans-serif;
@@ -76,6 +78,8 @@
   --inverse: #f4f2fa;
   --on-inverse: #111018;
   --shadow: rgba(0, 0, 0, 0.6);
+  --raised: #1a1823;
+  --raised-row: #24212f;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
