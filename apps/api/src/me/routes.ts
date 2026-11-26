@@ -283,18 +283,20 @@ export async function meRoutes(app: FastifyInstance, { config, db }: { config: C
     const userId = req.auth!.userId;
 
     const imageIds = await inTransaction(db, async (tx) => {
-      const { rows } = await tx.query<{ email: string | null }>('select email from users where id = $1 and deleted_at is null for update', [userId]);
+      const { rows } = await tx.query<{ email: string | null; personal_email: string | null }>('select email, personal_email from users where id = $1 and deleted_at is null for update', [userId]);
       const email = rows[0]?.email ?? null;
+      const personalEmail = rows[0]?.personal_email ?? null;
       const images = (await tx.query<{ id: string }>('select id from images where user_id = $1', [userId])).rows.map((r) => r.id);
       await tx.query('update posts set image_id = null where author_user_id = $1 and image_id is not null', [userId]);
       await tx.query(
-        `update users set email = null, name = null, photo_url = null, photo_image_id = null, course = null,
+        `update users set email = null, personal_email = null, personal_email_linked_at = null, name = null, photo_url = null, photo_image_id = null, course = null,
                 year_of_study = null, graduation_year = null, member_number = null, member_number_normalised = null,
                 member_number_status = 'unverified', is_under_18 = null, interests = '{}', deleted_at = clock_timestamp()
           where id = $1`,
         [userId],
       );
       await tx.query('update sessions set revoked_at = clock_timestamp() where user_id = $1 and revoked_at is null', [userId]);
+      if (personalEmail) await tx.query('delete from auth_codes where email = $1', [personalEmail]);
       if (email) {
         await tx.query('delete from auth_codes where email = $1', [email]);
         await tx.query(`delete from rate_limit_events where bucket = 'code_email' and key = $1`, [email]);

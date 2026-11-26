@@ -45,6 +45,8 @@ export function PrivacyPolicy() {
       <h2>What we collect</h2>
       <ul>
         <li><strong>Your university email</strong>, to send you a sign-in code and prove you belong to the university.</li>
+        <li><strong>A personal email</strong>, only if you link one so you can keep signing in after graduating. Only you see it,
+          and it is used for signing in, nothing else.</li>
         <li><strong>Your profile:</strong> name, whether you are a fresher, continuing student, alumnus or staff, course, year of study or
           graduation year, interests, and a profile photo if you add one.</li>
         <li><strong>Registration or staff number</strong>, optional for students. It is <strong>never shown</strong> to other members;

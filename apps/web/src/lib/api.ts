@@ -68,9 +68,10 @@ function mockNewMe(email: string): Me {
 }
 
 // ---------------------------------------------------------------- auth
-export async function requestCode(email: string): Promise<{ resendAfterSeconds: number }> {
+/** `personal`: a personal email linked for signing in after graduating (never creates an account). */
+export async function requestCode(email: string, personal = false): Promise<{ resendAfterSeconds: number }> {
   if (MOCK) { await wait(600); return { resendAfterSeconds: 30 }; }
-  return call('POST', '/api/auth/request-code', { email });
+  return call('POST', '/api/auth/request-code', personal ? { email, personal: true } : { email });
 }
 
 export async function verifyCode(email: string, code: string): Promise<{ newUser: boolean }> {

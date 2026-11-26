@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Sheet } from '../components/Sheet';
 import { ApiError } from '../lib/api';
@@ -9,10 +9,11 @@ import {
   type AdminOffice, type AdminReport, type AdminUser, type ContentType, type LogEntry, type OfficeType, type ReportStatus, type Role,
 } from '../lib/admin';
 import { useAuth } from '../lib/auth';
+import { getEmergencyAlerts, markEmergencyHandled, type EmergencyAlert } from '../lib/emergency';
 import { REPORT_REASONS, timeAgo } from '../lib/feed';
 import { getFeedbackList, type FeedbackItem } from '../lib/feedback';
 
-type Tab = 'reports' | 'members' | 'offices' | 'feedback' | 'log';
+type Tab = 'reports' | 'alerts' | 'members' | 'offices' | 'feedback' | 'log';
 const errText = (err: unknown, fallback = 'That didn’t work. Try again.') => (err instanceof ApiError ? err.message : fallback);
 const reasonLabel = (r: string) => REPORT_REASONS.find(([v]) => v === r)?.[1] ?? r;
 const CONTENT: readonly string[] = ['post', 'comment', 'question', 'answer'];
@@ -26,12 +27,12 @@ export function Admin() {
   const admin = !!me?.isAdmin;
   const tab = (params.get('tab') as Tab | null) ?? 'reports';
   if (!isModerator(me)) return <Navigate to="/" replace />;
-  if (!admin && tab !== 'reports') return <Navigate to="/admin" replace />;
+  if (!admin && tab !== 'reports' && tab !== 'alerts') return <Navigate to="/admin" replace />;
 
   const show = (t: Tab, extra: Record<string, string> = {}) => setParams({ tab: t, ...extra }, { replace: true });
   const tabs: [Tab, string][] = admin
-    ? [['reports', 'Reports'], ['members', 'Members'], ['offices', 'Offices'], ['feedback', 'Feedback'], ['log', 'Log']]
-    : [['reports', 'Reports']];
+    ? [['reports', 'Reports'], ['alerts', 'Alerts'], ['members', 'Members'], ['offices', 'Offices'], ['feedback', 'Feedback'], ['log', 'Log']]
+    : [['reports', 'Reports'], ['alerts', 'Alerts']];
 
   return (
     <>
@@ -48,6 +49,7 @@ export function Admin() {
         </div>
       )}
       {tab === 'reports' && <Reports admin={admin} onFindMember={(name) => show('members', { q: name })} />}
+      {tab === 'alerts' && <Alerts />}
       {tab === 'members' && <Members initial={params.get('q') ?? ''} myId={me!.id} />}
       {tab === 'offices' && <Offices />}
       {tab === 'feedback' && <FeedbackList />}
@@ -527,5 +529,54 @@ function FeedbackList() {
       </ul>
       {data.nextCursor && <button type="button" className="linkish feed-foot" onClick={() => void load(data.nextCursor)}>Show more</button>}
     </div>
+  );
+}
+
+// ================================================================ Emergency alerts
+
+/** Emergency button alerts (MVP item 8): newest first, with who raised them so they can be reached. */
+function Alerts() {
+  const [status, setStatus] = useState<'open' | 'handled'>('open');
+  const [items, setItems] = useState<EmergencyAlert[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setItems(null); setError(null);
+    getEmergencyAlerts(status).then((r) => setItems(r.items)).catch((err) => setError(errText(err)));
+  }, [status]);
+  useEffect(load, [load]);
+  async function handled(id: string) {
+    try { await markEmergencyHandled(id); setItems((list) => list?.filter((a) => a.id !== id) ?? null); } catch (err) { setError(errText(err)); }
+  }
+  return (
+    <>
+      <div className="segmented" role="radiogroup" aria-label="Which alerts">
+        {(['open', 'handled'] as const).map((s) => (
+          <button key={s} type="button" role="radio" aria-checked={status === s} className={status === s ? 'active' : ''} onClick={() => setStatus(s)}>
+            {s === 'open' ? 'Open' : 'Handled'}
+          </button>
+        ))}
+      </div>
+      {error && <p className="error admin-hint" role="alert">{error}</p>}
+      {items === null && !error && <p className="muted admin-hint">Loading…</p>}
+      {items?.length === 0 && <p className="muted admin-hint">{status === 'open' ? 'No open alerts.' : 'Nothing handled yet.'}</p>}
+      <ul className="people-list">
+        {items?.map((a) => (
+          <li key={a.id} className="alert-row">
+            <div>
+              <strong>{a.member ? a.member.name ?? 'Member' : 'Deleted member'}</strong>
+              {a.member && <span className="muted"> · {[a.member.memberType, a.member.course, a.member.yearOfStudy ? `Year ${a.member.yearOfStudy}` : null].filter(Boolean).join(' · ')}</span>}
+              <p className="alert-message">{a.message ?? 'No message.'}</p>
+              <span className="hint">{timeAgo(a.createdAt)}{a.handledBy ? ` · handled by ${a.handledBy}` : ''}</span>
+            </div>
+            {a.status === 'open' && (
+              <div className="alert-actions">
+                {a.member && <Link className="btn secondary small-btn btn-link" to={`/u/${a.member.id}`}>Profile</Link>}
+                <button type="button" className="btn small-btn" onClick={() => void handled(a.id)}>Handled</button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

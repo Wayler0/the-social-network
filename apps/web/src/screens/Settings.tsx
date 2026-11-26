@@ -70,9 +70,13 @@ export function Settings() {
       </header>
       <div className="screen settings">
         <p className="muted">Signed in as <strong style={{ color: 'var(--text)' }}>{me?.email}</strong></p>
+        <Link to="/emergency" className="settings-row emergency-row">Emergency help</Link>
         <Link to="/profile/edit" className="settings-row">Edit profile</Link>
         <Link to="/settings/notifications" className="settings-row">Notifications</Link>
         <Appearance />
+        {me?.memberType !== 'staff' && (
+          <Link to="/settings/personal-email" className="settings-row">{me?.personalEmail ? 'Personal email for after graduating ✓' : 'Keep access after graduating'}</Link>
+        )}
         {isModerator(me) && <Link to="/admin" className="settings-row">{me?.isAdmin ? 'Admin' : 'Moderation'}</Link>}
         {install === 'available' && (
           <button className="settings-row" onClick={() => void promptInstall()}>Install {APP_NAME} on this device</button>

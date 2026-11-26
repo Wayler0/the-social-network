@@ -13,7 +13,7 @@ export function VerifyCode() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signIn } = useAuth();
-  const state = location.state as { email?: string; resendAfterSeconds?: number } | null;
+  const state = location.state as { email?: string; resendAfterSeconds?: number; personal?: boolean } | null;
   const email = state?.email;
 
   const [digits, setDigits] = useState<string[]>(Array(LENGTH).fill(''));
@@ -89,7 +89,7 @@ export function VerifyCode() {
   async function resend() {
     setError(null);
     try {
-      const { resendAfterSeconds } = await requestCode(email!);
+      const { resendAfterSeconds } = await requestCode(email!, !!state?.personal);
       setCooldown(resendAfterSeconds);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t resend. Try again.');
@@ -101,7 +101,9 @@ export function VerifyCode() {
       <Link to="/welcome" className="icon-btn back-link" aria-label="Back, change email"><Icon name="back" /></Link>
       <div className="auth-hero" style={{ paddingTop: 0 }}>
         <h1 className="screen-title">Check your email</h1>
-        <p>We sent a 6-digit code to <strong style={{ color: 'var(--text)' }}>{email}</strong>. It expires in 10 minutes.</p>
+        {state?.personal
+          ? <p>If <strong style={{ color: 'var(--text)' }}>{email}</strong> is linked to an account, we sent it a 6-digit code. It expires in 10 minutes.</p>
+          : <p>We sent a 6-digit code to <strong style={{ color: 'var(--text)' }}>{email}</strong>. It expires in 10 minutes.</p>}
       </div>
 
       <form className="auth-form" onSubmit={(e) => { e.preventDefault(); if (digits.every(Boolean)) void submit(digits.join('')); }}>

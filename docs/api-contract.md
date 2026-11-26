@@ -555,6 +555,38 @@ Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipi
 - **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
 - **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
 
+## 18. Emergency button (MVP item 8) ✅
+
+| Call | Who | Response |
+|---|---|---|
+| `GET /api/emergency` | any member | `{ contacts: [{ label, phone }] }` from `campuses.emergency_contacts` |
+| `POST /api/emergency` `{ message? }` (≤ 500) | any member; 3 per hour | `201 { id, contacts }` |
+| `GET /api/admin/emergencies?status=open\|handled` | moderators, admins | `{ items: [{ id, message, status, createdAt, handledAt, handledBy, member }] }` |
+| `POST /api/admin/emergencies/:id/handled` | moderators, admins | `204` (written to the admin log) |
+
+**Who is alerted:** moderators, admins, and current members of offices with `safety = true`.
+- They get an `emergency` notification.
+- They also get a push, even if they turned urgent pushes off.
+- They see who sent the alert. No location is sent (migration 028).
+
+## 17. Keep access after graduating ✅
+
+The student email closes right after graduation, so a member links a personal email while the campus one still works.
+
+| Call | Notes | Response |
+|---|---|---|
+| `POST /api/me/personal-email` `{ email }` | Not a campus domain; not linked to another account (`409 email_taken`). Code expires in 10 min. Limits: 1 per 30 s per address, 5 per hour per member | `{ resendAfterSeconds }` |
+| `POST /api/me/personal-email/verify` `{ code }` | Links it only after the code is right | `{ personalEmail }` |
+| `DELETE /api/me/personal-email` | Unlinks it | `204` |
+| `GET /api/me` | Includes `personalEmail` (the member only) | |
+
+**Sign-in with it:** `POST /api/auth/request-code` `{ email, personal: true }`.
+- The answer is the same whether or not the address is linked. A code is only sent if it is linked.
+- `verify-code` signs in to the linked account and never creates a new one.
+- Without `personal: true`, non-campus domains are still refused (`email_not_allowed`), so typos in a campus email are caught.
+
+The personal email is in the data export, and it is cleared when the account is deleted (migration 027).
+
 ## 16. Search (MVP item 10) ✅
 
 `GET /api/search?q=&type=all|people|groups|posts|questions`. `q`: 2–80 characters (spaces collapsed).

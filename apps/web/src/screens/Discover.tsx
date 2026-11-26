@@ -10,6 +10,7 @@ const tiles: { to: string | null; title: string; text: string; icon: IconName; t
   { to: '/ask', title: 'Ask a Senior', text: 'Questions about campus life, answered', icon: 'question', tone: 'mint' },
   { to: '/today', title: 'Today board', text: 'Official news from offices', icon: 'megaphone', tone: 'sunshine' },
   { to: '/events', title: 'Events', text: 'What’s on, and who’s going', icon: 'calendar', tone: 'coral' },
+  { to: '/emergency', title: 'Emergency', text: 'Numbers to call, alert campus safety', icon: 'alert', tone: 'coral' },
 ];
 
 /** Discover: the way into groups, Ask a Senior, the Today board and events (CLAUDE.md section 14). */
