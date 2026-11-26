@@ -32,13 +32,19 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
   useContractErrors(app);
 
   app.post('/api/auth/request-code', { config: { public: true } }, async (req, reply) => {
-    const body = parse(z.object({ email: z.string().max(320) }).strict(), req.body, reply);
+    const body = parse(z.object({ email: z.string().max(320), personal: z.boolean().optional() }).strict(), req.body, reply);
     if (!body) return;
     const parsed = normaliseEmail(body.email);
     if (!parsed) return fail(reply, 400, 'invalid_input', 'That doesn’t look like an email address.');
     const campus = await findCampusDomain(db, parsed.domain);
-    if (!campus) return fail(reply, 400, 'email_not_allowed', 'Use your campus email address.');
     const { email } = parsed;
+    // Not a campus email: only a personal email a member linked (alumni after graduating) can sign
+    // in, and it never creates an account. The answer is the same whether or not it is linked.
+    const personal = !campus;
+    if (personal && body.personal !== true) return fail(reply, 400, 'email_not_allowed', 'Use your campus email address.');
+    const linked = personal
+      ? (await db.query('select 1 from users where personal_email = $1 and deleted_at is null', [email])).rows.length > 0
+      : true;
 
     // The same answer whether or not this email has an account: nothing here reveals who is a member.
     const code = newCode();
@@ -49,6 +55,7 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
         { bucket: 'code_ip', key: req.ip, max: CODES_PER_IP_PER_HOUR, windowSeconds: 3600 },
       ]);
       if (wait) return { ok: false as const, wait };
+      if (!linked) return { ok: true as const, id: null };
       // A new code replaces any older unused one.
       await tx.query(
         `update auth_codes set consumed_at = clock_timestamp()
@@ -68,6 +75,7 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
       return fail(reply, 429, 'rate_limited', `Too many codes asked for. Try again in ${waitText(outcome.wait)}.`, { retryAfterSeconds: outcome.wait });
     }
 
+    if (outcome.id === null) return { resendAfterSeconds: RESEND_SECONDS };
     try {
       await app.mailer.sendSignInCode(email, code);
     } catch (err) {
@@ -99,7 +107,6 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
     const code = body.code.trim();
     if (!parsed || !/^\d{6}$/.test(code)) return codeWrong();
     const campus = await findCampusDomain(db, parsed.domain);
-    if (!campus) return codeWrong();
     const { email } = parsed;
 
     const outcome = await inTransaction(db, async (tx) => {
@@ -123,12 +130,13 @@ export async function authRoutes(app: FastifyInstance, { config, db }: { config:
       // A deleted account has no email, so its old address signs up as a new member.
       const existing = await tx.query<{ id: string; suspended: boolean }>(
         `select id, (suspended_at is not null and (suspended_until is null or suspended_until > clock_timestamp())) as suspended
-           from users where email = $1 and deleted_at is null`,
+           from users where ${campus ? 'email' : 'personal_email'} = $1 and deleted_at is null`,
         [email],
       );
       let user = existing.rows[0];
       let newUser = false;
-      if (!user) {
+      if (!user && !campus) return { result: 'wrong' as const };   // a personal email never creates an account
+      if (!user && campus) {
         const made = await tx.query<{ id: string }>(
           `insert into users (campus_id, email, member_type, verified, verified_method)
            values ($1, $2, $3, true, 'email_code') returning id`,

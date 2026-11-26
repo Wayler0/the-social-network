@@ -9,6 +9,8 @@ export type Me = {
   id: string;
   campus: { slug: string; name: string };
   email: string;
+  /** Linked for signing in after graduating (only the member sees it). */
+  personalEmail?: string | null;
   memberType: MemberTypeFull | null;
   name: string | null;
   photoUrl: string | null;

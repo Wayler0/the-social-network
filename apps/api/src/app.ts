@@ -18,6 +18,7 @@ import { imageRoutes } from './images/routes.js';
 import { followRoutes } from './follows/routes.js';
 import { suggestionRoutes } from './suggestions/routes.js';
 import { searchRoutes } from './search/routes.js';
+import { personalEmailRoutes } from './me/personal-email.js';
 import { storyRoutes } from './stories/routes.js';
 import { eventRoutes } from './events/routes.js';
 import { notificationRoutes } from './notifications/routes.js';
@@ -99,6 +100,7 @@ export function buildApp(config: Config, db: Db, deps: AppDeps = {}): FastifyIns
   app.register(followRoutes, { config, db });            // Kim — v0.2 follows
   app.register(suggestionRoutes, { db });                // who to follow (onboarding, Discover)
   app.register(searchRoutes, { db });                 // search: people, groups, posts, questions
+  app.register(personalEmailRoutes, { config, db });  // alumni keep access: link a personal email
   app.register(storyRoutes, { config, db });             // Kim — v0.2 stories
   app.register(eventRoutes, { config, db });             // Kim — v0.2 events
   app.register(notificationRoutes, { config, db });      // Kim — v0.2 notifications and push

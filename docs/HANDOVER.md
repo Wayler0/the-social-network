@@ -69,6 +69,11 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 
 ## Left before launch (in order of risk)
 
+- **Manual settings still empty:**
+  - `CONTACT_EMAIL` in `apps/web/src/config.ts`: the team address, shown in the privacy policy.
+  - Emergency numbers: they go on the campus row once the emergency button is built.
+- **Alumni:** linking a personal email is built (migration 027). Alumni who already graduated without one still need the reg number plus vouching or admin route.
+
 0. **Cloudflare (decided 25 Nov): keep the proxy** for attack protection, and fix what it breaks (Kim; details in `deploy/KENET.md`, To do 1).
    - Pass the member's real address (Caddy trusts Cloudflare's `CF-Connecting-IP`; `TRUST_PROXY_HOPS=3`).
    - The server accepts traffic only from Cloudflare.

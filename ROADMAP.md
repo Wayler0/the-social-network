@@ -34,6 +34,12 @@
 - **Clearer error messages.**
 - **Help page:** a short FAQ, linked from Settings.
 
+**Keep access after graduating** (`feat/dark-mode` branch, migration 027): Settings → "Keep access after graduating" links a personal email (with a code). After graduating, the sign-in screen offers "Graduated? Sign in with your linked personal email".
+- It never creates accounts.
+- Students who answer "I've graduated" in the year check are sent to link one.
+- Help and the privacy policy explain it.
+- Not built yet: alumni who already graduated without linking one still need reg number plus vouching or admin review (CLAUDE.md section 5).
+
 **Dark mode** (`feat/dark-mode`, stacked on `fix/heuristics`):
 - **Dark is the default look** (DECIDED 25 Nov, testers love it). Settings → Appearance still offers Light and System (follow the phone). The choice is remembered on the phone.
 - **Dark from the first frame:** the status bar and the installed app's launch screen are dark too.

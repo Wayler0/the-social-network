@@ -29,7 +29,11 @@ export function YearCheck() {
   const yes = () => answer(() => call<Me>('POST', '/api/me/year-check'));
   const stay = () => answer(() => call<Me>('PATCH', '/api/me',
     check.from === 1 ? { memberType: 'fresher', yearOfStudy: 1 } : { memberType: 'continuing', yearOfStudy: check.from }));
-  const graduated = () => answer(() => call<Me>('PATCH', '/api/me', { memberType: 'alumni', graduationYear: new Date().getFullYear() }));
+  const graduated = async () => {
+    await answer(() => call<Me>('PATCH', '/api/me', { memberType: 'alumni', graduationYear: new Date().getFullYear() }));
+    // The student email closes soon: link a personal one while it still works.
+    if (!me.personalEmail) navigate('/settings/personal-email');
+  };
 
   return (
     <Sheet title="New academic year" onClose={() => setLater(true)}>

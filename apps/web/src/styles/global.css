@@ -613,3 +613,7 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .settings-appearance { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 0 4px; border-bottom: 1px solid var(--line); font-size: 16px; }
 .settings-appearance .segmented { margin: 0; padding: 0; flex: none; }
 .settings-appearance .segmented button { padding: 0 12px; }
+
+/* ---------- Personal email (keep access after graduating) ---------- */
+.linked-email { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: var(--radius-m); background: var(--surface-2); overflow-wrap: anywhere; }
+.linked-email .btn { width: auto; flex: none; }

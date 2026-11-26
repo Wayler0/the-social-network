@@ -18,13 +18,14 @@ export type MeRow = {
   interests: string[]; roles: string[]; is_admin: boolean;
   member_number_normalised?: string | null; reg_number_pattern?: string | null;
   ask_feedback?: boolean;
+  personal_email?: string | null;
   year_check_from?: number | null;
 };
 
 const ME_SQL = `
   select u.id, c.slug as campus_slug, c.name as campus_name, u.email, u.member_type, u.name, u.photo_url, u.photo_image_id,
          u.course, u.year_of_study, u.graduation_year, u.member_number, u.member_number_status, u.is_under_18, u.interests,
-         u.member_number_normalised, c.reg_number_pattern, u.year_check_from,
+         u.member_number_normalised, c.reg_number_pattern, u.year_check_from, u.personal_email,
          (u.feedback_given_at is null and u.active_days >= u.feedback_ask_at_day) as ask_feedback,
          coalesce(array(select distinct r.role from roles r
                          where r.user_id = u.id and r.starts_at <= clock_timestamp()
@@ -67,6 +68,8 @@ export function meBody(u: MeRow) {
     id: u.id,
     campus: { slug: u.campus_slug, name: u.campus_name },
     email: u.email,
+    /** Linked for signing in after graduating (only ever shown to the member). */
+    personalEmail: u.personal_email ?? null,
     memberType: u.member_type,
     name: u.name,
     photoUrl: u.photo_url,

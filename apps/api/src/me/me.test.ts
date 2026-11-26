@@ -106,7 +106,7 @@ describe.skipIf(!url)('GET and PATCH /api/me (real database)', () => {
     const res = await m.as('GET', '/api/me');
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      id: m.id, campus: { slug: expect.any(String), name: expect.any(String) }, email: m.email, memberType: 'continuing',
+      id: m.id, campus: { slug: expect.any(String), name: expect.any(String) }, email: m.email, personalEmail: null, memberType: 'continuing',
       name: null, photoUrl: null, course: null, yearOfStudy: null, graduationYear: null,
       memberNumber: null, memberNumberStatus: 'unverified', isUnder18: null, interests: [], badges: [], isAdmin: false, profileComplete: false,
       memberNumberNeedsFix: false, askFeedback: false, yearCheck: null,
