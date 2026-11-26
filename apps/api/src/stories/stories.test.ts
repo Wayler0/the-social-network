@@ -55,7 +55,7 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     const res = await as('cynthia', 'POST', '/api/stories', { body: '  Exam week, good luck!  ' });
     expect(res.statusCode).toBe(201);
     const story = res.json();
-    expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers', background: 'black', resharedFrom: null,
+    expect(story).toEqual({ id: expect.any(String), body: 'Exam week, good luck!', image: null, audience: 'followers', background: 'black', resharedFrom: null, allowReshare: false,
       createdAt: expect.any(String), expiresAt: expect.any(String), seen: false, likedByMe: false, viewCount: 0, likeCount: 0 });
     expect(new Date(story.expiresAt).getTime() - new Date(story.createdAt).getTime()).toBe(24 * 3600 * 1000);
 
@@ -103,7 +103,7 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
   it('close friends and "hide my stories from"', async () => {
     await follows('brian', 'cynthia');
     await follows('david', 'cynthia');
-    const close = await post('cynthia', { audience: 'close_friends' });
+    const close = await post('cynthia', { audience: 'close_friends', allowReshare: true });
     expect(await seen('brian')).toEqual([]);
     expect((await as('cynthia', 'PUT', `/api/me/close-friends/${U('brian')}`)).statusCode).toBe(204);
     expect(await seen('brian')).toEqual([close]);
@@ -260,7 +260,7 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
 
   // ---------------------------------------------------------------- sharing a story
   it('reshare: credit and the original content; seen only by your followers who may also see the original', async () => {
-    const original = await post('cynthia', { body: 'Hackathon this weekend', background: 'violet' });
+    const original = await post('cynthia', { body: 'Hackathon this weekend', background: 'violet', allowReshare: true });
     await follows('brian', 'cynthia');                 // brian sees cynthia's stories
     await follows('david', 'brian');                   // david follows brian, but not cynthia
     await follows('esther', 'brian');
@@ -281,9 +281,13 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
   });
 
   it('reshare: not your own, not close friends, not what you cannot see; a reshare of a reshare points at the original', async () => {
-    const own = await post('cynthia', {});
-    expect((await as('cynthia', 'POST', `/api/stories/${own}/reshare`)).statusCode).toBe(400);
+    // Like WhatsApp: only when the author allows it (off by default).
+    const notAllowed = await post('cynthia', {});
     await follows('brian', 'cynthia');
+    const refused = await as('brian', 'POST', `/api/stories/${notAllowed}/reshare`);
+    expect([refused.statusCode, refused.json().message]).toEqual([403, 'The author hasn’t allowed sharing this story.']);
+    const own = await post('cynthia', { allowReshare: true });
+    expect((await as('cynthia', 'POST', `/api/stories/${own}/reshare`)).statusCode).toBe(400);
     await as('cynthia', 'PUT', `/api/me/close-friends/${U('brian')}`);
     const close = await post('cynthia', { audience: 'close_friends' });
     expect((await as('brian', 'POST', `/api/stories/${close}/reshare`)).statusCode).toBe(403);
@@ -296,8 +300,8 @@ describe.skipIf(!url)('Stories (real database, seed data)', () => {
     expect(second.statusCode).toBe(201);
     const root = (await client.query('select reshared_from_story_id as r from stories where id = $1', [second.json().id])).rows[0].r;
     expect(root).toBe(own);
-    // Official stories can be shared by anyone who sees them.
-    const official = await post('felix', { officeId: O('dean') });
+    // Official stories can be shared by anyone who sees them, when allowed.
+    const official = await post('felix', { officeId: O('dean'), allowReshare: true });
     expect((await as('amina', 'POST', `/api/stories/${official}/reshare`)).json()).toMatchObject({ resharedFrom: { name: expect.any(String) } });
   });
 

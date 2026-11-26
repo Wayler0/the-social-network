@@ -20,6 +20,7 @@ export function StoryNew() {
   const setBody = (v: string) => { setBodyState(v); saveDraft('story', v); };
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [audience, setAudience] = useState<'followers' | 'close_friends'>('followers');
+  const [allowReshare, setAllowReshare] = useState(false);
   const [background, setBackground] = useState<StoryBackground>('black');
   const [error, setError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -62,7 +63,7 @@ export function StoryNew() {
     if (!canShare) return;
     setPosting(true); setError(null);
     try {
-      await createStory({ ...(trimmed ? { body: trimmed } : {}), ...(photo?.imageId ? { imageId: photo.imageId } : {}), audience, ...(photo ? {} : { background }) });
+      await createStory({ ...(trimmed ? { body: trimmed } : {}), ...(photo?.imageId ? { imageId: photo.imageId } : {}), audience, allowReshare: allowReshare && audience === 'followers', ...(photo ? {} : { background }) });
       clearDraft('story');
       navigate('/', { replace: true });
     } catch (err) {
@@ -117,6 +118,12 @@ export function StoryNew() {
             </label>
           ))}
         </fieldset>
+        {audience === 'followers' && (
+          <label className="story-allow">
+            <input type="checkbox" checked={allowReshare} onChange={(e) => setAllowReshare(e.target.checked)} />
+            Let others add this to their story
+          </label>
+        )}
       </div>
       <p className="hint story-hint">Disappears after 24 hours. You’ll see who viewed it.</p>
       {error && <p className="error story-hint" role="alert">{error}</p>}

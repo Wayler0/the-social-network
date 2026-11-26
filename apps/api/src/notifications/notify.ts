@@ -10,7 +10,7 @@ import type { Queryable } from '../images/store.js';
  * turn that kind off. Push text is generic on purpose: it shows on lock screens.
  */
 
-export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled' | 'story' | 'office_story' | 'emergency';
+export type NotificationType = 'comment' | 'answer' | 'follow' | 'group_request' | 'group_approved' | 'event_cancelled' | 'story' | 'office_story' | 'emergency' | 'repost';
 type TargetType = 'post' | 'question' | 'user' | 'group' | 'event' | 'office' | 'emergency';
 
 /** Push settings a member can turn off (GET/PATCH /api/me/notification-settings). */
@@ -27,6 +27,7 @@ const KINDS: Record<NotificationType, { kind: PushKind; target: TargetType; text
   // Stories: generic text (lock screens); the stories row on Home shows whose.
   story:           { kind: 'stories',  target: 'user',     text: 'New story from someone you follow',       url: () => '/' },
   office_story:    { kind: 'stories',  target: 'office',   text: 'New story from an official account',      url: () => '/' },
+  repost:          { kind: 'comments', target: 'post',     text: 'Someone reposted your post',               url: (id) => `/post/${id}` },
   // Moderators and safety offices; its push is sent separately (src/emergency/routes.ts).
   emergency:       { kind: 'urgent',   target: 'emergency', text: 'A member pressed the emergency button',   url: () => '/admin?tab=alerts' },
 };

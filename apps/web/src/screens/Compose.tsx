@@ -6,7 +6,8 @@ import { PhotoCropper, POST_FRAMES } from '../components/PhotoCropper';
 import { ApiError } from '../lib/api';
 import { getGroup } from '../lib/community';
 import { addPostToTop } from '../lib/feed-store';
-import { createPost, IMAGE_MAX_BYTES, IMAGE_TYPES, POST_MAX, uploadImage } from '../lib/feed';
+import { createPost, getPost, IMAGE_MAX_BYTES, IMAGE_TYPES, POST_MAX, uploadImage, type Post } from '../lib/feed';
+import { RepostCard } from '../components/RepostCard';
 
 type Photo = { preview: string; imageId: string | null; uploading: boolean };
 
@@ -18,9 +19,13 @@ export function Compose() {
   // Club admins: an announcement goes to the club's members and followers, in their feeds too.
   const announcement = !!groupId && search.get('announcement') === '1';
   const [groupName, setGroupName] = useState<string | null>(null);
+  // "Repost with your comment": the original shows under the text; the comment is optional.
+  const repostId = search.get('repost');
+  const [repostSource, setRepostSource] = useState<Post | null>(null);
+  useEffect(() => { if (repostId) getPost(repostId).then(setRepostSource).catch(() => setRepostSource(null)); }, [repostId]);
   useEffect(() => { if (groupId) getGroup(groupId).then((g) => setGroupName(g.name)).catch(() => setGroupName(null)); }, [groupId]);
   // Kept on the phone while you type, so leaving the screen doesn't lose it (lib/drafts.ts).
-  const draftKey = `post:${groupId ?? 'feed'}`;
+  const draftKey = repostId ? `repost:${repostId}` : `post:${groupId ?? 'feed'}`;
   const [body, setBodyState] = useState(() => loadDraft(draftKey));
   const setBody = (v: string) => { setBodyState(v); saveDraft(draftKey, v); };
   const [photo, setPhoto] = useState<Photo | null>(null);
@@ -31,7 +36,7 @@ export function Compose() {
 
   const trimmed = body.trim();
   const tooLong = trimmed.length > POST_MAX;
-  const canPost = trimmed.length > 0 && !tooLong && !posting && !photo?.uploading;
+  const canPost = (trimmed.length > 0 || !!repostId) && !tooLong && !posting && !photo?.uploading;
 
   // A chosen photo opens the editor first (crop, zoom, rotate); only the edited photo is uploaded.
   const [original, setOriginal] = useState<File | null>(null);
@@ -67,7 +72,8 @@ export function Compose() {
     if (!canPost) return;
     setPosting(true); setError(null);
     try {
-      const created = await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}), ...(announcement ? { announcement: true } : {}) });
+      const created = await createPost(repostId ? { body: trimmed, repostOf: repostId }
+        : { body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}), ...(announcement ? { announcement: true } : {}) });
       clearDraft(draftKey);
       addPostToTop(created);
       // Back to the club tab the post went to (Discussion posts aren't on the Announcements tab).
@@ -83,7 +89,7 @@ export function Compose() {
     <form className="compose" onSubmit={submit}>
       <header className="topbar">
         <button type="button" className="icon-btn" aria-label="Cancel" onClick={() => navigate(-1)}><Icon name="close" /></button>
-        <h1 className="topbar-title">New post</h1>
+        <h1 className="topbar-title">{repostId ? 'Repost' : 'New post'}</h1>
         <button type="submit" className="btn post-btn" disabled={!canPost}>{posting ? 'Posting…' : 'Post'}</button>
       </header>
 
@@ -92,7 +98,7 @@ export function Compose() {
           ? <>Announcement from {groupName ?? 'the club'}. Its members and followers will see it, in their feeds too.</>
           : <>Posting in {groupName ?? 'the group'}. Only its members will see it.</>}</p>}
         <label htmlFor="post-body" className="visually-hidden">What’s happening on campus?</label>
-        <textarea id="post-body" className="compose-text" placeholder="What’s happening on campus?" autoFocus
+        <textarea id="post-body" className="compose-text" placeholder={repostId ? 'Add a comment (optional)' : 'What’s happening on campus?'} autoFocus
           value={body} onChange={(e) => setBody(e.target.value)} aria-invalid={tooLong} aria-describedby="post-count" />
         <p id="post-count" className={`hint count${tooLong ? ' over' : ''}`}>{trimmed.length} / {POST_MAX}</p>
 
@@ -114,15 +120,16 @@ export function Compose() {
             onDone={(edited) => { setEditing(false); void pick(edited); }} />
         )}
 
+        {repostId && repostSource && <RepostCard repost={repostSource.repostOf?.available ? repostSource.repostOf : { available: true, id: repostSource.id, body: repostSource.body, createdAt: repostSource.createdAt, author: repostSource.author, image: repostSource.image }} />}
         {error && <p className="error" role="alert">{error}</p>}
 
-        <div className="compose-tools">
+        {!repostId && <div className="compose-tools">
           <label className="btn secondary btn-link tool">
             <Icon name="image" /> {photo ? 'Change photo' : 'Add photo'}
             <input type="file" accept={IMAGE_TYPES} className="visually-hidden"
               onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
-        </div>
+        </div>}
         <p className="hint">Be kind. No photos of injured people, and don’t name anyone hurt or killed until it’s officially confirmed. Location data is removed from photos.</p>
       </div>
     </form>

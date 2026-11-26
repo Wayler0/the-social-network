@@ -82,13 +82,18 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
       officeId: z.string().uuid().optional(),
       /** Club pages: an announcement (club admins only) instead of a discussion post. */
       announcement: z.boolean().default(false),
+      /** Repost a campus feed post to the feed; `body` is an optional comment. */
+      repostOf: z.string().uuid().optional(),
     }).strict().refine((b) => !b.announcement || b.groupId, { message: 'announcement: only in a club (send groupId)' })
-      .refine((b) => b.body.length > 0 || b.eventId, { message: 'body: cannot be empty' }), req.body, reply);
+      .refine((b) => !b.repostOf || (!b.groupId && !b.eventId && !b.imageId && !b.officeId && !b.announcement),
+        { message: 'repostOf: a repost goes to the feed and has only an optional comment' })
+      .refine((b) => b.body.length > 0 || b.eventId || b.repostOf, { message: 'body: cannot be empty' }), req.body, reply);
     if (!body) return;
     if (!(await requireCompleteProfile(db, req, reply))) return;
     const viewer = req.auth!;
 
     type Outcome = { ok: true; id: string } | { ok: false; status: number; error: string; message: string } | { ok: false; wait: number };
+    let repostOf: { id: string; author: string } | null = null;
     const outcome = await inTransaction(db, async (tx): Promise<Outcome> => {
       if (body.groupId) {
         const { rows } = await tx.query<{ posting: string; kind: string; role: string | null; status: string | null }>(
@@ -128,6 +133,18 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
           [viewer.userId, viewer.campusId, body.eventId]);
         if (rows.length === 0) return { ok: false, status: 404, error: 'not_found', message: 'That event can’t be shared: only events open to the whole campus can.' };
       }
+      if (body.repostOf) {
+        // Only campus feed posts the viewer may see. Reposting a repost reposts its original.
+        const find = async (id: string) => (await tx.query<{ id: string; author_user_id: string; repost_of: string | null }>(
+          `select p.id, p.author_user_id, p.repost_of from posts p where p.id = $3 and p.group_id is null and ${visiblePost('p', V)}`,
+          [viewer.userId, viewer.campusId, id])).rows[0];
+        let original = await find(body.repostOf);
+        if (original?.repost_of) original = await find(original.repost_of);
+        if (!original) return { ok: false, status: 404, error: 'not_found', message: 'That post can’t be reposted.' };
+        const already = await tx.query('select 1 from posts where repost_of = $1 and author_user_id = $2 and deleted_at is null', [original.id, viewer.userId]);
+        if (already.rows.length) return { ok: false, status: 409, error: 'already_reposted', message: 'You already reposted this.' };
+        repostOf = { id: original.id, author: original.author_user_id };
+      }
       const wait = await takeRateLimits(tx, [{ bucket: 'post_user', key: viewer.userId, max: POSTS_PER_HOUR, windowSeconds: 3600 }]);
       if (wait) return { ok: false, wait };
 
@@ -138,10 +155,11 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
         imageId = image.id;
       }
       const { rows } = await tx.query<{ id: string }>(
-        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id, announcement, event_id)
-         values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
-        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId, body.announcement, body.eventId ?? null],
+        `insert into posts (campus_id, author_user_id, author_office_id, group_id, body, image_id, announcement, event_id, repost_of)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body, imageId, body.announcement, body.eventId ?? null, repostOf?.id ?? null],
       );
+      if (repostOf) await notify(tx, config.APP_NAME, { type: 'repost', userIds: [repostOf.author], actorId: viewer.userId, targetId: repostOf.id });
       return { ok: true, id: rows[0]!.id };
     });
 
@@ -190,6 +208,17 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     return reply.code(204).send();
   });
 
+  // ---- DELETE /api/posts/:id/repost   undo your repost of this post (the original's id)
+  app.delete('/api/posts/:id/repost', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    if (!params.success) return fail(reply, 404, 'not_found', 'Post not found.');
+    const { rowCount } = await db.query(
+      'update posts set deleted_at = clock_timestamp() where repost_of = $1 and author_user_id = $2 and deleted_at is null',
+      [params.data.id, req.auth!.userId]);
+    if (!rowCount) return fail(reply, 404, 'not_found', 'You haven’t reposted this.');
+    return reply.code(204).send();
+  });
+
   // ---- PATCH /api/posts/:id   { body }   the author changes the text; the post shows "Edited".
   // Only the text (not the photo, group or office). Not for hidden or deleted posts. The earlier
   // text is kept in post_edits for moderators, so editing can't hide what someone reported.
@@ -201,7 +230,7 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
     const post = params.success ? await loadPost(db, viewer, params.data.id) : null;
     if (!post) return fail(reply, 404, 'not_found', 'Post not found.');
     if (post.author_id !== viewer.userId) return fail(reply, 403, 'forbidden', 'You can only edit your own posts.');
-    if (body.body.length === 0 && !post.event_id) return fail(reply, 400, 'invalid_input', 'body: cannot be empty');
+    if (body.body.length === 0 && !post.event_id && !post.repost_of_id) return fail(reply, 400, 'invalid_input', 'body: cannot be empty');
     if (body.body === post.body) return postBody(post);
 
     const wait = await inTransaction(db, async (tx) => {

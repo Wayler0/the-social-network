@@ -181,7 +181,7 @@ export function StoryViewer({ groups, start, onSeen, onDeleted, onClose }: {
       {note && <p className="story-note" role="status">{note}</p>}
       {sheet === 'share' && (
         <Sheet title="Share story" onClose={() => setSheet('none')}>
-          {story.audience !== 'close_friends' && (
+          {story.audience !== 'close_friends' && story.allowReshare && (
             <button type="button" className="sheet-row" onClick={async () => {
               try { await reshareStory(story.id); setNote('Added to your story'); } catch (err) {
                 setNote(err instanceof ApiError ? err.message : 'Couldn’t share. Try again.');

@@ -35,13 +35,29 @@ export const POST_SELECT = `
          (ev.cancelled_at is not null) as event_cancelled,
          (select count(*) from event_rsvps er where er.event_id = ev.id and er.status = 'going')::int as event_going,
          (select er.status from event_rsvps er where er.event_id = ev.id and er.user_id = $1) as event_my_rsvp,
-         exists (select 1 from follows fa where fa.follower_id = $1 and fa.target_type = 'user' and fa.target_id = p.author_user_id) as following_author
+         exists (select 1 from follows fa where fa.follower_id = $1 and fa.target_type = 'user' and fa.target_id = p.author_user_id) as following_author,
+         p.repost_of as repost_of_id, op.id as rp_id, op.body as rp_body, op.created_at as rp_created_at,
+         case when opa.deleted_at is null then opa.id end as rp_author_id,
+         case when opa.deleted_at is null then opa.name end as rp_author_name,
+         case when opa.deleted_at is null then opa.photo_url end as rp_author_photo,
+         case when opa.deleted_at is null then ${activeRoles('opa.id')} else '{}' end as rp_author_roles,
+         opi.path as rp_image_path, opi.width as rp_image_width, opi.height as rp_image_height,
+         (select count(*) from posts rr where rr.repost_of = p.id and rr.deleted_at is null and rr.hidden_at is null)::int as repost_count,
+         exists (select 1 from posts rr where rr.repost_of = p.id and rr.author_user_id = $1 and rr.deleted_at is null) as reposted_by_me
     from posts p
     join users au on au.id = p.author_user_id
     left join office_accounts o on o.id = p.author_office_id
     left join groups g on g.id = p.group_id
     left join images i on i.id = p.image_id
-    left join events ev on ev.id = p.event_id and ev.hidden_at is null and ev.deleted_at is null`;
+    left join events ev on ev.id = p.event_id and ev.hidden_at is null and ev.deleted_at is null
+    -- A repost's original, only while the viewer may see it (a campus feed post, same campus, not
+    -- hidden or deleted, no block either way): the same as visiblePost for a post outside groups.
+    left join posts op on op.id = p.repost_of and op.campus_id = p.campus_id and op.group_id is null
+                        and op.hidden_at is null and op.deleted_at is null
+                        and not exists (select 1 from blocks ob where (ob.blocker_id = $1 and ob.blocked_id = op.author_user_id)
+                                                                 or (ob.blocker_id = op.author_user_id and ob.blocked_id = $1))
+    left join users opa on opa.id = op.author_user_id
+    left join images opi on opi.id = op.image_id`;
 
 export type AuthorRow = { author_id: string | null; author_name: string | null; author_photo: string | null; author_roles: string[] };
 
@@ -54,6 +70,10 @@ export type PostRow = AuthorRow & {
   saved_by_me: boolean;
   event_id: string | null; event_title: string | null; event_location: string | null; event_starts_at: Date | null;
   event_cancelled: boolean | null; event_going: number | null; event_my_rsvp: string | null; following_author: boolean;
+  repost_of_id: string | null; rp_id: string | null; rp_body: string | null; rp_created_at: Date | null;
+  rp_author_id: string | null; rp_author_name: string | null; rp_author_photo: string | null; rp_author_roles: string[] | null;
+  rp_image_path: string | null; rp_image_width: number | null; rp_image_height: number | null;
+  repost_count: number; reposted_by_me: boolean;
 };
 
 export function author(r: AuthorRow) {
@@ -85,6 +105,16 @@ export function postBody(r: PostRow) {
     createdAt: r.created_at.toISOString(),
     /** When the author last changed the text (shown as "Edited"), or null. */
     editedAt: r.edited_at ? r.edited_at.toISOString() : null,
+    /** A repost: the original post, or { available: false } once it is deleted, hidden or blocked. */
+    repostOf: r.repost_of_id === null ? null : r.rp_id === null ? { available: false as const } : {
+      available: true as const, id: r.rp_id, body: r.rp_body ?? '', createdAt: r.rp_created_at!.toISOString(),
+      author: r.rp_author_id
+        ? { id: r.rp_author_id, name: r.rp_author_name, photoUrl: r.rp_author_photo, badges: badgesFor(r.rp_author_roles ?? []) }
+        : { id: null, name: 'Deleted member', photoUrl: null, badges: [] },
+      image: r.rp_image_path ? { url: imageUrls(r.rp_image_path).url, width: r.rp_image_width, height: r.rp_image_height } : null,
+    },
+    repostCount: r.repost_count,
+    repostedByMe: r.reposted_by_me,
   };
 }
 

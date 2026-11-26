@@ -16,6 +16,8 @@ export type Story = {
   id: string; body: string | null; image: StoryImage | null; audience: 'followers' | 'close_friends';
   /** Shared from someone else's story: who it is from. */
   resharedFrom?: { name: string } | null;
+  /** The author lets others add it to their story (off by default, like WhatsApp). */
+  allowReshare?: boolean;
   /** Missing on stories from before colours existed: treat as black. */
   background?: StoryBackground;
   createdAt: string; expiresAt: string; seen: boolean; likedByMe: boolean;
@@ -30,7 +32,7 @@ export const STORY_MAX = 500;
 const id = encodeURIComponent;
 
 export const getStories = () => call<{ items: StoryGroup[] }>('GET', '/api/stories');
-export const createStory = (input: { body?: string; imageId?: string; audience?: 'followers' | 'close_friends'; background?: StoryBackground }) =>
+export const createStory = (input: { body?: string; imageId?: string; audience?: 'followers' | 'close_friends'; background?: StoryBackground; allowReshare?: boolean }) =>
   call<Story>('POST', '/api/stories', input);
 export const markStorySeen = (storyId: string) => call<void>('POST', `/api/stories/${id(storyId)}/view`);
 export const getStoryViewers = (storyId: string) => call<{ count: number; likeCount: number; items: StoryViewer[] }>('GET', `/api/stories/${id(storyId)}/viewers`);

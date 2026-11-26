@@ -2,10 +2,12 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { follow, deletePost, REACTION_EMOJI, REACTION_LABEL, REACTIONS, reactToPost, savePost, type Reaction, plural, timeAgo, type Post } from '../lib/feed';
+import { follow, createPost, undoRepost, deletePost, REACTION_EMOJI, REACTION_LABEL, REACTIONS, reactToPost, savePost, type Reaction, plural, timeAgo, type Post } from '../lib/feed';
 import { Avatar } from './Avatar';
 import { ContentMenu } from './ContentMenu';
 import { EditPostSheet } from './EditPostSheet';
+import { RepostCard } from './RepostCard';
+import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { PhotoViewer } from './PhotoViewer';
 import { setFollowingAuthor } from '../lib/feed-store';
@@ -28,10 +30,31 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [reposting, setReposting] = useState(false);
+  const [repostNote, setRepostNote] = useState<string | null>(null);
   const [likeError, setLikeError] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
   const isOwn = !!me && post.author.id === me.id;
+  // Reposts: campus feed posts only (not group posts). Reposting a repost reposts its original.
+  const repostTarget = post.repostOf?.available ? post.repostOf.id : post.id;
+  const canRepost = !post.group && !(post.repostOf && !post.repostOf.available);
+  async function quickRepost() {
+    setReposting(false);
+    try {
+      await createPost({ body: '', repostOf: repostTarget });
+      onChange({ ...post, repostedByMe: true, repostCount: (post.repostCount ?? 0) + 1 });
+      setRepostNote('Reposted to your followers’ feed.');
+    } catch (err) { setRepostNote(err instanceof ApiError ? err.message : 'Couldn’t repost. Check your connection and try again.'); }
+    window.setTimeout(() => setRepostNote(null), 2500);
+  }
+  async function undo() {
+    setReposting(false);
+    try {
+      await undoRepost(repostTarget);
+      onChange({ ...post, repostedByMe: false, repostCount: Math.max(0, (post.repostCount ?? 1) - 1) });
+    } catch (err) { setRepostNote(err instanceof ApiError ? err.message : 'Couldn’t undo. Try again.'); }
+  }
   const href = `/post/${post.id}`;
 
   async function share() {
@@ -129,6 +152,7 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
             {post.group && <span>{post.announcement ? 'from' : 'in'} <Link to={`/groups/${post.group.id}`} className="post-group-link">{post.group.name}</Link> · </span>}
             <time dateTime={post.createdAt} title={new Date(post.createdAt).toLocaleString()}>{timeAgo(post.createdAt)}</time>
             {post.editedAt && <span title={`Edited ${new Date(post.editedAt).toLocaleString()}`}> · Edited</span>}
+            {post.repostOf && <span className="reposted-label"> · <Icon name="repost" size={13} /> reposted</span>}
           </div>
         </div>
         <button type="button" className="icon-btn" aria-label="Post options" onClick={() => setMenu(true)}>
@@ -142,6 +166,8 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
         onClick={linkToPost ? () => { if (!window.getSelection()?.toString()) navigate(href); } : undefined}>
         <RichText text={post.body} />
       </p>}
+
+      {post.repostOf && <RepostCard repost={post.repostOf} />}
 
       {post.event && (() => {
         const ev = post.event!;
@@ -193,8 +219,10 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
         {linkToPost
           ? <Link to={href} className="action" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></Link>
           : <span className="action static" aria-label={plural(post.commentCount, 'comment')}><Icon name="comment" /><span>{post.commentCount}</span></span>}
-        <button type="button" className="action" aria-label="Share link to this post" onClick={() => void share()}>
-          <Icon name="share" />
+        {/* One button for sharing, like stories: repost inside the app, or share a link outside it. */}
+        <button type="button" className={`action${post.repostedByMe ? ' reposted' : ''}`}
+          aria-label={`Share or repost${post.repostCount ? `, ${plural(post.repostCount, 'repost')}` : ''}`} onClick={() => setReposting(true)}>
+          <Icon name="share" />{(post.repostCount ?? 0) > 0 && <span>{post.repostCount}</span>}
         </button>
         <button type="button" className={`action action-end${post.savedByMe ? ' saved' : ''}`} aria-pressed={post.savedByMe}
           aria-label={post.savedByMe ? 'Remove from saved' : 'Save post'} onClick={() => void toggleSave()}>
@@ -210,6 +238,22 @@ export function PostCard({ post, onChange, onRemoved, onBlocked, linkToPost = tr
           onDelete={async () => { await deletePost(post.id); onRemoved(post.id); }}
           onEdit={() => { setMenu(false); setEditing(true); }}
           onBlocked={onBlocked} onClose={() => setMenu(false)} />
+      )}
+      {repostNote && <p className="hint post-error" role="status">{repostNote}</p>}
+      {reposting && (
+        <Sheet title="Share post" onClose={() => setReposting(false)}>
+          <div className="sheet-actions">
+            {canRepost && (post.repostedByMe
+              ? <button type="button" className="sheet-row danger" onClick={() => void undo()}>Undo repost</button>
+              : <>
+                  <button type="button" className="sheet-row" onClick={() => void quickRepost()}>Repost</button>
+                  <button type="button" className="sheet-row" onClick={() => { setReposting(false); navigate(`/create?repost=${repostTarget}`); }}>Repost with your comment</button>
+                </>)}
+            <button type="button" className="sheet-row" onClick={() => { setReposting(false); void share(); }}>Share link</button>
+            <p className="sheet-text muted">Only members can open the link.</p>
+            <button type="button" className="sheet-row muted" onClick={() => setReposting(false)}>Cancel</button>
+          </div>
+        </Sheet>
       )}
       {editing && <EditPostSheet post={post} onSaved={onChange} onClose={() => setEditing(false)} />}
     </article>
