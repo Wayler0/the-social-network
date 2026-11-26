@@ -34,6 +34,12 @@
 - **Clearer error messages.**
 - **Help page:** a short FAQ, linked from Settings.
 
+**Dark mode** (`feat/dark-mode`, stacked on `fix/heuristics`):
+- **Setting:** Settings → Appearance: System (the default, follows the phone), Light or Dark. The choice is remembered on the phone.
+- **Colours** are from the dark design canvas. Filled buttons stay violet, and the status bar turns dark too.
+- **Checked:** 16 screens in the browser. No leftover white backgrounds, and all text meets readable contrast (4.5:1) in both themes.
+- **Team review still needed:** is the background dark enough, and should System stay the default?
+
 **Still to check by hand on a phone** (the browser tool was down): story sharing sheet, course suggestions, event card in the feed.
 
 **Open:** APK — wait for the final domain, or build a Trusted Web Activity now? · team contact email for the privacy policy · next graduation date (alumni sign-in).

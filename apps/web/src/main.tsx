@@ -6,9 +6,11 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { AuthProvider } from './lib/auth';
 import { startInstallListener } from './lib/install';
 import { startNoZoom } from './lib/no-zoom';
+import { startTheme } from './lib/theme';
 import { UnreadProvider } from './lib/unread';
 import './styles/global.css';
 
+startTheme();
 startInstallListener();
 startNoZoom();
 
