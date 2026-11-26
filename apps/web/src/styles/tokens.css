@@ -18,8 +18,21 @@
   --line: #eceaf2;
   --danger: #c4183c;
 
-  --accent: var(--violet);
+  --accent: var(--violet);          /* links, active tabs, focus rings, selected borders */
   --accent-press: var(--violet-dark);
+  --violet-text: var(--violet-dark); /* text on violet-soft */
+  --button: var(--violet);           /* filled buttons and badges with white text */
+  --button-press: var(--violet-dark);
+  --danger-button: #c4183c;
+  --danger-line: #f3c2cd;
+  --mint-soft: #dcf7f1;
+  --mint-text: #0b7d69;
+  --sunshine-soft: #fff3d1;
+  --sunshine-text: #8a6200;
+  --inverse: var(--ink);             /* toasts, banners: dark on light, light on dark */
+  --on-inverse: #ffffff;
+  --shadow: rgba(17, 16, 24, 0.25);
+  color-scheme: light;
 
   --font-heading: 'Space Grotesk', Inter, system-ui, sans-serif;
   --font-body: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -33,4 +46,62 @@
   --topbar-h: 56px;
   --nav-h: 64px;
   --max-w: 480px; /* one column, phone-first */
+}
+
+/*
+ * Dark theme (design canvas "Dark theme", 25 Nov 2026). Follows the phone's setting unless the
+ * member picks Light or Dark in Settings (data-theme on <html>, lib/theme.ts). Filled buttons stay
+ * violet #6a3df5; --ink stays dark because it is also the text colour on sunshine and mint.
+ */
+:root[data-theme="dark"] {
+  --violet-soft: #2a2246;
+  --coral: #ff5c86;
+  --coral-soft: #3a1a26;
+  --text: #f4f2fa;
+  --text-2: #b9b4c9;
+  --text-3: #9a95ab;
+  --surface: #121119;
+  --surface-2: #1a1823;
+  --fill: #24212f;
+  --line: #2c2939;
+  --danger: #ff8fa9;
+  --accent: #a48cff;
+  --accent-press: #c9bbff;
+  --violet-text: #c9bbff;
+  --danger-line: #5a2433;
+  --mint-soft: #143a34;
+  --mint-text: #2ee0bf;
+  --sunshine-soft: #3a3014;
+  --sunshine-text: #ffc83d;
+  --inverse: #f4f2fa;
+  --on-inverse: #111018;
+  --shadow: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --violet-soft: #2a2246;
+    --coral: #ff5c86;
+    --coral-soft: #3a1a26;
+    --text: #f4f2fa;
+    --text-2: #b9b4c9;
+    --text-3: #9a95ab;
+    --surface: #121119;
+    --surface-2: #1a1823;
+    --fill: #24212f;
+    --line: #2c2939;
+    --danger: #ff8fa9;
+    --accent: #a48cff;
+    --accent-press: #c9bbff;
+    --violet-text: #c9bbff;
+    --danger-line: #5a2433;
+    --mint-soft: #143a34;
+    --mint-text: #2ee0bf;
+    --sunshine-soft: #3a3014;
+    --sunshine-text: #ffc83d;
+    --inverse: #f4f2fa;
+    --on-inverse: #111018;
+    --shadow: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
 }

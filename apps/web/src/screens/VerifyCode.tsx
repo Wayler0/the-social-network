@@ -101,7 +101,7 @@ export function VerifyCode() {
       <Link to="/welcome" className="icon-btn back-link" aria-label="Back, change email"><Icon name="back" /></Link>
       <div className="auth-hero" style={{ paddingTop: 0 }}>
         <h1 className="screen-title">Check your email</h1>
-        <p>We sent a 6-digit code to <strong style={{ color: 'var(--ink)' }}>{email}</strong>. It expires in 10 minutes.</p>
+        <p>We sent a 6-digit code to <strong style={{ color: 'var(--text)' }}>{email}</strong>. It expires in 10 minutes.</p>
       </div>
 
       <form className="auth-form" onSubmit={(e) => { e.preventDefault(); if (digits.every(Boolean)) void submit(digits.join('')); }}>

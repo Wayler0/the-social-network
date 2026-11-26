@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { promptInstall, useInstallState } from '../lib/install';
 import { forgetLastEmail } from '../lib/last-email';
 import { APP_NAME } from '../config';
+import { setTheme, useTheme, type ThemeChoice } from '../lib/theme';
 
 /** Settings and account: log out and delete account (CLAUDE.md sections 4.1 and 10). */
 export function Settings() {
@@ -68,9 +69,10 @@ export function Settings() {
         <span style={{ width: 44 }} />
       </header>
       <div className="screen settings">
-        <p className="muted">Signed in as <strong style={{ color: 'var(--ink)' }}>{me?.email}</strong></p>
+        <p className="muted">Signed in as <strong style={{ color: 'var(--text)' }}>{me?.email}</strong></p>
         <Link to="/profile/edit" className="settings-row">Edit profile</Link>
         <Link to="/settings/notifications" className="settings-row">Notifications</Link>
+        <Appearance />
         {isModerator(me) && <Link to="/admin" className="settings-row">{me?.isAdmin ? 'Admin' : 'Moderation'}</Link>}
         {install === 'available' && (
           <button className="settings-row" onClick={() => void promptInstall()}>Install {APP_NAME} on this device</button>
@@ -114,5 +116,25 @@ export function Settings() {
         </div>
       </div>
     </>
+  );
+}
+
+const THEMES: { value: ThemeChoice; label: string }[] = [
+  { value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' },
+];
+
+/** Light, dark, or follow the phone (remembered on this phone). */
+function Appearance() {
+  const theme = useTheme();
+  return (
+    <div className="settings-appearance">
+      <span id="appearance-label">Appearance</span>
+      <div className="segmented" role="radiogroup" aria-labelledby="appearance-label">
+        {THEMES.map((t) => (
+          <button key={t.value} type="button" role="radio" aria-checked={theme === t.value}
+            className={theme === t.value ? 'active' : ''} onClick={() => setTheme(t.value)}>{t.label}</button>
+        ))}
+      </div>
+    </div>
   );
 }
