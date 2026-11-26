@@ -17,6 +17,7 @@ export function Discover() {
   return (
     <>
       <header className="topbar"><h1 className="topbar-title">Discover</h1></header>
+      <Link to="/search" className="search-entry"><Icon name="discover" size={18} /> Search people, groups, posts</Link>
       <PeopleCards />
       <div className="tiles">
         {tiles.map((t) => {
