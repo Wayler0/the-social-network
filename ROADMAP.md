@@ -34,6 +34,10 @@
 - **Clearer error messages.**
 - **Help page:** a short FAQ, linked from Settings.
 
+**Reposts** (migration 029):
+- **Feed:** anyone can repost a campus post, or repost it with a comment. The repost shows the original inside it, or "no longer available" once it's gone. One Share button holds Repost, Repost with your comment, and Share link, like stories (group posts get Share link only). Undo from the same button.
+- **Stories:** like WhatsApp, others can add your story to theirs only if you tick "Let others add this to their story" (off by default).
+
 **Chat: January 2027** (DECIDED 26 Nov). Until then there's no Messages icon; the Help page says chat is coming.
 
 **Emergency button** (migration 028): Settings → Emergency help, or the Discover tile.

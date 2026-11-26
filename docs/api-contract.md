@@ -555,6 +555,21 @@ Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipi
 - **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
 - **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
 
+## 19. Reposts ✅ (migration 029)
+
+**Feed (free):** any member may repost a campus feed post (not a group post) they can see.
+- **Create:** `POST /api/posts { body, repostOf }`. The comment in `body` is optional.
+- **One per person per post:** a second one gets `409 already_reposted`. Reposting a repost reposts its original.
+- **Undo:** `DELETE /api/posts/:id/repost`, where `:id` is the original's id.
+- **On every `Post`:**
+  - `repostOf`: `null`, `{ available: false }` once the original is deleted, hidden or blocked for you, or `{ available: true, id, body, createdAt, author, image }`.
+  - `repostCount` and `repostedByMe`.
+- The original's author gets a `repost` notification.
+
+**Stories (like WhatsApp):** `POST /api/stories { …, allowReshare }`, off by default. Close-friends stories never allow it.
+- `POST /api/stories/:id/reshare` returns `403` unless the original allows it.
+- Stories include `allowReshare`.
+
 ## 18. Emergency button (MVP item 8) ✅
 
 | Call | Who | Response |

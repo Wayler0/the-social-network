@@ -27,6 +27,7 @@ const ROW_LIMIT = 500;
 type StoryRow = {
   id: string; body: string | null; audience: 'followers' | 'close_friends'; background: string; created_at: Date; expires_at: Date;
   reshared_from_name: string | null;
+  allow_reshare: boolean;
   author_user_id: string; author_name: string | null; author_photo: string | null; author_roles: string[];
   office_id: string | null; office_name: string | null; office_photo: string | null;
   group_id: string | null; group_name: string | null; group_verified: boolean | null;
@@ -37,6 +38,7 @@ type StoryRow = {
 const STORY_SELECT = `
   select s.id, coalesce(rs.body, s.body) as body, s.audience, coalesce(rs.background, s.background) as background, s.created_at, s.expires_at,
          case when rs.id is not null then coalesce(ro.name, rg.name, ru.name) end as reshared_from_name,
+         (coalesce(rs.allow_reshare, s.allow_reshare) and coalesce(rs.audience, s.audience) = 'followers') as allow_reshare,
          s.author_user_id, au.name as author_name, au.photo_url as author_photo, ${activeRoles('au.id')} as author_roles,
          o.id as office_id, o.name as office_name, o.photo_url as office_photo,
          g.id as group_id, g.name as group_name, (g.club_verified_at is not null) as group_verified,
@@ -75,6 +77,8 @@ function storyBody(s: StoryRow) {
     audience: s.audience, background: s.background,
     /** Shared from someone else's story: who it is from (credit). */
     resharedFrom: s.reshared_from_name !== null ? { name: s.reshared_from_name } : null,
+    /** The author lets others add it to their story (like WhatsApp; off by default). */
+    allowReshare: s.allow_reshare,
     createdAt: iso(s.created_at), expiresAt: iso(s.expires_at), seen: s.seen,
     likedByMe: s.liked_by_me,
     ...(s.view_count !== null ? { viewCount: s.view_count } : {}),
@@ -194,6 +198,8 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
       audience: z.enum(['followers', 'close_friends']).default('followers'),
       /** Text stories: the background colour (black by default). */
       background: z.enum(STORY_BACKGROUNDS).default('black'),
+      /** Let others add this story to theirs (off by default). Close-friends stories never. */
+      allowReshare: z.boolean().default(false),
       officeId: z.string().uuid().optional(),
       groupId: z.string().uuid().optional(),
     }).strict()
@@ -231,9 +237,9 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
         imageId = image.id;
       }
       const { rows } = await tx.query<{ id: string }>(
-        `insert into stories (campus_id, author_user_id, author_office_id, author_group_id, body, image_id, audience, background, created_at, expires_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp(), clock_timestamp() + make_interval(hours => $9)) returning id`,
-        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body ?? null, imageId, body.audience, body.background, STORY_HOURS]);
+        `insert into stories (campus_id, author_user_id, author_office_id, author_group_id, body, image_id, audience, background, allow_reshare, created_at, expires_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $10, clock_timestamp(), clock_timestamp() + make_interval(hours => $9)) returning id`,
+        [viewer.campusId, viewer.userId, body.officeId ?? null, body.groupId ?? null, body.body ?? null, imageId, body.audience, body.background, STORY_HOURS, body.allowReshare && body.audience === 'followers']);
       await notifyNewStory(tx, config.APP_NAME, rows[0]!.id, viewer.userId);
       return { ok: true, id: rows[0]!.id };
     });
@@ -274,10 +280,11 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
            from stories s where s.id = $3 and ${visibleStory('s', V)}`,
         [viewer.userId, viewer.campusId, params.data.id])).rows[0];
       if (!original) return 'missing' as const;
-      const root = (await tx.query<{ author_user_id: string; audience: string; author_office_id: string | null; author_group_id: string | null }>(
-        'select author_user_id, audience, author_office_id, author_group_id from stories where id = $1', [original.root])).rows[0]!;
+      const root = (await tx.query<{ author_user_id: string; audience: string; author_office_id: string | null; author_group_id: string | null; allow_reshare: boolean }>(
+        'select author_user_id, audience, author_office_id, author_group_id, allow_reshare from stories where id = $1', [original.root])).rows[0]!;
       if (root.author_user_id === viewer.userId && !root.author_office_id && !root.author_group_id) return 'own' as const;
       if (root.audience !== 'followers') return 'private' as const;
+      if (!root.allow_reshare) return 'not_allowed' as const;
       const wait = await takeRateLimits(tx, [{ bucket: 'story_user', key: viewer.userId, max: STORIES_PER_DAY, windowSeconds: 86_400 }]);
       if (wait) return { wait, id: null };
       const { rows } = await tx.query<{ id: string }>(
@@ -289,6 +296,7 @@ export async function storyRoutes(app: FastifyInstance, { config, db }: { config
     if (outcome === 'missing') return notFound(reply);
     if (outcome === 'own') return fail(reply, 400, 'invalid_input', 'That’s your own story.');
     if (outcome === 'private') return fail(reply, 403, 'forbidden', 'Close-friends stories can’t be shared.');
+    if (outcome === 'not_allowed') return fail(reply, 403, 'forbidden', 'The author hasn’t allowed sharing this story.');
     if (outcome.wait || !outcome.id) {
       reply.header('Retry-After', String(outcome.wait));
       return fail(reply, 429, 'rate_limited', `You have posted a lot of stories today. Try again in ${waitText(outcome.wait)}.`, { retryAfterSeconds: outcome.wait });
