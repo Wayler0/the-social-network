@@ -15,6 +15,7 @@ import { EventForm } from './screens/EventForm';
 import { Events } from './screens/Events';
 import { Discover } from './screens/Discover';
 import { Search } from './screens/Search';
+import { Help } from './screens/Help';
 import { GroupPage } from './screens/GroupPage';
 import { GroupNew, Groups } from './screens/Groups';
 import { Today } from './screens/Today';
@@ -86,6 +87,7 @@ export function App() {
       {/* Public: readable before signing in (linked from sign-up). */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/help" element={<Help />} />
       <Route element={<GuestOnly />}>
         <Route path="/welcome" element={<SignUp />} />
         <Route path="/verify" element={<VerifyCode />} />

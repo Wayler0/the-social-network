@@ -25,6 +25,15 @@
 
 **Photo editor for posts and stories** (`feat/edit-post-story-photos`): crop, zoom, rotate before uploading; posts choose Original / Square / Portrait 4:5 / Landscape 16:9, stories are 9:16, profile photos stay a circle. Only the edited photo is uploaded (never enlarged).
 
+**Usability review (Nielsen's 10 heuristics), 25 Nov** (`fix/heuristics`, migration 026):
+- **Search:** people, groups and clubs, posts, Ask a Senior, with the usual privacy rules. Opens from the search icon on Home and the search box in Discover.
+- **Edit post:** text only, shown as "Edited". Earlier text is kept for moderators.
+- **Fewer dead ends:** the Messages icon (chat isn't built yet) and the Market tile are gone.
+- **Offline banner.**
+- **Drafts:** post and story text is kept on the phone until posted, and cleared on sign-out.
+- **Clearer error messages.**
+- **Help page:** a short FAQ, linked from Settings.
+
 **Still to check by hand on a phone** (the browser tool was down): story sharing sheet, course suggestions, event card in the feed.
 
 **Open:** APK — wait for the final domain, or build a Trusted Web Activity now? · team contact email for the privacy policy · next graduation date (alumni sign-in).

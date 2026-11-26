@@ -52,6 +52,10 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 
 ## Left before launch (in order of risk)
 
+0. **Live-site check, 25 Nov.**
+   - The site answers through **Cloudflare's proxy**, but `deploy/KENET.md` says "DNS only". That means Cloudflare decrypts the traffic, and per-IP sign-in limits may count Cloudflare's addresses (`TRUST_PROXY_HOPS=2` doesn't include it). Kim: switch the record to DNS only, or update the privacy policy and the proxy setting.
+   - Backups are on the same server, with no restore test yet.
+   - `vm-db` has no PostGIS.
 1. **Server (#10, #38).** ✅ Live on KENET since 24 Nov; `main` deploys itself after CI (`deploy/KENET.md`). Still to do: a **database backup before each deploy** (deploy runs migrations on restart), confirm nightly off-server backups and a restore test. Original notes: Target: the campus **KENET** server (ICT access by **Sun 29 Nov**).
    Production setup and runbook: `deploy/README.md` (Caddy does HTTPS, or `deploy/behind-proxy.yml` if the server
    already has a web server).
