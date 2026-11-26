@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { PhotoCropper, STORY_FRAME } from '../components/PhotoCropper';
 import { ApiError } from '../lib/api';
 import { IMAGE_MAX_BYTES, IMAGE_TYPES, uploadImage } from '../lib/feed';
 import { createStory, STORY_BACKGROUND_LABEL, STORY_BACKGROUNDS, STORY_MAX, type StoryBackground } from '../lib/stories';
@@ -25,6 +26,19 @@ export function StoryNew() {
 
   const trimmed = body.trim();
   const canShare = (trimmed.length > 0 || !!photo?.imageId) && trimmed.length <= STORY_MAX && !posting && !photo?.uploading;
+
+  // A chosen photo opens the editor first (crop, zoom, rotate); only the edited photo is uploaded.
+  const [original, setOriginal] = useState<File | null>(null);
+  const [editing, setEditing] = useState(false);
+  function choose(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    if (!IMAGE_TYPES.split(',').includes(file.type)) return setError('Choose a JPEG, PNG or WebP photo.');
+    // The editor shrinks big camera photos, so they are fine here.
+    if (file.size > 4 * IMAGE_MAX_BYTES) return setError('That photo is too big. Choose a smaller one.');
+    setOriginal(file);
+    setEditing(true);
+  }
 
   async function pick(file: File | undefined) {
     if (!file) return;
@@ -79,9 +93,17 @@ export function StoryNew() {
         </div>
       )}
       <div className="story-tools">
-        <input ref={fileRef} type="file" accept={IMAGE_TYPES} hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+        <input ref={fileRef} type="file" accept={IMAGE_TYPES} hidden onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />
+        {editing && original && (
+          <PhotoCropper file={original} frames={STORY_FRAME} title="Edit story photo"
+            onCancel={() => setEditing(false)}
+            onDone={(edited) => { setEditing(false); void pick(edited); }} />
+        )}
         {photo
-          ? <button type="button" className="btn secondary small-btn" onClick={() => setPhoto(null)}>Remove photo</button>
+          ? <span className="story-photo-actions">
+              {original && !photo.uploading && <button type="button" className="btn secondary small-btn" onClick={() => setEditing(true)}>Edit photo</button>}
+              <button type="button" className="btn secondary small-btn" onClick={() => { setPhoto(null); setOriginal(null); }}>Remove photo</button>
+            </span>
           : <button type="button" className="btn secondary small-btn" onClick={() => fileRef.current?.click()}>Add a photo</button>}
         <fieldset className="story-audience">
           <legend className="visually-hidden">Who can see it</legend>

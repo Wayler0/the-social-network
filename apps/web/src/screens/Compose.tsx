@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { PhotoCropper, POST_FRAMES } from '../components/PhotoCropper';
 import { ApiError } from '../lib/api';
 import { getGroup } from '../lib/community';
 import { addPostToTop } from '../lib/feed-store';
@@ -27,6 +28,19 @@ export function Compose() {
   const trimmed = body.trim();
   const tooLong = trimmed.length > POST_MAX;
   const canPost = trimmed.length > 0 && !tooLong && !posting && !photo?.uploading;
+
+  // A chosen photo opens the editor first (crop, zoom, rotate); only the edited photo is uploaded.
+  const [original, setOriginal] = useState<File | null>(null);
+  const [editing, setEditing] = useState(false);
+  function choose(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    if (!IMAGE_TYPES.split(',').includes(file.type)) return setError('Choose a JPEG, PNG or WebP photo.');
+    // The editor shrinks big camera photos, so they are fine here.
+    if (file.size > 4 * IMAGE_MAX_BYTES) return setError('That photo is too big. Choose a smaller one.');
+    setOriginal(file);
+    setEditing(true);
+  }
 
   async function pick(file: File | undefined) {
     if (!file) return;
@@ -81,10 +95,18 @@ export function Compose() {
           <div className="compose-photo">
             <img src={photo.preview} alt="Selected photo" />
             {photo.uploading && <span className="compose-uploading" role="status">Uploading…</span>}
-            <button type="button" className="icon-btn remove-photo" aria-label="Remove photo" onClick={() => setPhoto(null)}>
+            <button type="button" className="icon-btn remove-photo" aria-label="Remove photo" onClick={() => { setPhoto(null); setOriginal(null); }}>
               <Icon name="close" />
             </button>
+            {original && !photo.uploading && (
+              <button type="button" className="btn secondary small-btn edit-photo" onClick={() => setEditing(true)}>Edit</button>
+            )}
           </div>
+        )}
+        {editing && original && (
+          <PhotoCropper file={original} frames={POST_FRAMES} title="Edit photo"
+            onCancel={() => setEditing(false)}
+            onDone={(edited) => { setEditing(false); void pick(edited); }} />
         )}
 
         {error && <p className="error" role="alert">{error}</p>}
@@ -93,7 +115,7 @@ export function Compose() {
           <label className="btn secondary btn-link tool">
             <Icon name="image" /> {photo ? 'Change photo' : 'Add photo'}
             <input type="file" accept={IMAGE_TYPES} className="visually-hidden"
-              onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+              onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
         </div>
         <p className="hint">Be kind. No photos of injured people, and don’t name anyone hurt or killed until it’s officially confirmed. Location data is removed from photos.</p>
