@@ -37,9 +37,12 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
       where gm.user_id = $1 order by gm.joined_at`);
 
   const posts = await q<{ id: string; body: string; group_id: string | null; group_name: string | null; office_name: string | null;
-    image_path: string | null; created_at: Date; hidden_at: Date | null; deleted_at: Date | null }>(
+    image_path: string | null; created_at: Date; edited_at: Date | null; hidden_at: Date | null; deleted_at: Date | null;
+    earlier: Array<{ body: string; edited_at: string }> }>(
     `select p.id, p.body, p.group_id, g.name as group_name, o.name as office_name, i.path as image_path,
-            p.created_at, p.hidden_at, p.deleted_at
+            p.created_at, p.edited_at, p.hidden_at, p.deleted_at,
+            coalesce((select jsonb_agg(jsonb_build_object('body', e.body, 'edited_at', e.edited_at) order by e.edited_at)
+                        from post_edits e where e.post_id = p.id), '[]') as earlier
        from posts p left join groups g on g.id = p.group_id
                     left join office_accounts o on o.id = p.author_office_id
                     left join images i on i.id = p.image_id
@@ -134,7 +137,8 @@ export async function exportMemberData(db: Queryable, userId: string, appName: s
     posts: posts.map((p) => ({
       id: p.id, body: p.body, group: p.group_id ? { id: p.group_id, name: p.group_name } : null, asOffice: p.office_name,
       imageUrl: p.image_path ? imageUrls(p.image_path).url : null,
-      createdAt: iso(p.created_at), hiddenAt: iso(p.hidden_at), deletedAt: iso(p.deleted_at),
+      createdAt: iso(p.created_at), editedAt: iso(p.edited_at), hiddenAt: iso(p.hidden_at), deletedAt: iso(p.deleted_at),
+      earlierVersions: p.earlier.map((e) => ({ body: e.body, editedAt: e.edited_at })),
     })),
     comments: comments.map((c) => ({ id: c.id, postId: c.post_id, body: c.body, createdAt: iso(c.created_at), hiddenAt: iso(c.hidden_at), deletedAt: iso(c.deleted_at) })),
     likes: likes.map((l) => ({ postId: l.post_id, reaction: l.reaction, createdAt: iso(l.created_at) })),

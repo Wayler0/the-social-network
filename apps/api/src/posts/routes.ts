@@ -18,6 +18,8 @@ const pageSchema = z.object(pageQuery).strict();
 const text = (max: number) => z.string().transform((s) => s.trim()).pipe(z.string().min(1, 'cannot be empty').max(max));
 
 const POSTS_PER_HOUR = 20;
+/** Edits per member per hour: plenty for fixing typos, not for flooding moderators with versions. */
+const EDITS_PER_HOUR = 30;
 const COMMENTS_PER_HOUR = 60;
 
 /** True for a current admin of the viewer's campus (they may delete anything on it). */
@@ -178,12 +180,39 @@ export async function postRoutes(app: FastifyInstance, { config, db }: { config:
       return fail(reply, 403, 'forbidden', 'You can only delete your own posts.');
     }
     await db.query('update posts set deleted_at = clock_timestamp() where id = $1', [params.data.id]);
+    // Earlier versions go too, unless moderators still need them for an open report.
+    if (!post.open_reports) await db.query('delete from post_edits where post_id = $1', [params.data.id]);
     // The photo goes too, unless moderators still need it as evidence for an open report.
     if (post.image_id && !post.open_reports) {
       await db.query('update posts set image_id = null where id = $1', [params.data.id]);
       await deleteImage(db, config.MEDIA_DIR, post.image_id);
     }
     return reply.code(204).send();
+  });
+
+  // ---- PATCH /api/posts/:id   { body }   the author changes the text; the post shows "Edited".
+  // Only the text (not the photo, group or office). Not for hidden or deleted posts. The earlier
+  // text is kept in post_edits for moderators, so editing can't hide what someone reported.
+  app.patch('/api/posts/:id', async (req, reply) => {
+    const params = idParam.safeParse(req.params);
+    const body = parse(z.object({ body: z.string().transform((s) => s.trim()).pipe(z.string().max(2000)) }).strict(), req.body, reply);
+    if (!body) return;
+    const viewer = req.auth!;
+    const post = params.success ? await loadPost(db, viewer, params.data.id) : null;
+    if (!post) return fail(reply, 404, 'not_found', 'Post not found.');
+    if (post.author_id !== viewer.userId) return fail(reply, 403, 'forbidden', 'You can only edit your own posts.');
+    if (body.body.length === 0 && !post.event_id) return fail(reply, 400, 'invalid_input', 'body: cannot be empty');
+    if (body.body === post.body) return postBody(post);
+
+    const wait = await inTransaction(db, async (tx) => {
+      const w = await takeRateLimits(tx, [{ bucket: 'post_edit_user', key: viewer.userId, max: EDITS_PER_HOUR, windowSeconds: 3600 }]);
+      if (w) return w;
+      await tx.query('insert into post_edits (post_id, body) values ($1, $2)', [post.id, post.body]);
+      await tx.query('update posts set body = $2, edited_at = clock_timestamp() where id = $1', [post.id, body.body]);
+      return null;
+    });
+    if (wait) return rateLimited(reply, wait, 'edited');
+    return postBody((await loadPost(db, viewer, post.id))!);
   });
 
   // ---- GET /api/posts/:id/comments   oldest first

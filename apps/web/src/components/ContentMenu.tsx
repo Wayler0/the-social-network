@@ -9,7 +9,7 @@ type Step = 'menu' | 'report' | 'block' | 'delete' | 'reported';
  * The "…" menu on a post or comment: report, block the author, delete (own, or admin / post author for comments).
  * Report and block are on every piece of content (CLAUDE.md section 6). Every destructive step asks first, in the sheet.
  */
-export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete, onBlocked, onClose, startAt = 'menu' }: {
+export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete, onEdit, onBlocked, onClose, startAt = 'menu' }: {
   kind: 'post' | 'comment' | 'group' | 'question' | 'answer' | 'profile' | 'story' | 'event';
   /** Open straight on a step, e.g. 'report' when the caller has its own menu. */
   startAt?: 'menu' | 'report';
@@ -18,6 +18,8 @@ export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete
   isOwn: boolean;
   canDelete: boolean;
   onDelete: () => Promise<void>;
+  /** Your own content that can be edited: shows "Edit …" (the caller closes the menu and opens its editor). */
+  onEdit?: () => void;
   onBlocked: (authorId: string) => void;
   onClose: () => void;
 }) {
@@ -31,7 +33,7 @@ export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete
   async function run(action: () => Promise<void>) {
     setBusy(true); setError(null);
     try { await action(); } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
+      setError(err instanceof ApiError ? err.message : 'Couldn’t reach the server. Check your connection and try again.');
     } finally { setBusy(false); }
   }
 
@@ -41,6 +43,7 @@ export function ContentMenu({ kind, targetId, author, isOwn, canDelete, onDelete
         <div className="sheet-actions">
           {!isOwn && <button type="button" className="sheet-row" onClick={() => setStep('report')}>Report {kind}</button>}
           {canBlock && <button type="button" className="sheet-row" onClick={() => setStep('block')}>Block {author.name}</button>}
+          {isOwn && onEdit && <button type="button" className="sheet-row" onClick={onEdit}>Edit {kind}</button>}
           {canDelete && <button type="button" className="sheet-row danger" onClick={() => setStep('delete')}>Delete {kind}</button>}
           <button type="button" className="sheet-row muted" onClick={onClose}>Cancel</button>
         </div>

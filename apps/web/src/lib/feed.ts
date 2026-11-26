@@ -31,6 +31,8 @@ export type Post = {
   /** Whether you follow the author: a Follow button shows next to the name when you don't. */
   followingAuthor: boolean;
   createdAt: string;
+  /** When the author last changed the text (shown as "Edited"), or null. */
+  editedAt?: string | null;
 };
 
 export type Comment = { id: string; author: Author; body: string; createdAt: string };
@@ -45,6 +47,8 @@ const page = (path: string, cursor?: string | null, limit = 20) =>
 export const getFeed = (cursor?: string | null) => call<Page<Post>>('GET', page('/api/feed', cursor));
 export const getPost = (id: string) => call<Post>('GET', `/api/posts/${encodeURIComponent(id)}`);
 export const createPost = (input: { body: string; imageId?: string; groupId?: string; announcement?: boolean; eventId?: string }) => call<Post>('POST', '/api/posts', input);
+/** Change your own post's text (the photo stays). */
+export const editPost = (id: string, body: string) => call<Post>('PATCH', `/api/posts/${encodeURIComponent(id)}`, { body });
 export const deletePost = (id: string) => call<void>('DELETE', `/api/posts/${encodeURIComponent(id)}`);
 
 export const likePost = (id: string, like: boolean) =>

@@ -41,7 +41,7 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/api/auth/')) signedOutListeners.forEach((l) => l());
-    throw new ApiError(data.message ?? 'Something went wrong. Try again.', res.status, data.error);
+    throw new ApiError(data.message ?? (res.status >= 500 ? 'The server had a problem. Try again in a minute.' : 'That didn’t work. Try again.'), res.status, data.error);
   }
   return data as T;
 }
