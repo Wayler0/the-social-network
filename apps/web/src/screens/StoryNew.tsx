@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { clearDraft, loadDraft, saveDraft } from '../lib/drafts';
 import { PhotoCropper, STORY_FRAME } from '../components/PhotoCropper';
 import { ApiError } from '../lib/api';
 import { IMAGE_MAX_BYTES, IMAGE_TYPES, uploadImage } from '../lib/feed';
@@ -15,7 +16,8 @@ type Photo = { preview: string; imageId: string | null; uploading: boolean };
 export function StoryNew() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [body, setBody] = useState('');
+  const [body, setBodyState] = useState(() => loadDraft('story'));
+  const setBody = (v: string) => { setBodyState(v); saveDraft('story', v); };
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [audience, setAudience] = useState<'followers' | 'close_friends'>('followers');
   const [background, setBackground] = useState<StoryBackground>('black');
@@ -61,6 +63,7 @@ export function StoryNew() {
     setPosting(true); setError(null);
     try {
       await createStory({ ...(trimmed ? { body: trimmed } : {}), ...(photo?.imageId ? { imageId: photo.imageId } : {}), audience, ...(photo ? {} : { background }) });
+      clearDraft('story');
       navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Your story didn’t post. Try again.');

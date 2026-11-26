@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { clearDraft, loadDraft, saveDraft } from '../lib/drafts';
 import { PhotoCropper, POST_FRAMES } from '../components/PhotoCropper';
 import { ApiError } from '../lib/api';
 import { getGroup } from '../lib/community';
@@ -18,7 +19,10 @@ export function Compose() {
   const announcement = !!groupId && search.get('announcement') === '1';
   const [groupName, setGroupName] = useState<string | null>(null);
   useEffect(() => { if (groupId) getGroup(groupId).then((g) => setGroupName(g.name)).catch(() => setGroupName(null)); }, [groupId]);
-  const [body, setBody] = useState('');
+  // Kept on the phone while you type, so leaving the screen doesn't lose it (lib/drafts.ts).
+  const draftKey = `post:${groupId ?? 'feed'}`;
+  const [body, setBodyState] = useState(() => loadDraft(draftKey));
+  const setBody = (v: string) => { setBodyState(v); saveDraft(draftKey, v); };
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -64,6 +68,7 @@ export function Compose() {
     setPosting(true); setError(null);
     try {
       const created = await createPost({ body: trimmed, ...(photo?.imageId ? { imageId: photo.imageId } : {}), ...(groupId ? { groupId } : {}), ...(announcement ? { announcement: true } : {}) });
+      clearDraft(draftKey);
       addPostToTop(created);
       // Back to the club tab the post went to (Discussion posts aren't on the Announcements tab).
       const clubTab = created.group?.kind === 'club' ? (created.announcement ? '?tab=announcements' : '?tab=discussion') : '';
