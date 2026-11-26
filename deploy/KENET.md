@@ -6,7 +6,7 @@ stack in `/opt/nextup`, so Hatua is two services in it.
 
 | | |
 |---|---|
-| Address | **https://hatua.nextup.co.ke** (DNS: Cloudflare `A` record → 197.137.65.49, DNS only, grey cloud) |
+| Address | **https://hatua.nextup.co.ke** (DNS: Cloudflare `A` record → 197.137.65.49, **proxied** (orange cloud): kept on purpose for attack protection, decided 25 Nov; see To do 1) |
 | Where | vm-app (197.137.65.49): `hatua-api` and `hatua-web` in `/opt/nextup/compose.yml` |
 | Front door | the shared Caddy (Let's Encrypt) → `hatua-web` (this repo's `deploy/web.Dockerfile`: app files, headers, `/api` and `/media` → `hatua-api`). `TRUST_PROXY_HOPS=2` |
 | Database | vm-db (10.8.0.12 over WireGuard): PostgreSQL 18, database and user `hatua`. No PostGIS there yet: the first migration that needs it needs it installed on vm-db first |
@@ -50,8 +50,16 @@ the deploy passes the new version and compiles once more (about 8 minutes); othe
 
 ## To do (written down 22 Nov 2026, to look at later)
 
-1. **Cloudflare: switch `hatua.nextup.co.ke` to DNS only (grey cloud).** It is proxied (orange)
-   now, so the API sees Cloudflare's address instead of the member's (checked: it logged
+1. **Cloudflare: keep the proxy, fix what it breaks (decided 25 Nov, Kim and Wayler).** The proxy
+   stays for attack protection. Three settings, done by Kim:
+   (a) **Real addresses:** in the shared Caddy, `trusted_proxies` = Cloudflare's ranges and
+   `client_ip_headers CF-Connecting-IP`, then `TRUST_PROXY_HOPS=3` for hatua-api. Check other apps
+   behind that Caddy still see real addresses.
+   (b) **Lock the origin:** vm-app accepts 80/443 only from Cloudflare's ranges (or a Cloudflare
+   Tunnel), since 197.137.65.49 is public.
+   (c) **SSL mode Full (strict).**
+   The privacy policy names Cloudflare (25 Nov). Why (a) matters: the API sees Cloudflare's
+   address instead of the member's (checked: it logged
    `104.22.77.136` for a request from `105.160.56.202`). Sign-in rate limits are per address, so
    members behind the same Cloudflare server share one limit and a few wrong codes can lock them
    all out. The other KENET sites are DNS only. The proxy also blocks one of Let's Encrypt's two

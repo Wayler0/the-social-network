@@ -73,6 +73,9 @@ export function PrivacyPolicy() {
       <h2>Where it is kept, and who else handles it</h2>
       <ul>
         <li>Your data is stored on our own server in Kenya. Connections to it are encrypted (HTTPS), and access to the server is limited to the team.</li>
+        <li>Connections pass through Cloudflare, which protects the site from attacks. Cloudflare handles the traffic in transit
+          (it can see it while delivering it) and keeps technical logs such as IP addresses. It does not keep copies of your posts,
+          photos or profile: those are marked private and never cached.</li>
         <li>Sign-in code emails are sent through an email delivery service (Resend), which sees your email address and the code.</li>
         <li>If you turn on push notifications, your phone’s push service (Google, Apple or Mozilla) delivers them. The text is kept
           general (for example “New comment on your post”).</li>
