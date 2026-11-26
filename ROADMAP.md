@@ -23,6 +23,8 @@
 3. `feat/story-sharing` (024, built on 2) — add someone's story to yours (only seen by people who may see the original; gone with it) or share its link.
 4. `feat/event-posts` (025) — share an event to the feed as a post with an event card.
 
+**Photo editor for posts and stories** (`feat/edit-post-story-photos`): crop, zoom, rotate before uploading; posts choose Original / Square / Portrait 4:5 / Landscape 16:9, stories are 9:16, profile photos stay a circle. Only the edited photo is uploaded (never enlarged).
+
 **Still to check by hand on a phone** (the browser tool was down): story sharing sheet, course suggestions, event card in the feed.
 
 **Open:** APK — wait for the final domain, or build a Trusted Web Activity now? · team contact email for the privacy policy · next graduation date (alumni sign-in).

@@ -78,7 +78,7 @@ function usePhotoUpload() {
       <input ref={fileRef} type="file" accept={IMAGE_TYPES} hidden
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; afterUpload.current = onDone; choose(f); }} />
       {editing && (
-        <PhotoCropper file={editing} onCancel={() => setEditing(null)}
+        <PhotoCropper file={editing} circle title="Edit profile photo" onCancel={() => setEditing(null)}
           onDone={(cropped) => { setEditing(null); void pick(cropped).then((ok) => afterUpload.current?.(ok)); }} />
       )}
     </>

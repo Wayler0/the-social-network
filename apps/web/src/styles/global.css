@@ -543,10 +543,11 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .cropper-text-btn { min-height: 44px; padding: 0 12px; border: 0; background: none; color: #fff; font: inherit; font-size: 16px; }
 .cropper-text-btn.strong { font-weight: 700; color: var(--sunshine); }
 .cropper-text-btn:disabled { opacity: 0.4; }
-.cropper-stage { position: relative; width: min(100vw - 32px, 420px); aspect-ratio: 1; margin: 12px auto; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.cropper-area { flex: 1; min-height: 0; margin: 12px 16px; display: flex; align-items: center; justify-content: center; }
+.cropper-stage { position: relative; flex: none; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 .cropper-stage img { position: absolute; left: 50%; top: 50%; max-width: none; transform-origin: center; -webkit-user-drag: none; pointer-events: none; }
 /* Darkens everything outside the circle: what shows inside is the profile photo. */
-.cropper-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); outline: 2px solid rgba(255, 255, 255, 0.85); pointer-events: none; }
+.cropper-mask { position: absolute; inset: 0; border-radius: 0; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); outline: 2px solid rgba(255, 255, 255, 0.85); pointer-events: none; }
 .cropper-error { position: absolute; left: 12px; right: 12px; top: 45%; margin: 0; text-align: center; }
 .cropper-tools { padding: 8px 20px max(20px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .cropper-zoom { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 360px; }
@@ -569,3 +570,11 @@ input[type='datetime-local'].input { min-width: 0; width: 100%; }
 .post-event-title { font-size: 15px; overflow-wrap: anywhere; }
 .post-event.cancelled .post-event-title { text-decoration: line-through; color: var(--text-3); }
 .share-event-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; }
+
+/* Frame shapes in the photo editor; the circle is for profile photos. */
+.cropper-mask.circle { border-radius: 50%; }
+.cropper-frames { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.cropper-chip { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.cropper-chip.selected { background: rgba(255, 200, 61, 0.18); border-color: var(--sunshine); color: var(--sunshine); }
+.compose-photo .edit-photo { position: absolute; left: 8px; bottom: 8px; width: auto; height: 34px; padding: 0 12px; }
+.story-photo-actions { display: flex; gap: 6px; }
