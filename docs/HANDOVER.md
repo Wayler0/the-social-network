@@ -50,12 +50,31 @@ If the web page is blank after a pull: stop the dev server and start it again (V
 | Images: upload, resize, strip location, serve to members only | ✅ | ✅ |
 | Email sending (Resend over HTTPS; KENET blocks mail ports), backups (restic scripts) | ✅ live | backups: ❌ not confirmed on the server |
 
+## GitHub issues (reviewed 25 Nov)
+
+**Done; close with a note:**
+- **Screens:** #1 sign-up, #2 code entry, #7 profile, #8 layout.
+- **Server:** #10 ICT server access, #33 Caddy/HTTPS, #35 email, #38 deploy (follow-up: Cloudflare, above).
+- **Data and API:** #30 schema, #31 seed, #32 images (stored on a disk volume, not MinIO), #34 thumbnails and indexes, #37 admin API.
+- **Legal:** #14 legal pages (follow-up: `CONTACT_EMAIL`).
+
+**Partly done:**
+- #36 backups: nightly, but on the same server.
+- #39 Uptime Kuma: the backup scripts can ping a monitor; no monitor is set up.
+- #29 Peter's review: ask him.
+
+**Still ahead:**
+- UX rounds #41–#46. #44, the real-phone test, is due Sun 29 Nov; script in `docs/research/round2-phone-test.md`.
+- Launch: #15, #28, #40 (18–20 Dec).
+
 ## Left before launch (in order of risk)
 
-0. **Live-site check, 25 Nov.**
-   - The site answers through **Cloudflare's proxy**, but `deploy/KENET.md` says "DNS only". That means Cloudflare decrypts the traffic, and per-IP sign-in limits may count Cloudflare's addresses (`TRUST_PROXY_HOPS=2` doesn't include it). Kim: switch the record to DNS only, or update the privacy policy and the proxy setting.
-   - Backups are on the same server, with no restore test yet.
-   - `vm-db` has no PostGIS.
+0. **Cloudflare (decided 25 Nov): keep the proxy** for attack protection, and fix what it breaks (Kim; details in `deploy/KENET.md`, To do 1).
+   - Pass the member's real address (Caddy trusts Cloudflare's `CF-Connecting-IP`; `TRUST_PROXY_HOPS=3`).
+   - The server accepts traffic only from Cloudflare.
+   - SSL mode Full (strict).
+   - The privacy policy names Cloudflare.
+   - Also still open: backups are on the same server with no restore test (#36), and `vm-db` has no PostGIS.
 1. **Server (#10, #38).** ✅ Live on KENET since 24 Nov; `main` deploys itself after CI (`deploy/KENET.md`). Still to do: a **database backup before each deploy** (deploy runs migrations on restart), confirm nightly off-server backups and a restore test. Original notes: Target: the campus **KENET** server (ICT access by **Sun 29 Nov**).
    Production setup and runbook: `deploy/README.md` (Caddy does HTTPS, or `deploy/behind-proxy.yml` if the server
    already has a web server).
