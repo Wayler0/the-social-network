@@ -177,7 +177,7 @@ Hours are per person.
 
 - **Holiday (21 Dec – Jan):** fix bugs, respond to feedback, moderate. Build **v0.2** (aim mid-January):
   - **Chat** with optional **disappearing messages** (24 h after seen; reported messages are kept for moderators) and view-once photos.
-  - **Push notifications.**
+  - **Push notifications.** Built early, on `main`; turned on per server with the Web Push keys (deploy/KENET.md, "Push notifications").
   - **Camera-first create** with **campus frames** (Freshers Week, Graduation, Sports, Clubs) and stickers.
   - **Events** with Going / Interested.
   - **Reactions** beyond like.

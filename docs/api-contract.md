@@ -553,7 +553,7 @@ Rules (code: `apps/api/src/notifications/`, migrations 018 and 023; story recipi
 - **Urgent announcements** push to everyone on the campus who is not suspended and did not turn `urgent` off, with the announcement title (official public information). Normal ones never push.
 - **Worker:** the API sends due pushes every 5 s (`push_outbox`, `SKIP LOCKED`). It retries with back-off (1, 2, 4, 8 min, at most 5 tries) only when no device got the push. Subscriptions the browser dropped (`404`/`410`) are deleted; one that fails 10 times is dropped. Each member keeps at most their 10 newest subscriptions.
 - **Housekeeping:** outbox rows are deleted after a day; read notifications after 90 days; any after a year. Export includes notifications, devices and settings; deleting an account removes them all and clears the member as an actor.
-- **Setup:** `npm run push:keys -w apps/api` once per server, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
+- **Setup:** make a key pair once per server (`npm run push:keys -w apps/api` locally; on a server, `node dist/notifications/push-keys.js` inside the API container: steps in deploy/KENET.md, "Push notifications"), then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a team address, never a personal one). Changing the keys unsubscribes every browser.
 
 ## 16. Search (MVP item 10) ✅
 

@@ -11,7 +11,7 @@ stack in `/opt/nextup`, so Hatua is two services in it.
 | Front door | the shared Caddy (Let's Encrypt) → `hatua-web` (this repo's `deploy/web.Dockerfile`: app files, headers, `/api` and `/media` → `hatua-api`). `TRUST_PROXY_HOPS=2` |
 | Database | vm-db (10.8.0.12 over WireGuard): PostgreSQL 18, database and user `hatua`. No PostGIS there yet: the first migration that needs it needs it installed on vm-db first |
 | Photos | Docker volume `nextup_hatua_media` |
-| Settings | `/opt/nextup/env/hatua.env` (CODE_PEPPER, APP_URL, email) and `HATUA_DB_PASSWORD` in `/opt/nextup/.env`. Never in git |
+| Settings | `/opt/nextup/env/hatua.env` (CODE_PEPPER, APP_URL, email, Web Push keys) and `HATUA_DB_PASSWORD` in `/opt/nextup/.env`. Never in git |
 | Backups | nightly 02:00 (`/opt/nextup/backup.sh`): `hatua-<date>.dump` and `hatua-media-<date>.tar.gz` in `/srv/files/backups`, kept 14 days |
 | Deploy | **Automatic:** every commit on `main` whose CI passes, within about 5 minutes (below). By hand: `deploy/kenet.sh` (origin/main) or `deploy/kenet.sh <ref>`, with the KENET key `~/.ssh/kenet_rsa` |
 | Logs | `ssh user@197.137.65.49 'cd /opt/nextup && docker compose logs --tail 100 hatua-api'` |
@@ -39,6 +39,37 @@ scp -i ~/.ssh/kenet_rsa deploy/kenet-autodeploy.sh user@197.137.65.49:/opt/nextu
 ssh -i ~/.ssh/kenet_rsa user@197.137.65.49 'chmod 755 /opt/nextup/hatua-autodeploy.sh
   (crontab -l | grep -v hatua-autodeploy; echo "*/5 * * * * /opt/nextup/hatua-autodeploy.sh >> /opt/nextup/hatua-autodeploy.log 2>&1") | crontab -'
 ```
+
+## Push notifications (Web Push keys)
+
+Push needs three settings in `/opt/nextup/env/hatua.env`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+and `VAPID_SUBJECT`. Without them push is off (the in-app inbox still works) and the API logs
+`push notifications are off`. Make the keys **once** for this server: new keys unsubscribe every
+member's browser, and they have to turn push on again. Deploys never touch `hatua.env`, so the keys
+survive them.
+
+1. **Log in:** `ssh -i ~/.ssh/kenet_rsa user@197.137.65.49`, then `cd /opt/nextup`.
+2. **Check first:** `grep '^VAPID_' env/hatua.env`. If all three already have values, stop: push is
+   set up.
+3. **Make the keys** inside the running API (the image has no `tsx`, so not `npm run push:keys`):
+   ```sh
+   docker compose exec hatua-api node dist/notifications/push-keys.js
+   ```
+   It prints `VAPID_PUBLIC_KEY=...`, `VAPID_PRIVATE_KEY=...` and a `VAPID_SUBJECT` line to edit.
+4. **Add them:** `cp env/hatua.env env/hatua.env.bak`, then add the three lines to `env/hatua.env`.
+   `VAPID_SUBJECT` is the team address push services may contact: `mailto:<team address>` or an
+   `https://` page, never a personal address. Delete the `# ...` comment after it; no quotes, no
+   spaces around `=`. All three or none: the API refuses to start with only some.
+   Keep a copy in the team's password manager (losing the private key is the same as new keys).
+   Never commit it or paste it into chat.
+5. **Restart the API only:** `docker compose up -d --no-deps --force-recreate hatua-api`.
+6. **Check:** `docker compose logs --tail 50 hatua-api | grep -i push` should print nothing. If the
+   API doesn't start, `docker compose logs hatua-api` names the bad setting
+   (`must be a base64url VAPID ...` or `set ... together, or none`): fix it, or put the backup back
+   (`cp env/hatua.env.bak env/hatua.env`), and restart again. Then, on a phone: Settings →
+   Notifications → turn push on and allow it; have someone comment on your post; the push should
+   arrive within seconds. iPhone: only once the app is added to the Home Screen.
+7. **Clean up:** `rm env/hatua.env.bak`.
 
 ## The sharp fix (why the API image has two steps)
 
